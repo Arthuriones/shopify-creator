@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,28 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+
+    const updateRemaining = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setSecondsRemaining(remaining);
+    };
+
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 250);
+    return () => clearInterval(timer);
+  }, [cooldownUntil]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || secondsRemaining > 0) return;
+
+    setErrorMessage(null);
     setLoading(true);
 
     const supabase = createClient();
@@ -23,7 +42,26 @@ export default function LoginPage() {
     });
 
     setLoading(false);
-    if (!error) setSent(true);
+    if (!error) {
+      setSent(true);
+      return;
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+    if (
+      normalizedMessage.includes("429") ||
+      normalizedMessage.includes("too many") ||
+      normalizedMessage.includes("security purposes") ||
+      normalizedMessage.includes("rate limit")
+    ) {
+      const secondsMatch = error.message.match(/(\d+)\s*seconds?/i);
+      const waitSeconds = secondsMatch ? Number(secondsMatch[1]) : 60;
+      setCooldownUntil(Date.now() + waitSeconds * 1000);
+      setErrorMessage(`Muitas tentativas. Aguarde ${waitSeconds}s e tente novamente.`);
+      return;
+    }
+
+    setErrorMessage(error.message || "Não foi possível enviar o link. Tente novamente.");
   }
 
   return (
@@ -107,7 +145,7 @@ export default function LoginPage() {
                 background: loading ? "oklch(0.72 0.19 155 / 70%)" : "oklch(0.72 0.19 155)",
                 color: "oklch(0.13 0.02 155)",
               }}
-              disabled={loading}
+              disabled={loading || secondsRemaining > 0}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -117,10 +155,15 @@ export default function LoginPage() {
                     <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
                   </span>
                 </span>
+              ) : secondsRemaining > 0 ? (
+                `Aguarde ${secondsRemaining}s`
               ) : (
                 "Entrar com Magic Link"
               )}
             </Button>
+            {errorMessage ? (
+              <p className="text-xs text-red-400">{errorMessage}</p>
+            ) : null}
           </form>
         )}
       </div>
