@@ -36,6 +36,7 @@ import {
   ImageIcon,
   Loader2,
   AlertCircle,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -51,6 +52,14 @@ interface ConnectedStore {
   brand_voice: string | null;
   store_description: string | null;
   logo_path: string | null;
+  created_at: string;
+}
+
+interface StoreAsset {
+  id: string;
+  store_id: string;
+  file_path: string;
+  label: string | null;
   created_at: string;
 }
 
@@ -89,6 +98,11 @@ function getLogoUrl(logoPath: string): string {
   return `${supabaseUrl}/storage/v1/object/public/store-logos/${logoPath}`;
 }
 
+function getAssetUrl(filePath: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  return `${supabaseUrl}/storage/v1/object/public/store-assets/${filePath}`;
+}
+
 function isProfileComplete(store: ConnectedStore): boolean {
   return !!(store.niche && store.logo_path);
 }
@@ -114,11 +128,30 @@ export default function StoresPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [storeAssets, setStoreAssets] = useState<StoreAsset[]>([]);
+  const [assetFiles, setAssetFiles] = useState<File[]>([]);
+  const [assetUploading, setAssetUploading] = useState(false);
+  const [materialsStoreId, setMaterialsStoreId] = useState("");
+  const [quickAssetFiles, setQuickAssetFiles] = useState<File[]>([]);
+  const [quickAssetsSaving, setQuickAssetsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const assetsInputRef = useRef<HTMLInputElement>(null);
+  const quickAssetsInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadStores();
   }, []);
+
+  useEffect(() => {
+    if (!loadingStores && stores.length > 0 && !materialsStoreId) {
+      setMaterialsStoreId(stores[0].id);
+    }
+  }, [loadingStores, stores, materialsStoreId]);
+
+  useEffect(() => {
+    if (!materialsStoreId) return;
+    void loadStoreAssets(materialsStoreId);
+  }, [materialsStoreId]);
 
   async function loadStores() {
     setLoadingStores(true);
@@ -164,7 +197,7 @@ export default function StoresPage() {
       const updatedStores = await loadStoresAndReturn();
       const newStore = updatedStores?.find((s) => s.shop_domain === data.store.shop_domain);
       if (newStore) {
-        openProfileEditor(newStore);
+        await openProfileEditor(newStore);
       }
     } catch {
       toast.error("Erro ao conectar loja");
@@ -183,7 +216,17 @@ export default function StoresPage() {
     return data;
   }
 
-  function openProfileEditor(store: ConnectedStore) {
+  async function loadStoreAssets(storeId: string) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("store_assets")
+      .select("id, store_id, file_path, label, created_at")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false });
+    setStoreAssets(data || []);
+  }
+
+  async function openProfileEditor(store: ConnectedStore) {
     setEditingStore(store);
     setProfileNiche(store.niche || "");
     setProfileAudience(store.target_audience || "");
@@ -201,6 +244,8 @@ export default function StoresPage() {
     setProfileDescription(store.store_description || "");
     setLogoPreview(store.logo_path ? getLogoUrl(store.logo_path) : null);
     setLogoFile(null);
+    setAssetFiles([]);
+    await loadStoreAssets(store.id);
     setProfileOpen(true);
   }
 
@@ -222,6 +267,150 @@ export default function StoresPage() {
     setLogoPreview(URL.createObjectURL(file));
   }
 
+  function handleAssetsSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedTypes = ["image/png", "image/webp", "image/jpeg", "image/jpg"];
+    const validFiles: File[] = [];
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`Formato nao suportado: ${file.name}`);
+        continue;
+      }
+      if (file.size > 6 * 1024 * 1024) {
+        toast.error(`Arquivo muito grande (${file.name}). Max 6MB por imagem.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    setAssetFiles((prev) => {
+      const next = [...prev, ...validFiles].slice(0, 12);
+      if (next.length < prev.length + validFiles.length) {
+        toast.error("Limite de 12 materiais por vez.");
+      }
+      return next;
+    });
+  }
+
+  function handleQuickAssetsSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedTypes = ["image/png", "image/webp", "image/jpeg", "image/jpg"];
+    const validFiles: File[] = [];
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`Formato nao suportado: ${file.name}`);
+        continue;
+      }
+      if (file.size > 6 * 1024 * 1024) {
+        toast.error(`Arquivo muito grande (${file.name}). Max 6MB por imagem.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    setQuickAssetFiles((prev) => {
+      const next = [...prev, ...validFiles].slice(0, 12);
+      if (next.length < prev.length + validFiles.length) {
+        toast.error("Limite de 12 materiais por vez.");
+      }
+      return next;
+    });
+  }
+
+  async function handleSaveQuickAssets() {
+    if (!materialsStoreId) {
+      toast.error("Selecione uma loja para salvar os materiais.");
+      return;
+    }
+    if (quickAssetFiles.length === 0) {
+      toast.error("Adicione ao menos um material.");
+      return;
+    }
+
+    const supabase = createClient();
+    setQuickAssetsSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Nao autenticado");
+
+      const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
+
+      for (const [index, file] of quickAssetFiles.entries()) {
+        const ext = file.name.split(".").pop() || "png";
+        const path = `${user.id}/${materialsStoreId}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("store-assets")
+          .upload(path, file, { upsert: false });
+
+        if (uploadError) {
+          throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
+        }
+
+        recordsToInsert.push({
+          store_id: materialsStoreId,
+          file_path: path,
+          label: file.name,
+        });
+      }
+
+      if (recordsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from("store_assets")
+          .insert(recordsToInsert);
+        if (insertError) {
+          throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
+        }
+      }
+
+      await loadStoreAssets(materialsStoreId);
+      setQuickAssetFiles([]);
+      toast.success("Materiais salvos na loja!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao salvar materiais";
+      toast.error(msg);
+    } finally {
+      setQuickAssetsSaving(false);
+    }
+  }
+
+  async function handleRemoveAsset(asset: StoreAsset) {
+    if (!confirm("Remover este material da marca?")) return;
+
+    const supabase = createClient();
+
+    const [{ error: dbError }, { error: storageError }] = await Promise.all([
+      supabase.from("store_assets").delete().eq("id", asset.id),
+      supabase.storage.from("store-assets").remove([asset.file_path]),
+    ]);
+
+    if (dbError) {
+      toast.error("Nao foi possivel remover o material.");
+      return;
+    }
+
+    if (storageError) {
+      toast.error("Material removido do cadastro, mas houve erro ao excluir arquivo.");
+    } else {
+      toast.success("Material removido.");
+    }
+
+    setStoreAssets((prev) => prev.filter((a) => a.id !== asset.id));
+  }
+
   async function handleSaveProfile() {
     if (!editingStore) return;
     if (!profileNiche.trim()) {
@@ -234,15 +423,22 @@ export default function StoresPage() {
 
     try {
       let logoPath = editingStore.logo_path;
+      let userId: string | null = null;
+
+      if (logoFile || assetFiles.length > 0) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) throw new Error("Nao autenticado");
+        userId = user.id;
+      }
 
       // Upload logo se selecionou novo arquivo
       if (logoFile) {
         setLogoUploading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Não autenticado");
-
+        if (!userId) throw new Error("Nao autenticado");
         const ext = logoFile.name.split(".").pop() || "png";
-        const path = `${user.id}/${editingStore.id}/logo.${ext}`;
+        const path = `${userId}/${editingStore.id}/logo.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("store-logos")
@@ -254,6 +450,41 @@ export default function StoresPage() {
 
         logoPath = path;
         setLogoUploading(false);
+      }
+
+      if (assetFiles.length > 0) {
+        setAssetUploading(true);
+        if (!userId) throw new Error("Nao autenticado");
+
+        const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
+
+        for (const [index, file] of assetFiles.entries()) {
+          const ext = file.name.split(".").pop() || "png";
+          const path = `${userId}/${editingStore.id}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("store-assets")
+            .upload(path, file, { upsert: false });
+
+          if (uploadError) {
+            throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
+          }
+
+          recordsToInsert.push({
+            store_id: editingStore.id,
+            file_path: path,
+            label: file.name,
+          });
+        }
+
+        if (recordsToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from("store_assets")
+            .insert(recordsToInsert);
+          if (insertError) {
+            throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
+          }
+        }
       }
 
       const brandVoice = profileVoice === "custom" ? profileCustomVoice : profileVoice;
@@ -272,6 +503,8 @@ export default function StoresPage() {
       if (error) throw new Error(error.message);
 
       await loadStores();
+      await loadStoreAssets(editingStore.id);
+      setAssetFiles([]);
       setProfileOpen(false);
       toast.success("Perfil da loja salvo!");
     } catch (err) {
@@ -280,6 +513,7 @@ export default function StoresPage() {
     } finally {
       setProfileSaving(false);
       setLogoUploading(false);
+      setAssetUploading(false);
     }
   }
 
@@ -317,17 +551,19 @@ export default function StoresPage() {
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger>
-            <Button
-              className="h-9 text-[13px] font-medium transition-all duration-200"
-              style={{
-                background: "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
-              }}
-            >
-              <Plus className="mr-2 h-3.5 w-3.5" />
-              Conectar Loja
-            </Button>
+          <DialogTrigger
+            render={
+              <Button
+                className="h-9 text-[13px] font-medium transition-all duration-200"
+                style={{
+                  background: "oklch(0.72 0.19 155)",
+                  color: "oklch(0.13 0.02 155)",
+                }}
+              />
+            }
+          >
+            <Plus className="mr-2 h-3.5 w-3.5" />
+            Conectar Loja
           </DialogTrigger>
           <DialogContent className="border-border/50 bg-card">
             <DialogHeader>
@@ -409,6 +645,128 @@ export default function StoresPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {!loadingStores && stores.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle
+              className="text-[13px] font-medium uppercase text-muted-foreground"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              Sessao de Materiais da Marca
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+              <div className="space-y-2">
+                <Label className="text-[13px] text-muted-foreground">
+                  Loja
+                </Label>
+                <Select value={materialsStoreId} onValueChange={(value) => setMaterialsStoreId(value ?? "")}>
+                  <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
+                    <SelectValue placeholder="Selecione a loja" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 border-border/50"
+                  onClick={() => quickAssetsInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-3.5 w-3.5" />
+                  Adicionar materiais
+                </Button>
+                <Button
+                  type="button"
+                  className="h-10"
+                  style={{
+                    background: quickAssetsSaving
+                      ? "oklch(0.72 0.19 155 / 40%)"
+                      : "oklch(0.72 0.19 155)",
+                    color: "oklch(0.13 0.02 155)",
+                  }}
+                  disabled={quickAssetsSaving || quickAssetFiles.length === 0 || !materialsStoreId}
+                  onClick={handleSaveQuickAssets}
+                >
+                  {quickAssetsSaving ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    "Salvar materiais"
+                  )}
+                </Button>
+                <input
+                  ref={quickAssetsInputRef}
+                  type="file"
+                  accept="image/png,image/webp,image/jpeg,image/jpg"
+                  onChange={handleQuickAssetsSelect}
+                  multiple
+                  className="hidden"
+                />
+              </div>
+            </div>
+
+            {quickAssetFiles.length > 0 && (
+              <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
+                <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                  Prontos para salvar ({quickAssetFiles.length})
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {quickAssetFiles.map((file, index) => (
+                    <Badge key={`${file.name}-${index}`} variant="outline" className="text-[10px] border-border/40">
+                      {file.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {materialsStoreId && (
+              storeAssets.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+                  {storeAssets.map((asset) => (
+                    <div key={asset.id} className="relative group">
+                      <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-background/40">
+                        <Image
+                          src={getAssetUrl(asset.file_path)}
+                          alt={asset.label || "Material da marca"}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveAsset(asset)}
+                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-card border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remover material"
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Sem materiais cadastrados para esta loja ainda.
+                </p>
+              )
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {loadingStores ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -529,7 +887,7 @@ export default function StoresPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => openProfileEditor(store)}
+                  onClick={() => void openProfileEditor(store)}
                   className="h-8 text-[12px] border-border/50 hover:border-border"
                 >
                   <Pencil className="mr-1.5 h-3 w-3" />
@@ -608,6 +966,82 @@ export default function StoresPage() {
                   className="hidden"
                 />
               </div>
+            </div>
+
+            {/* Materiais da marca */}
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">
+                Materiais da Marca (banners e referencias visuais)
+              </Label>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px] border-border/50"
+                  onClick={() => assetsInputRef.current?.click()}
+                >
+                  <Upload className="mr-1.5 h-3 w-3" />
+                  Adicionar materiais
+                </Button>
+                <span className="text-[11px] text-muted-foreground/60">
+                  Ate 12 imagens (PNG, JPG, WEBP)
+                </span>
+                <input
+                  ref={assetsInputRef}
+                  type="file"
+                  accept="image/png,image/webp,image/jpeg,image/jpg"
+                  onChange={handleAssetsSelect}
+                  multiple
+                  className="hidden"
+                />
+              </div>
+
+              {assetFiles.length > 0 && (
+                <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
+                  <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                    Novos arquivos ({assetFiles.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {assetFiles.map((file, index) => (
+                      <Badge key={`${file.name}-${index}`} variant="outline" className="text-[10px] border-border/40">
+                        {file.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {storeAssets.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {storeAssets.map((asset) => (
+                    <div key={asset.id} className="relative group">
+                      <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-background/40">
+                        <Image
+                          src={getAssetUrl(asset.file_path)}
+                          alt={asset.label || "Material da marca"}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveAsset(asset)}
+                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-card border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remover material"
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/50">
+                  Sem materiais extras ainda. Esses arquivos serao usados como referencia para recriar as imagens dos produtos.
+                </p>
+              )}
             </div>
 
             {/* Nicho */}
@@ -698,7 +1132,11 @@ export default function StoresPage() {
               {profileSaving ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {logoUploading ? "Enviando logo..." : "Salvando..."}
+                  {logoUploading
+                    ? "Enviando logo..."
+                    : assetUploading
+                      ? "Enviando materiais..."
+                      : "Salvando..."}
                 </span>
               ) : (
                 "Salvar Perfil"
@@ -710,3 +1148,4 @@ export default function StoresPage() {
     </div>
   );
 }
+

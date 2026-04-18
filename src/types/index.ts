@@ -23,6 +23,14 @@ export interface StoreContext {
   storeDescription: string;
 }
 
+export interface StoreAsset {
+  id: string;
+  store_id: string;
+  file_path: string;
+  label: string | null;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   store_id: string;

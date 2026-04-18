@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,10 @@ import {
   Layers,
   Stamp,
   Loader2,
+  Trash2,
+  ShoppingCart,
+  ShieldCheck,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -51,6 +55,14 @@ interface StoreOption {
   shop_domain: string;
   niche: string | null;
   logo_path: string | null;
+}
+
+interface StoreAsset {
+  id: string;
+  store_id: string;
+  file_path: string;
+  label: string | null;
+  created_at: string;
 }
 
 function CharCounter({ current, max }: { current: number; max: number }) {
@@ -97,6 +109,29 @@ function ProductSkeleton() {
   );
 }
 
+function getAssetUrl(filePath: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  return `${supabaseUrl}/storage/v1/object/public/store-assets/${filePath}`;
+}
+
+function isValidImageUrl(url: string): boolean {
+  return /^https:\/\/.+\.(jpg|jpeg|png|webp|avif)(?:\?.*)?$/i.test(url);
+}
+
+function sanitizeTitle(title: string): string {
+  return title.replace(/\s*[-|–]\s*AliExpress.*$/i, "").trim();
+}
+
+function looksInvalidImportedProduct(title: string): boolean {
+  const normalized = title.toLowerCase().trim();
+  return (
+    normalized === "404 page" ||
+    normalized.startsWith("404") ||
+    normalized.includes("page not found") ||
+    normalized.includes("not found")
+  );
+}
+
 export default function ProductsPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -107,7 +142,11 @@ export default function ProductsPage() {
   const [optimized, setOptimized] = useState<OptimizationResult | null>(null);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
-  const [activeTab, setActiveTab] = useState("original");
+  const [activeTab, setActiveTab] = useState("preview");
+  const [storeAssets, setStoreAssets] = useState<StoreAsset[]>([]);
+  const [materialFiles, setMaterialFiles] = useState<File[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [materialsSaving, setMaterialsSaving] = useState(false);
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -125,11 +164,13 @@ export default function ProductsPage() {
   const [brandedImages, setBrandedImages] = useState<Record<string, string>>({});
   const [brandingAll, setBrandingAll] = useState(false);
   const [selectedMainImage, setSelectedMainImage] = useState(0);
+  const [selectedVariantOptions, setSelectedVariantOptions] = useState<Record<string, string>>({});
 
   // AI generated images
   const [generatedImages, setGeneratedImages] = useState<Record<string, string>>({});
   const [generatingImage, setGeneratingImage] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
+  const materialsInputRef = useRef<HTMLInputElement>(null);
 
   async function handleGenerateCleanImage(imageUrl: string) {
     setGeneratingImage(imageUrl);
@@ -221,22 +262,6 @@ export default function ProductsPage() {
     }
   }
 
-  async function handleDownloadBranded(originalUrl: string) {
-    const imageUrl = brandedImages[originalUrl];
-    if (!imageUrl) return;
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `produto-branded-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch {
-      window.open(imageUrl, "_blank");
-    }
-  }
-
   async function handleGenerateImagePrompt(imageUrl: string) {
     setSelectedImageUrl(imageUrl);
     setImagePromptOpen(true);
@@ -276,6 +301,145 @@ export default function ProductsPage() {
     toast.success("Prompt copiado!");
   }
 
+  async function loadStoreAssets(storeId: string) {
+    const supabase = createClient();
+    setMaterialsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("store_assets")
+        .select("id, store_id, file_path, label, created_at")
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        toast.error("Nao foi possivel carregar os materiais da marca.");
+        setStoreAssets([]);
+        return;
+      }
+
+      setStoreAssets(data || []);
+    } finally {
+      setMaterialsLoading(false);
+    }
+  }
+
+  function handleMaterialsSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const allowedTypes = ["image/png", "image/webp", "image/jpeg", "image/jpg"];
+    const validFiles: File[] = [];
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`Formato nao suportado: ${file.name}`);
+        continue;
+      }
+
+      if (file.size > 6 * 1024 * 1024) {
+        toast.error(`Arquivo muito grande (${file.name}). Max 6MB por imagem.`);
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    setMaterialFiles((prev) => {
+      const next = [...prev, ...validFiles].slice(0, 12);
+      if (next.length < prev.length + validFiles.length) {
+        toast.error("Limite de 12 materiais por vez.");
+      }
+      return next;
+    });
+  }
+
+  async function handleSaveMaterials() {
+    if (!selectedStore) {
+      toast.error("Selecione uma loja.");
+      return;
+    }
+
+    if (materialFiles.length === 0) {
+      toast.error("Adicione ao menos um material.");
+      return;
+    }
+
+    const supabase = createClient();
+    setMaterialsSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Nao autenticado");
+
+      const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
+
+      for (const [index, file] of materialFiles.entries()) {
+        const ext = file.name.split(".").pop() || "png";
+        const filePath = `${user.id}/${selectedStore}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("store-assets")
+          .upload(filePath, file, { upsert: false });
+
+        if (uploadError) {
+          throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
+        }
+
+        recordsToInsert.push({
+          store_id: selectedStore,
+          file_path: filePath,
+          label: file.name,
+        });
+      }
+
+      if (recordsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from("store_assets")
+          .insert(recordsToInsert);
+
+        if (insertError) {
+          throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
+        }
+      }
+
+      await loadStoreAssets(selectedStore);
+      setMaterialFiles([]);
+      toast.success("Materiais da marca salvos!");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao salvar materiais";
+      toast.error(message);
+    } finally {
+      setMaterialsSaving(false);
+    }
+  }
+
+  async function handleRemoveMaterial(asset: StoreAsset) {
+    if (!confirm("Remover este material da marca?")) return;
+
+    const supabase = createClient();
+    const [{ error: dbError }, { error: storageError }] = await Promise.all([
+      supabase.from("store_assets").delete().eq("id", asset.id),
+      supabase.storage.from("store-assets").remove([asset.file_path]),
+    ]);
+
+    if (dbError) {
+      toast.error("Nao foi possivel remover o material.");
+      return;
+    }
+
+    if (storageError) {
+      toast.error("Material removido do cadastro, mas houve erro ao excluir arquivo.");
+    } else {
+      toast.success("Material removido.");
+    }
+
+    setStoreAssets((prev) => prev.filter((current) => current.id !== asset.id));
+  }
+
   useEffect(() => {
     async function loadStores() {
       const supabase = createClient();
@@ -292,6 +456,16 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
+    if (!selectedStore) {
+      setStoreAssets([]);
+      setMaterialFiles([]);
+      return;
+    }
+
+    void loadStoreAssets(selectedStore);
+  }, [selectedStore]);
+
+  useEffect(() => {
     if (optimized) {
       setEditTitle(optimized.title);
       setEditDescription(optimized.description);
@@ -301,6 +475,42 @@ export default function ProductsPage() {
     }
   }, [optimized]);
 
+  useEffect(() => {
+    if (!product || product.variantOptions.length === 0) {
+      setSelectedVariantOptions({});
+      return;
+    }
+
+    const firstVariant = product.variants[0];
+    if (firstVariant?.properties) {
+      setSelectedVariantOptions(firstVariant.properties);
+      return;
+    }
+
+    const fallback: Record<string, string> = {};
+    for (const option of product.variantOptions) {
+      if (option.values[0]?.name) {
+        fallback[option.name] = option.values[0].name;
+      }
+    }
+    setSelectedVariantOptions(fallback);
+  }, [product]);
+
+  useEffect(() => {
+    if (!product) {
+      setSelectedMainImage(0);
+      return;
+    }
+
+    const availableCount = product.images
+      .map((src) => generatedImages[src] || brandedImages[src] || src)
+      .filter(isValidImageUrl).length;
+
+    if (availableCount === 0 || selectedMainImage >= availableCount) {
+      setSelectedMainImage(0);
+    }
+  }, [product, generatedImages, brandedImages, selectedMainImage]);
+
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -308,6 +518,7 @@ export default function ProductsPage() {
     setOptimized(null);
     setPublished(false);
     setBrandedImages({});
+    setGeneratedImages({});
     setSelectedMainImage(0);
 
     try {
@@ -324,8 +535,45 @@ export default function ProductsPage() {
         return;
       }
 
-      setProduct(data.product);
-      const p = data.product as AliExpressProduct;
+      const imported = data.product as AliExpressProduct;
+      const normalizedProduct: AliExpressProduct = {
+        ...imported,
+        title: sanitizeTitle(imported.title),
+        images: imported.images.filter(isValidImageUrl),
+      };
+
+      if (looksInvalidImportedProduct(normalizedProduct.title)) {
+        toast.error("O AliExpress retornou uma pagina invalida (404). Use outro link do mesmo produto.");
+        return;
+      }
+
+      if ((normalizedProduct.price ?? 0) <= 0 && normalizedProduct.variants.length > 0) {
+        const variantPrices = normalizedProduct.variants
+          .map((variant) => variant.price)
+          .filter((price) => price > 0);
+        if (variantPrices.length > 0) {
+          normalizedProduct.price = Math.min(...variantPrices);
+        }
+      }
+
+      if ((normalizedProduct.originalPrice ?? 0) <= 0) {
+        normalizedProduct.originalPrice = normalizedProduct.price;
+      }
+
+      if (normalizedProduct.images.length === 0) {
+        toast.error("Nao foi possivel importar imagens validas deste anuncio.");
+        return;
+      }
+
+      if (normalizedProduct.images.length < imported.images.length) {
+        toast.warning(
+          `${imported.images.length - normalizedProduct.images.length} imagens irrelevantes foram descartadas automaticamente.`
+        );
+      }
+
+      setProduct(normalizedProduct);
+      setActiveTab("preview");
+      const p = normalizedProduct;
       const variantCount = p.variants?.length || 0;
       const optionCount = p.variantOptions?.length || 0;
       toast.success(
@@ -478,6 +726,21 @@ export default function ProductsPage() {
   }
 
   const selectedStoreName = stores.find((s) => s.id === selectedStore)?.name;
+  const previewTitle = editTitle || product?.title || "";
+  const previewDescription = editDescription || product?.description || "";
+  const previewImages = product
+    ? product.images
+      .map((src) => generatedImages[src] || brandedImages[src] || src)
+      .filter(isValidImageUrl)
+    : [];
+  const selectedVariant = product?.variants.find((variant) =>
+    Object.entries(selectedVariantOptions).every(
+      ([key, value]) => variant.properties[key] === value
+    )
+  );
+  const previewPrice = selectedVariant?.price ?? product?.price ?? 0;
+  const previewOriginalPrice =
+    selectedVariant?.originalPrice ?? product?.originalPrice ?? previewPrice;
 
   return (
     <div className="space-y-8">
@@ -612,6 +875,127 @@ export default function ProductsPage() {
         </CardContent>
       </Card>
 
+      {stores.length > 0 && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle
+              className="text-[13px] font-medium uppercase text-muted-foreground"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              Materiais da marca da loja
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Envie banners e referencias da identidade visual para guiar a recriacao das imagens
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!selectedStore ? (
+              <p className="text-sm text-muted-foreground">
+                Selecione uma loja para enviar os materiais.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 border-border/50"
+                    onClick={() => materialsInputRef.current?.click()}
+                  >
+                    <Upload className="mr-1.5 h-3.5 w-3.5" />
+                    Adicionar materiais
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-9"
+                    style={{
+                      background: materialsSaving
+                        ? "oklch(0.72 0.19 155 / 40%)"
+                        : "oklch(0.72 0.19 155)",
+                      color: "oklch(0.13 0.02 155)",
+                    }}
+                    onClick={handleSaveMaterials}
+                    disabled={materialsSaving || materialFiles.length === 0}
+                  >
+                    {materialsSaving ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Salvando...
+                      </span>
+                    ) : (
+                      "Salvar materiais"
+                    )}
+                  </Button>
+                  <input
+                    ref={materialsInputRef}
+                    type="file"
+                    accept="image/png,image/webp,image/jpeg,image/jpg"
+                    onChange={handleMaterialsSelect}
+                    multiple
+                    className="hidden"
+                  />
+                </div>
+
+                {materialFiles.length > 0 && (
+                  <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+                      Prontos para salvar ({materialFiles.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {materialFiles.map((file, index) => (
+                        <Badge
+                          key={`${file.name}-${index}`}
+                          variant="outline"
+                          className="text-[10px] border-border/40"
+                        >
+                          {file.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {materialsLoading ? (
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
+                    {[...Array(5)].map((_, index) => (
+                      <div key={index} className="skeleton aspect-square rounded-md" />
+                    ))}
+                  </div>
+                ) : storeAssets.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
+                    {storeAssets.map((asset) => (
+                      <div key={asset.id} className="relative group">
+                        <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-background/40">
+                          <Image
+                            src={getAssetUrl(asset.file_path)}
+                            alt={asset.label || "Material da marca"}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveMaterial(asset)}
+                          className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-border/50 bg-card opacity-0 transition-opacity group-hover:opacity-100"
+                          title="Remover material"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Esta loja ainda nao tem materiais cadastrados.
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Loading skeleton */}
       {loading && !product && <ProductSkeleton />}
 
@@ -623,6 +1007,9 @@ export default function ProductsPage() {
           className="space-y-4 animate-fade-in"
         >
           <TabsList className="bg-card border border-border/50">
+            <TabsTrigger value="preview" className="text-[13px]">
+              Preview Shopify
+            </TabsTrigger>
             <TabsTrigger value="original" className="text-[13px]">
               Original
             </TabsTrigger>
@@ -848,6 +1235,217 @@ export default function ProductsPage() {
                     </Button>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB: Preview Shopify */}
+          <TabsContent value="preview" className="animate-fade-in">
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle
+                  className="text-[13px] font-medium uppercase text-muted-foreground"
+                  style={{ letterSpacing: "0.05em" }}
+                >
+                  Preview completo da pagina de produto
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  Visualize como o cliente vera o produto final na Shopify
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-2">
+                    <div className="relative aspect-square overflow-hidden rounded-lg border border-border/50 bg-card">
+                      {previewImages[selectedMainImage] ? (
+                        <Image
+                          src={previewImages[selectedMainImage]}
+                          alt={previewTitle}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                        </div>
+                      )}
+                    </div>
+
+                    {previewImages.length > 1 && (
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {previewImages.slice(0, 10).map((img, index) => (
+                          <button
+                            key={`${img}-${index}`}
+                            type="button"
+                            onClick={() => setSelectedMainImage(index)}
+                            className={`relative aspect-square overflow-hidden rounded-md border transition-all duration-200 ${
+                              selectedMainImage === index
+                                ? "border-[oklch(0.72_0.19_155)] ring-1 ring-[oklch(0.72_0.19_155)]"
+                                : "border-border/50 hover:border-border"
+                            }`}
+                          >
+                            <Image
+                              src={img}
+                              alt={`Miniatura ${index + 1}`}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Badge
+                        variant="outline"
+                        className="text-[11px] border-border/40"
+                      >
+                        {selectedStoreName || "Sua loja"}
+                      </Badge>
+                      <h3
+                        className="text-2xl font-semibold text-foreground"
+                        style={{ letterSpacing: "-0.02em" }}
+                      >
+                        {previewTitle}
+                      </h3>
+                      <div className="flex items-end gap-2">
+                        <span
+                          className="text-2xl font-bold"
+                          style={{ color: "oklch(0.72 0.19 155)" }}
+                        >
+                          US${previewPrice.toFixed(2)}
+                        </span>
+                        {previewOriginalPrice > previewPrice && (
+                          <span className="text-sm text-muted-foreground/50 line-through">
+                            US${previewOriginalPrice.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground/70">
+                        ou 12x de US${(previewPrice / 12).toFixed(2)}
+                      </p>
+                    </div>
+
+                    {product.variantOptions.length > 0 && (
+                      <div className="space-y-3 rounded-lg border border-border/30 p-3">
+                        {product.variantOptions.map((option) => (
+                          <div key={option.name} className="space-y-1.5">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {option.name}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {option.values.map((value) => {
+                                const selected = selectedVariantOptions[option.name] === value.name;
+                                return (
+                                  <button
+                                    key={`${option.name}-${value.name}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedVariantOptions((prev) => ({
+                                        ...prev,
+                                        [option.name]: value.name,
+                                      }))
+                                    }
+                                    className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                                      selected
+                                        ? "border-[oklch(0.72_0.19_155)] text-[oklch(0.72_0.19_155)]"
+                                        : "border-border/40 text-muted-foreground hover:border-border"
+                                    }`}
+                                  >
+                                    {value.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <Button
+                      className="w-full h-11 text-sm font-medium"
+                      style={{
+                        background: "oklch(0.72 0.19 155)",
+                        color: "oklch(0.13 0.02 155)",
+                      }}
+                    >
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Comprar agora
+                    </Button>
+
+                    <div className="grid gap-2 text-xs text-muted-foreground/80">
+                      <p className="flex items-center gap-2">
+                        <Truck className="h-3.5 w-3.5" />
+                        Frete com rastreio para todo Brasil
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Compra segura e suporte ao cliente
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border/30 p-4 space-y-2">
+                  <h4 className="text-sm font-medium text-foreground">Descricao do produto</h4>
+                  {previewDescription ? (
+                    <div
+                      className="prose prose-sm prose-invert max-w-none text-sm text-muted-foreground/85 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: previewDescription }}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground/70">
+                      Sem descricao ainda.
+                    </p>
+                  )}
+                </div>
+
+                {Object.keys(product.specs).length > 0 && (
+                  <div className="rounded-lg border border-border/30 p-4 space-y-3">
+                    <h4 className="text-sm font-medium text-foreground">Especificacoes</h4>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {Object.entries(product.specs)
+                        .slice(0, 8)
+                        .map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="rounded-md border border-border/30 bg-background/30 px-3 py-2 text-xs"
+                          >
+                            <p className="font-medium text-foreground/80">{key}</p>
+                            <p className="mt-1 text-muted-foreground/80">{value}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {previewImages.length > 1 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-foreground">Galeria completa</h4>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6">
+                      {previewImages.slice(0, 12).map((img, index) => (
+                        <button
+                          key={`${img}-gallery-${index}`}
+                          type="button"
+                          onClick={() => setSelectedMainImage(index)}
+                          className="relative aspect-square overflow-hidden rounded-md border border-border/40 hover:border-border"
+                        >
+                          <Image
+                            src={img}
+                            alt={`Galeria ${index + 1}`}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

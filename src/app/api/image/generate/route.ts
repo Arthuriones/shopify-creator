@@ -5,6 +5,46 @@ import { createClient } from "@/lib/supabase/server";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
+async function toJpegBase64(buffer: Buffer, maxSize: number = 1200) {
+  const optimized = await sharp(buffer)
+    .resize({ width: maxSize, height: maxSize, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+  return optimized.toString("base64");
+}
+
+async function loadStoreReferenceImages(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  storeId: string
+): Promise<string[]> {
+  try {
+    const { data: assets } = await supabase
+      .from("store_assets")
+      .select("file_path")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: false })
+      .limit(4);
+
+    if (!assets?.length) return [];
+
+    const references: string[] = [];
+    for (const asset of assets) {
+      const { data: assetData, error } = await supabase.storage
+        .from("store-assets")
+        .download(asset.file_path);
+      if (error || !assetData) continue;
+
+      const buffer = Buffer.from(await assetData.arrayBuffer());
+      references.push(await toJpegBase64(buffer, 1024));
+    }
+
+    return references;
+  } catch {
+    return [];
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -25,8 +65,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Buscar logo da loja (opcional)
+    // Buscar logo da loja e materiais de referencia (opcional)
     let logoBuffer: Buffer | null = null;
+    let referenceImages: string[] = [];
     if (storeId) {
       const { data: store } = await supabase
         .from("stores")
@@ -43,6 +84,8 @@ export async function POST(request: NextRequest) {
           logoBuffer = Buffer.from(await logoData.arrayBuffer());
         }
       }
+
+      referenceImages = await loadStoreReferenceImages(supabase, storeId);
     }
 
     // Baixar imagem original do AliExpress
@@ -51,12 +94,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Erro ao baixar imagem original" }, { status: 400 });
     }
     const originalBuffer = Buffer.from(await imgRes.arrayBuffer());
-    const originalBase64 = originalBuffer.toString("base64");
+    const originalBase64 = await toJpegBase64(originalBuffer);
 
     // Gerar imagem limpa com Gemini (visão + geração)
-    const prompt = `You are a professional e-commerce product photographer.
+    const prompt = `You are a professional e-commerce product photographer and art director.
 
 Look at this product image and recreate it as a clean, professional product photo.
+${referenceImages.length > 0 ? "Also use the provided brand reference images to match visual style." : ""}
 
 Product: "${productTitle}"
 
@@ -68,25 +112,46 @@ REQUIREMENTS:
 - Professional studio lighting
 - High quality, sharp details
 - E-commerce ready (square aspect ratio)
+- Keep the product shape and key details exactly recognizable
+- If brand references are provided: match their palette, vibe, composition style, and premium feel
 - DO NOT add any text, logos, or watermarks to the new image
 - Make it look like a premium brand product photo
 
 Generate the clean product image.`;
+
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [
+      { text: "Original product image to recreate:" },
+      {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: originalBase64,
+        },
+      },
+    ];
+
+    if (referenceImages.length > 0) {
+      referenceImages.forEach((imgBase64, index) => {
+        parts.push({ text: `Brand reference image ${index + 1}:` });
+        parts.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: imgBase64,
+          },
+        });
+      });
+    }
+
+    parts.push({ text: prompt });
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: [
         {
           role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: originalBase64,
-              },
-            },
-            { text: prompt },
-          ],
+          parts,
         },
       ],
       config: {
@@ -103,10 +168,9 @@ Generate the clean product image.`;
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const imagePart = candidate.content.parts.find(
-      (p: any) => p.inlineData
-    );
+    const imagePart = (candidate.content.parts as Array<{
+      inlineData?: { data?: string };
+    }>).find((part) => part.inlineData);
     if (!imagePart?.inlineData?.data) {
       return NextResponse.json(
         { error: "IA não gerou imagem. Tente novamente." },
