@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
@@ -54,6 +55,23 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const admin = createAdminClient();
+      const { data: buckets } = await admin.storage.listBuckets();
+      const existing = new Set((buckets || []).map((bucket) => bucket.name));
+      if (!existing.has("store-assets")) {
+        await admin.storage.createBucket("store-assets", { public: true });
+      }
+      if (!existing.has("store-logos")) {
+        await admin.storage.createBucket("store-logos", { public: true });
+      }
+      if (!existing.has("product-images")) {
+        await admin.storage.createBucket("product-images", { public: true });
+      }
+    } catch {
+      // segue o fluxo normal; falhas de bucket serao retornadas no upload/download
     }
 
     const { imageUrl, productTitle, storeId } = await request.json();

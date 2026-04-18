@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getShopInfo, getThemes } from "@/lib/shopify/client";
+import {
+  ShopifyClientError,
+  getShopInfo,
+  getThemes,
+} from "@/lib/shopify/client";
+import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { createClient } from "@/lib/supabase/server";
+
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -12,11 +29,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { shopDomain, clientId, clientSecret } = await request.json();
+  let payload: Record<string, unknown>;
+  try {
+    const body = await request.json();
+    payload = typeof body === "object" && body !== null ? body : {};
+  } catch {
+    return NextResponse.json(
+      { error: "Payload invalido. Envie os campos da conexao." },
+      { status: 400 }
+    );
+  }
+
+  const shopDomainInput = asTrimmedString(payload.shopDomain);
+  const clientId = asTrimmedString(payload.clientId);
+  const clientSecret = asTrimmedString(payload.clientSecret);
+  const shopDomain = normalizeShopDomain(shopDomainInput);
 
   if (!shopDomain || !clientId || !clientSecret) {
     return NextResponse.json(
-      { error: "shopDomain, clientId and clientSecret are required" },
+      {
+        error:
+          "Informe dominio (.myshopify.com), Client ID e Client Secret para conectar.",
+      },
       { status: 400 }
     );
   }
@@ -62,8 +96,21 @@ export async function POST(request: NextRequest) {
       theme: activeTheme,
     });
   } catch (error) {
+    if (error instanceof ShopifyClientError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode }
+      );
+    }
+
     const message =
-      error instanceof Error ? error.message : "Connection failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+      error instanceof Error
+        ? sanitizeErrorMessage(error.message)
+        : "Nao foi possivel conectar a loja agora.";
+
+    return NextResponse.json(
+      { error: message || "Nao foi possivel conectar a loja agora." },
+      { status: 500 }
+    );
   }
 }

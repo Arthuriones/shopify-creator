@@ -1,3 +1,5 @@
+import { normalizeShopDomain } from "@/lib/shopify/domain";
+
 const SHOPIFY_API_VERSION = "2024-10";
 
 // Cache de tokens por loja (em memória — reseta no restart do server)
@@ -6,14 +8,101 @@ const tokenCache = new Map<
   { accessToken: string; expiresAt: number }
 >();
 
+type ShopifyClientErrorCode =
+  | "INVALID_DOMAIN"
+  | "INVALID_CREDENTIALS"
+  | "REQUEST_FAILED";
+
+export class ShopifyClientError extends Error {
+  code: ShopifyClientErrorCode;
+  statusCode: number;
+
+  constructor(
+    message: string,
+    code: ShopifyClientErrorCode,
+    statusCode: number
+  ) {
+    super(message);
+    this.name = "ShopifyClientError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
 interface ShopifyCredentials {
   shopDomain: string;
   clientId: string;
   clientSecret: string;
 }
 
+function getOperationName(query: string): string {
+  const match = query.match(/\b(query|mutation)\s+([A-Za-z0-9_]+)/);
+  return match?.[2] || "unknown_operation";
+}
+
+function sanitizeErrorText(input: string): string {
+  return input
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
+function looksLikeMissingPublicationScope(reason: string): boolean {
+  const normalized = reason.toLowerCase();
+  return (
+    normalized.includes("read_publications") ||
+    (normalized.includes("access denied") && normalized.includes("publications"))
+  );
+}
+
+async function getInstalledAccessScopes(
+  creds: ShopifyCredentials
+): Promise<string[]> {
+  try {
+    const query = `
+      query getInstalledScopes {
+        currentAppInstallation {
+          accessScopes {
+            handle
+          }
+        }
+      }
+    `;
+    const data = await shopifyGraphQL(creds, query);
+    const scopes =
+      data?.currentAppInstallation?.accessScopes?.map(
+        (scope: { handle?: string }) => scope.handle || ""
+      ) || [];
+    return scopes.filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function looksLikeHtml(contentType: string, body: string): boolean {
+  const lowerType = contentType.toLowerCase();
+  const lowerBody = body.toLowerCase();
+
+  return (
+    lowerType.includes("text/html") ||
+    lowerBody.includes("<html") ||
+    lowerBody.includes("<script") ||
+    lowerBody.includes("<!doctype html")
+  );
+}
+
 async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
-  const cacheKey = `${creds.shopDomain}:${creds.clientId}`;
+  const normalizedShopDomain = normalizeShopDomain(creds.shopDomain);
+  if (!normalizedShopDomain) {
+    throw new ShopifyClientError(
+      "Use o dominio da loja no formato sualoja.myshopify.com.",
+      "INVALID_DOMAIN",
+      400
+    );
+  }
+
+  const cacheKey = `${normalizedShopDomain}:${creds.clientId}`;
   const cached = tokenCache.get(cacheKey);
 
   // Renova 5 min antes de expirar
@@ -22,7 +111,7 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
   }
 
   const res = await fetch(
-    `https://${creds.shopDomain}/admin/oauth/access_token`,
+    `https://${normalizedShopDomain}/admin/oauth/access_token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -35,9 +124,42 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
   );
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Shopify token error: ${res.status} ${res.statusText} - ${text}`
+    const contentType = res.headers.get("content-type") || "";
+    const body = await res.text();
+    const lowerBody = body.toLowerCase();
+
+    if (
+      res.status === 404 ||
+      looksLikeHtml(contentType, body) ||
+      lowerBody.includes("cloudflare")
+    ) {
+      throw new ShopifyClientError(
+        "Nao foi possivel acessar essa loja. Use o dominio .myshopify.com da sua loja.",
+        "INVALID_DOMAIN",
+        400
+      );
+    }
+
+    if (
+      res.status === 401 ||
+      res.status === 403 ||
+      lowerBody.includes("invalid_client") ||
+      lowerBody.includes("invalid client")
+    ) {
+      throw new ShopifyClientError(
+        "Client ID ou Client Secret invalidos. Verifique as credenciais do app no Shopify.",
+        "INVALID_CREDENTIALS",
+        401
+      );
+    }
+
+    const details = sanitizeErrorText(body);
+    throw new ShopifyClientError(
+      details
+        ? `Falha ao autenticar na Shopify: ${details}`
+        : "Falha ao autenticar na Shopify.",
+      "REQUEST_FAILED",
+      502
     );
   }
 
@@ -59,7 +181,16 @@ async function shopifyGraphQL(
   variables?: Record<string, unknown>
 ) {
   const accessToken = await getAccessToken(creds);
-  const url = `https://${creds.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const normalizedShopDomain = normalizeShopDomain(creds.shopDomain);
+  if (!normalizedShopDomain) {
+    throw new ShopifyClientError(
+      "Use o dominio da loja no formato sualoja.myshopify.com.",
+      "INVALID_DOMAIN",
+      400
+    );
+  }
+
+  const url = `https://${normalizedShopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -76,6 +207,11 @@ async function shopifyGraphQL(
 
   const json = await res.json();
   if (json.errors) {
+    console.error("[shopifyGraphQL] GraphQL errors", {
+      shopDomain: normalizedShopDomain,
+      operation: getOperationName(query),
+      errors: json.errors,
+    });
     throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
   }
 
@@ -104,6 +240,98 @@ export async function getThemes(creds: ShopifyCredentials) {
   return shopifyGraphQL(creds, query);
 }
 
+async function getOnlineStorePublicationId(
+  creds: ShopifyCredentials
+): Promise<string | null> {
+  const query = `
+    query getPublications {
+      publications(first: 30) {
+        nodes {
+          id
+          name
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query);
+  const nodes = data?.publications?.nodes as { id: string; name: string }[] | undefined;
+
+  if (!nodes || nodes.length === 0) {
+    return null;
+  }
+
+  const byName = nodes.find((publication) =>
+    /online store|loja virtual|tienda online/i.test(publication.name)
+  );
+
+  return byName?.id || nodes[0].id || null;
+}
+
+async function publishProductToStorefront(
+  creds: ShopifyCredentials,
+  productId: string
+) {
+  try {
+    const publicationId = await getOnlineStorePublicationId(creds);
+    if (!publicationId) {
+      return { ok: false, reason: "Nenhuma publication encontrada na loja." };
+    }
+
+    const mutation = `
+      mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+        publishablePublish(id: $id, input: $input) {
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const data = await shopifyGraphQL(creds, mutation, {
+      id: productId,
+      input: [{ publicationId }],
+    });
+
+    const errors = data?.publishablePublish?.userErrors as
+      | { field?: string[]; message: string }[]
+      | undefined;
+
+    if (errors && errors.length > 0) {
+      console.warn("[shopify.publishProductToStorefront] userErrors", {
+        shopDomain: creds.shopDomain,
+        productId,
+        errors,
+      });
+      return {
+        ok: false,
+        reason: errors.map((error) => error.message).join(" | "),
+      };
+    }
+
+    return { ok: true, publicationId };
+  } catch (error) {
+    let reason =
+      error instanceof Error
+        ? error.message
+        : "Falha ao publicar no canal da loja.";
+
+    if (looksLikeMissingPublicationScope(reason)) {
+      const scopes = await getInstalledAccessScopes(creds);
+      const scopesText = scopes.length > 0 ? scopes.join(", ") : "indisponivel";
+      reason =
+        `Scopes insuficientes para publicar no Online Store. ` +
+        `Adicione read_publications e write_publications, reinstale o app e reconecte a loja. ` +
+        `Scopes atuais: ${scopesText}`;
+    }
+
+    console.error("[shopify.publishProductToStorefront] failed", {
+      shopDomain: creds.shopDomain,
+      productId,
+      reason,
+    });
+    return { ok: false, reason };
+  }
+}
+
 export async function createProduct(
   creds: ShopifyCredentials,
   input: {
@@ -114,8 +342,10 @@ export async function createProduct(
     variants: { price: string; compareAtPrice?: string; options?: string[] }[];
     options?: string[]; // nomes das opções: ["Cor", "Tamanho"]
     seo?: { title: string; description: string };
+    publishToStorefront?: boolean;
   }
 ) {
+  const shouldPublishToStorefront = input.publishToStorefront !== false;
   const hasMultipleVariants = input.variants.length > 1 && input.options?.length;
 
   // Passo 1: Criar produto com opções se houver variantes
@@ -139,6 +369,7 @@ export async function createProduct(
     descriptionHtml: input.descriptionHtml,
     tags: input.tags,
     seo: input.seo,
+    status: shouldPublishToStorefront ? "ACTIVE" : "DRAFT",
   };
 
   const createResult = await shopifyGraphQL(creds, createQuery, {
@@ -251,7 +482,18 @@ export async function createProduct(
     });
   }
 
-  return createResult;
+  let storefrontPublication:
+    | { ok: boolean; publicationId?: string; reason?: string }
+    | undefined;
+
+  if (shouldPublishToStorefront) {
+    storefrontPublication = await publishProductToStorefront(creds, product.id);
+  }
+
+  return {
+    ...createResult,
+    storefrontPublication,
+  };
 }
 
 const POLICY_TYPE_MAP: Record<string, string> = {
@@ -290,21 +532,182 @@ export async function updateStorePolicies(
 
 export async function getProducts(
   creds: ShopifyCredentials,
-  first: number = 50
+  optionsOrFirst:
+    | number
+    | {
+        first?: number;
+        status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+        query?: string;
+      } = 50
 ) {
-  const safeFirst = Math.min(Math.max(1, Math.floor(first)), 250);
+  const parsedOptions =
+    typeof optionsOrFirst === "number"
+      ? { first: optionsOrFirst }
+      : optionsOrFirst;
+
+  const safeFirst = Math.min(Math.max(1, Math.floor(parsedOptions.first ?? 50)), 250);
+  const filters: string[] = [];
+
+  if (parsedOptions.status) {
+    filters.push(`status:${parsedOptions.status}`);
+  }
+  if (parsedOptions.query?.trim()) {
+    filters.push(parsedOptions.query.trim());
+  }
+
+  const queryFilter = filters.join(" ");
   const query = `
-    query getProducts($first: Int!) {
-      products(first: $first) {
+    query getProducts($first: Int!, $query: String) {
+      products(first: $first, query: $query) {
         nodes {
-          id title handle status
-          images(first: 1) { nodes { url altText } }
-          variants(first: 1) { nodes { price compareAtPrice } }
+          id
+          title
+          handle
+          status
+          descriptionHtml
+          tags
+          seo { title description }
+          images(first: 12) { nodes { url altText } }
+          options {
+            name
+            values
+          }
+          variants(first: 50) {
+            nodes {
+              id
+              title
+              price
+              compareAtPrice
+              selectedOptions { name value }
+            }
+          }
         }
       }
     }
   `;
-  return shopifyGraphQL(creds, query, { first: safeFirst });
+  return shopifyGraphQL(creds, query, {
+    first: safeFirst,
+    query: queryFilter || null,
+  });
+}
+
+export async function updateShopifyProduct(
+  creds: ShopifyCredentials,
+  input: {
+    productId: string;
+    title: string;
+    descriptionHtml: string;
+    tags: string[];
+    seo?: { title?: string; description?: string };
+    status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+    variants?: {
+      id: string;
+      price: string;
+      compareAtPrice?: string | null;
+    }[];
+    publishToStorefront?: boolean;
+  }
+) {
+  const nextStatus =
+    input.status ?? (input.publishToStorefront === false ? "DRAFT" : "ACTIVE");
+
+  const mutation = `
+    mutation productUpdate($input: ProductUpdateInput!) {
+      productUpdate(input: $input) {
+        product {
+          id
+          title
+          handle
+          status
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const result = await shopifyGraphQL(creds, mutation, {
+    input: {
+      id: input.productId,
+      title: input.title,
+      descriptionHtml: input.descriptionHtml,
+      tags: input.tags,
+      seo: input.seo,
+      status: nextStatus,
+    },
+  });
+
+  const userErrors = result?.productUpdate?.userErrors as
+    | { field?: string[]; message: string }[]
+    | undefined;
+  if (userErrors && userErrors.length > 0) {
+    throw new Error(userErrors.map((err) => err.message).join(" | "));
+  }
+
+  let variantsUpdate:
+    | {
+        productVariants?: { id: string }[];
+        userErrors?: { field?: string[]; message: string }[];
+      }
+    | undefined;
+  if (input.variants && input.variants.length > 0) {
+    const variantsMutation = `
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants { id }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const variantsPayload = input.variants.map((variant) => {
+      const payload: {
+        id: string;
+        price: string;
+        compareAtPrice?: string | null;
+      } = {
+        id: variant.id,
+        price: variant.price,
+      };
+
+      if (variant.compareAtPrice !== undefined) {
+        payload.compareAtPrice = variant.compareAtPrice;
+      }
+
+      return payload;
+    });
+
+    const variantsResult = await shopifyGraphQL(creds, variantsMutation, {
+      productId: input.productId,
+      variants: variantsPayload,
+    });
+
+    variantsUpdate = variantsResult?.productVariantsBulkUpdate as
+      | {
+          productVariants?: { id: string }[];
+          userErrors?: { field?: string[]; message: string }[];
+        }
+      | undefined;
+
+    if (variantsUpdate?.userErrors && variantsUpdate.userErrors.length > 0) {
+      throw new Error(variantsUpdate.userErrors.map((err) => err.message).join(" | "));
+    }
+  }
+
+  let storefrontPublication:
+    | { ok: boolean; publicationId?: string; reason?: string }
+    | undefined;
+  if (nextStatus === "ACTIVE" && input.publishToStorefront !== false) {
+    storefrontPublication = await publishProductToStorefront(creds, input.productId);
+  }
+
+  return {
+    ...result,
+    variantsUpdate,
+    storefrontPublication,
+  };
 }
 
 export async function getMenus(creds: ShopifyCredentials) {

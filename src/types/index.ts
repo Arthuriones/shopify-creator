@@ -11,6 +11,10 @@ export interface Store {
   brand_voice: string | null;
   store_description: string | null;
   logo_path: string | null;
+  currency_code: string;
+  auto_convert_prices: boolean;
+  currency_rate: number;
+  price_markup_percent: number;
   created_at: string;
   updated_at: string;
 }

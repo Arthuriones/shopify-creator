@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,11 +43,15 @@ import {
   ShoppingCart,
   ShieldCheck,
   Truck,
+  RefreshCw,
+  Pencil,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { AliExpressProduct, OptimizationResult } from "@/types";
 import Image from "next/image";
+import Link from "next/link";
 
 interface StoreOption {
   id: string;
@@ -55,6 +59,10 @@ interface StoreOption {
   shop_domain: string;
   niche: string | null;
   logo_path: string | null;
+  currency_code: string;
+  auto_convert_prices: boolean;
+  currency_rate: number;
+  price_markup_percent: number;
 }
 
 interface StoreAsset {
@@ -64,6 +72,50 @@ interface StoreAsset {
   label: string | null;
   created_at: string;
 }
+
+interface ShopifyCatalogProduct {
+  id: string;
+  title: string;
+  handle: string;
+  status: "ACTIVE" | "DRAFT" | "ARCHIVED";
+  descriptionHtml: string;
+  tags: string[];
+  seo?: { title?: string; description?: string } | null;
+  images: { nodes: { url: string; altText?: string | null }[] };
+  variants: {
+    nodes: {
+      id: string;
+      title: string;
+      price: string;
+      compareAtPrice?: string | null;
+      selectedOptions?: { name: string; value: string }[];
+    }[];
+  };
+  options: { name: string; values: string[] }[];
+}
+
+type LogoPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "center-left"
+  | "center"
+  | "center-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
+  { value: "top-left", label: "Topo esquerdo" },
+  { value: "top-center", label: "Topo centro" },
+  { value: "top-right", label: "Topo direito" },
+  { value: "center-left", label: "Centro esquerdo" },
+  { value: "center", label: "Centro" },
+  { value: "center-right", label: "Centro direito" },
+  { value: "bottom-left", label: "Inferior esquerdo" },
+  { value: "bottom-center", label: "Inferior centro" },
+  { value: "bottom-right", label: "Inferior direito" },
+];
 
 function CharCounter({ current, max }: { current: number; max: number }) {
   const ratio = current / max;
@@ -115,7 +167,13 @@ function getAssetUrl(filePath: string): string {
 }
 
 function isValidImageUrl(url: string): boolean {
-  return /^https:\/\/.+\.(jpg|jpeg|png|webp|avif)(?:\?.*)?$/i.test(url);
+  if (!/^https:\/\//i.test(url)) return false;
+  if (/\b(logo|avatar|icon|placeholder|no_photo|nophoto|flag|country)\b/i.test(url)) return false;
+  return true;
+}
+
+function normalizeImportedImages(images: string[]): string[] {
+  return [...new Set(images.map((image) => image.trim()).filter(isValidImageUrl))];
 }
 
 function sanitizeTitle(title: string): string {
@@ -132,21 +190,101 @@ function looksInvalidImportedProduct(title: string): boolean {
   );
 }
 
+function isMissingPublicationScope(reason: string | undefined): boolean {
+  if (!reason) return false;
+  const normalized = reason.toLowerCase();
+  return normalized.includes("read_publications") || normalized.includes("write_publications");
+}
+
+function roundPrice(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Number(value.toFixed(2));
+}
+
+function parseNumericInput(value: string): number {
+  const parsed = Number(value.replace(",", ".").trim());
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function formatPrice(value: number, currencyCode: string): string {
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: currencyCode || "USD",
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currencyCode || "USD"} ${value.toFixed(2)}`;
+  }
+}
+
+function applyMultiplierToProduct(
+  source: AliExpressProduct,
+  multiplier: number
+): AliExpressProduct {
+  const safeMultiplier = Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1;
+  const apply = (value: number) => roundPrice(value * safeMultiplier);
+
+  return {
+    ...source,
+    price: apply(source.price || 0),
+    originalPrice: apply(source.originalPrice || source.price || 0),
+    variants: source.variants.map((variant) => ({
+      ...variant,
+      price: apply(variant.price || 0),
+      originalPrice: apply(variant.originalPrice || variant.price || 0),
+    })),
+  };
+}
+
+function applyStorePricingRules(
+  source: AliExpressProduct,
+  store: StoreOption | undefined
+): AliExpressProduct {
+  if (!store || !store.auto_convert_prices) return source;
+
+  const rate = Number(store.currency_rate) > 0 ? Number(store.currency_rate) : 1;
+  const markup = Number(store.price_markup_percent) || 0;
+  const multiplier = rate * (1 + markup / 100);
+  return applyMultiplierToProduct(source, multiplier);
+}
+
 export default function ProductsPage() {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [product, setProduct] = useState<AliExpressProduct | null>(null);
+  const [baseImportedProduct, setBaseImportedProduct] = useState<AliExpressProduct | null>(null);
   const [optimized, setOptimized] = useState<OptimizationResult | null>(null);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
+  const [priceDraft, setPriceDraft] = useState("");
+  const [comparePriceDraft, setComparePriceDraft] = useState("");
+  const [bulkMarkupDraft, setBulkMarkupDraft] = useState("0");
   const [activeTab, setActiveTab] = useState("preview");
   const [storeAssets, setStoreAssets] = useState<StoreAsset[]>([]);
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsSaving, setMaterialsSaving] = useState(false);
+  const [autoApplyLogoOnImport, setAutoApplyLogoOnImport] = useState(true);
+
+  const [catalogProducts, setCatalogProducts] = useState<ShopifyCatalogProduct[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogRefreshing, setCatalogRefreshing] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [editingCatalogProduct, setEditingCatalogProduct] = useState<ShopifyCatalogProduct | null>(null);
+  const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
+  const [catalogEditTitle, setCatalogEditTitle] = useState("");
+  const [catalogEditDescription, setCatalogEditDescription] = useState("");
+  const [catalogEditTags, setCatalogEditTags] = useState("");
+  const [catalogEditSeoTitle, setCatalogEditSeoTitle] = useState("");
+  const [catalogEditSeoDescription, setCatalogEditSeoDescription] = useState("");
+  const [catalogSaving, setCatalogSaving] = useState(false);
+  const [catalogOptimizing, setCatalogOptimizing] = useState(false);
+  const [publishToStorefront, setPublishToStorefront] = useState(true);
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -163,6 +301,12 @@ export default function ProductsPage() {
   // Branded images
   const [brandedImages, setBrandedImages] = useState<Record<string, string>>({});
   const [brandingAll, setBrandingAll] = useState(false);
+  const [brandingImage, setBrandingImage] = useState<string | null>(null);
+  const [brandingProgress, setBrandingProgress] = useState<{ done: number; total: number } | null>(null);
+  const [logoPosition, setLogoPosition] = useState<LogoPosition>("bottom-right");
+  const [logoScalePercent, setLogoScalePercent] = useState(20);
+  const [logoMarginPercent, setLogoMarginPercent] = useState(3);
+  const [logoOpacityPercent, setLogoOpacityPercent] = useState(100);
   const [selectedMainImage, setSelectedMainImage] = useState(0);
   const [selectedVariantOptions, setSelectedVariantOptions] = useState<Record<string, string>>({});
 
@@ -171,6 +315,220 @@ export default function ProductsPage() {
   const [generatingImage, setGeneratingImage] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
   const materialsInputRef = useRef<HTMLInputElement>(null);
+
+  function createDefaultDescriptionHtml(rawDescription: string | undefined): string {
+    const description = (rawDescription || "").trim();
+    if (!description) return "<p>Descricao do produto em breve.</p>";
+
+    if (/<[a-z][\s\S]*>/i.test(description)) {
+      return description;
+    }
+
+    return `<p>${description.replace(/\n+/g, "<br />")}</p>`;
+  }
+
+  async function ensureStorageBuckets() {
+    const res = await fetch("/api/storage/ensure-buckets", { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Nao foi possivel preparar o storage.");
+    }
+  }
+
+  function toAliExpressProductFromCatalog(item: ShopifyCatalogProduct): AliExpressProduct {
+    const firstVariant = item.variants.nodes[0];
+    const basePrice = Number(firstVariant?.price || 0);
+    const baseCompare = Number(firstVariant?.compareAtPrice || basePrice);
+
+    return {
+      title: item.title,
+      description: item.descriptionHtml || "",
+      price: basePrice,
+      originalPrice: baseCompare > basePrice ? baseCompare : basePrice,
+      images: item.images.nodes.map((node) => node.url).filter(Boolean),
+      specs: {},
+      rating: 0,
+      orders: 0,
+      variantOptions: item.options.map((option) => ({
+        name: option.name,
+        values: option.values.map((value) => ({ name: value })),
+      })),
+      variants: item.variants.nodes.map((variant) => ({
+        sku: variant.id,
+        properties: Object.fromEntries(
+          (variant.selectedOptions || []).map((option) => [option.name, option.value])
+        ),
+        price: Number(variant.price || 0),
+        originalPrice: Number(variant.compareAtPrice || variant.price || 0),
+        stock: 0,
+      })),
+    };
+  }
+
+  function getShopifyAdminProductUrl(productId: string): string | null {
+    const storeDomain = stores.find((store) => store.id === selectedStore)?.shop_domain;
+    if (!storeDomain) return null;
+
+    const idMatch = productId.match(/(\d+)$/);
+    if (!idMatch?.[1]) return null;
+    return `https://${storeDomain}/admin/products/${idMatch[1]}`;
+  }
+
+  const loadCatalogProducts = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!selectedStore) {
+      setCatalogProducts([]);
+      return;
+    }
+
+    if (opts?.silent) {
+      setCatalogRefreshing(true);
+    } else {
+      setCatalogLoading(true);
+    }
+
+    try {
+      const params = new URLSearchParams({
+        storeId: selectedStore,
+        status: "ACTIVE",
+        first: "100",
+      });
+
+      if (catalogSearch.trim()) {
+        params.set("search", catalogSearch.trim());
+      }
+
+      const res = await fetch(`/api/shopify/products?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel carregar produtos ativos.");
+        return;
+      }
+
+      setCatalogProducts(data.products || []);
+    } catch {
+      toast.error("Erro ao carregar produtos da loja.");
+    } finally {
+      setCatalogLoading(false);
+      setCatalogRefreshing(false);
+    }
+  }, [catalogSearch, selectedStore]);
+
+  function openCatalogEditor(productItem: ShopifyCatalogProduct) {
+    setEditingCatalogProduct(productItem);
+    setCatalogEditTitle(productItem.title || "");
+    setCatalogEditDescription(productItem.descriptionHtml || "");
+    setCatalogEditTags((productItem.tags || []).join(", "));
+    setCatalogEditSeoTitle(productItem.seo?.title || productItem.title || "");
+    setCatalogEditSeoDescription(productItem.seo?.description || "");
+    setCatalogEditorOpen(true);
+  }
+
+  async function handleOptimizeCatalogProduct() {
+    if (!editingCatalogProduct || !selectedStore) return;
+
+    setCatalogOptimizing(true);
+    try {
+      const res = await fetch("/api/ai/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: selectedStore,
+          product: toAliExpressProductFromCatalog(editingCatalogProduct),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel otimizar o produto.");
+        return;
+      }
+
+      const result = data.result as OptimizationResult;
+      setCatalogEditTitle(result.title);
+      setCatalogEditDescription(result.description);
+      setCatalogEditTags(result.tags.join(", "));
+      setCatalogEditSeoTitle(result.seoTitle);
+      setCatalogEditSeoDescription(result.seoDescription);
+      toast.success("Texto do produto otimizado com IA!");
+    } catch {
+      toast.error("Erro ao otimizar produto.");
+    } finally {
+      setCatalogOptimizing(false);
+    }
+  }
+
+  async function handleSaveCatalogProduct() {
+    if (!editingCatalogProduct || !selectedStore) return;
+    const title = catalogEditTitle.trim();
+    const descriptionHtml = catalogEditDescription.trim();
+    if (!title || !descriptionHtml) {
+      toast.error("Titulo e descricao sao obrigatorios.");
+      return;
+    }
+
+    setCatalogSaving(true);
+    try {
+      const tags = catalogEditTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const res = await fetch("/api/shopify/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: selectedStore,
+          productId: editingCatalogProduct.id,
+          updates: {
+            title,
+            descriptionHtml,
+            tags,
+            seo: {
+              title: catalogEditSeoTitle || title,
+              description: catalogEditSeoDescription || title,
+            },
+            publishToStorefront,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel salvar produto.");
+        return;
+      }
+
+      const storefrontPublication = data.result?.storefrontPublication as
+        | { ok?: boolean; reason?: string }
+        | undefined;
+
+      if (publishToStorefront && storefrontPublication?.ok === false) {
+        console.warn("[products.catalogEditor] storefront publish failed", {
+          storeId: selectedStore,
+          productId: editingCatalogProduct.id,
+          reason: storefrontPublication.reason,
+        });
+        if (isMissingPublicationScope(storefrontPublication.reason)) {
+          toast.warning(
+            "Produto atualizado, mas faltam scopes de publicacao (read_publications/write_publications). Reinstale o app e reconecte a loja."
+          );
+        } else {
+          toast.warning(
+            `Produto atualizado, mas nao foi possivel publicar no storefront: ${storefrontPublication.reason || "erro desconhecido"}`
+          );
+        }
+      } else {
+        toast.success("Produto atualizado na Shopify!");
+      }
+
+      setCatalogEditorOpen(false);
+      await loadCatalogProducts({ silent: true });
+    } catch {
+      toast.error("Erro ao salvar produto.");
+    } finally {
+      setCatalogSaving(false);
+    }
+  }
 
   async function handleGenerateCleanImage(imageUrl: string) {
     setGeneratingImage(imageUrl);
@@ -233,32 +591,120 @@ export default function ProductsPage() {
     toast.success("Imagens geradas com IA!");
   }
 
-  async function handleBrandAllImages() {
-    if (!product || product.images.length === 0) return;
-    setBrandingAll(true);
-    const results: Record<string, string> = {};
+  async function applyLogoToImage(
+    sourceImageUrl: string,
+    showErrorToast: boolean = true
+  ): Promise<string | null> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    for (const img of product.images) {
-      try {
-        const res = await fetch("/api/image/branded", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl: img, storeId: selectedStore }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          results[img] = data.url;
+    try {
+      const res = await fetch("/api/image/branded", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          imageUrl: sourceImageUrl,
+          storeId: selectedStore,
+          position: logoPosition,
+          logoScalePercent,
+          marginPercent: logoMarginPercent,
+          logoOpacityPercent,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (showErrorToast) {
+          toast.error(data.error || "Erro ao aplicar logo");
         }
-      } catch {
-        // skip failed images
+        return null;
       }
+
+      const data = await res.json();
+      return typeof data.url === "string" ? data.url : null;
+    } catch {
+      if (showErrorToast) {
+        toast.error("Erro ao aplicar logo");
+      }
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function handleBrandImage(imageUrl: string) {
+    if (!selectedStore) {
+      toast.error("Selecione uma loja para aplicar a logo.");
+      return;
     }
 
-    setBrandedImages(results);
-    setBrandingAll(false);
-    const count = Object.keys(results).length;
-    if (count > 0) {
-      toast.success(`${count} imagens geradas com logo!`);
+    setBrandingImage(imageUrl);
+    const sourceImageUrl = generatedImages[imageUrl] || imageUrl;
+    const resultUrl = await applyLogoToImage(sourceImageUrl);
+    if (resultUrl) {
+      setBrandedImages((prev) => ({ ...prev, [imageUrl]: resultUrl }));
+      toast.success("Logo aplicada na imagem!");
+    }
+    setBrandingImage(null);
+  }
+
+  async function handleBrandAllImages(options?: {
+    sourceImages?: string[];
+    showToast?: boolean;
+  }) {
+    const imagesToBrand = options?.sourceImages || product?.images || [];
+    if (imagesToBrand.length === 0) return;
+    if (!selectedStore) {
+      toast.error("Selecione uma loja para aplicar a logo.");
+      return;
+    }
+
+    setBrandingAll(true);
+    setBrandingProgress({ done: 0, total: imagesToBrand.length });
+
+    try {
+      const results: Record<string, string> = {};
+      const queue = [...imagesToBrand];
+      const workerCount = Math.min(3, queue.length);
+
+      async function worker() {
+        while (queue.length > 0) {
+          const img = queue.shift();
+          if (!img) break;
+
+          const sourceImageUrl = generatedImages[img] || img;
+          const brandedUrl = await applyLogoToImage(sourceImageUrl, false);
+          if (brandedUrl) {
+            results[img] = brandedUrl;
+            setBrandedImages((prev) => ({ ...prev, [img]: brandedUrl }));
+          }
+
+          setBrandingProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  done: Math.min(prev.total, prev.done + 1),
+                }
+              : prev
+          );
+        }
+      }
+
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+      const shouldShowToast = options?.showToast !== false;
+      if (shouldShowToast) {
+        const count = Object.keys(results).length;
+        if (count > 0) {
+          toast.success(`${count} imagens com logo atualizadas!`);
+        } else {
+          toast.error("Nao foi possivel aplicar logo nas imagens.");
+        }
+      }
+    } finally {
+      setBrandingAll(false);
+      setBrandingProgress(null);
     }
   }
 
@@ -299,6 +745,66 @@ export default function ProductsPage() {
   function handleCopyPrompt() {
     navigator.clipboard.writeText(imagePrompt);
     toast.success("Prompt copiado!");
+  }
+
+  function handleApplyPriceDraft() {
+    if (!product) return;
+
+    const nextPrice = parseNumericInput(priceDraft);
+    const nextCompare = parseNumericInput(comparePriceDraft);
+
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+      toast.error("Informe um preco principal valido.");
+      return;
+    }
+
+    const currentBase = product.price > 0 ? product.price : 1;
+    const ratio = nextPrice / currentBase;
+    const normalizedCompare =
+      Number.isFinite(nextCompare) && nextCompare >= nextPrice
+        ? nextCompare
+        : nextPrice;
+
+    setProduct((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        price: roundPrice(nextPrice),
+        originalPrice: roundPrice(normalizedCompare),
+        variants:
+          prev.variants.length > 0
+            ? prev.variants.map((variant) => {
+                const variantBase = variant.price > 0 ? variant.price : nextPrice;
+                const variantCompareBase =
+                  variant.originalPrice > 0 ? variant.originalPrice : variantBase;
+                const adjusted = roundPrice(variantBase * ratio);
+                const adjustedCompare = roundPrice(
+                  variantCompareBase * ratio
+                );
+                return {
+                  ...variant,
+                  price: adjusted,
+                  originalPrice: Math.max(adjusted, adjustedCompare),
+                };
+              })
+            : prev.variants,
+      };
+    });
+
+    toast.success("Preco atualizado no preview e na publicacao.");
+  }
+
+  function handleApplyBulkMarkup() {
+    if (!product) return;
+    const markup = parseNumericInput(bulkMarkupDraft);
+    if (!Number.isFinite(markup) || markup <= -100) {
+      toast.error("Markup invalido. Use um valor maior que -100.");
+      return;
+    }
+
+    const factor = 1 + markup / 100;
+    setProduct((prev) => (prev ? applyMultiplierToProduct(prev, factor) : prev));
+    toast.success("Markup aplicado nas variantes e no preco principal.");
   }
 
   async function loadStoreAssets(storeId: string) {
@@ -370,6 +876,8 @@ export default function ProductsPage() {
     setMaterialsSaving(true);
 
     try {
+      await ensureStorageBuckets();
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -441,12 +949,37 @@ export default function ProductsPage() {
   }
 
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
     async function loadStores() {
       const supabase = createClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("stores")
-        .select("id, name, shop_domain, niche, logo_path")
+        .select("id, name, shop_domain, niche, logo_path, currency_code, auto_convert_prices, currency_rate, price_markup_percent")
         .order("created_at", { ascending: false });
+      if (error) {
+        const fallback = await supabase
+          .from("stores")
+          .select("id, name, shop_domain, niche, logo_path")
+          .order("created_at", { ascending: false });
+
+        if (fallback.data) {
+          setStores(
+            fallback.data.map((store) => ({
+              ...store,
+              currency_code: "USD",
+              auto_convert_prices: false,
+              currency_rate: 1,
+              price_markup_percent: 0,
+            }))
+          );
+          if (fallback.data.length === 1) setSelectedStore(fallback.data[0].id);
+        }
+        return;
+      }
+
       if (data) {
         setStores(data);
         if (data.length === 1) setSelectedStore(data[0].id);
@@ -459,11 +992,29 @@ export default function ProductsPage() {
     if (!selectedStore) {
       setStoreAssets([]);
       setMaterialFiles([]);
+      setCatalogProducts([]);
+      setCatalogEditorOpen(false);
+      setEditingCatalogProduct(null);
       return;
     }
 
     void loadStoreAssets(selectedStore);
+    void loadCatalogProducts();
+  }, [loadCatalogProducts, selectedStore]);
+
+  useEffect(() => {
+    setPublished(false);
   }, [selectedStore]);
+
+  useEffect(() => {
+    if (!selectedStore) return;
+
+    const timer = setTimeout(() => {
+      void loadCatalogProducts({ silent: true });
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [catalogSearch, loadCatalogProducts, selectedStore]);
 
   useEffect(() => {
     if (optimized) {
@@ -503,7 +1054,7 @@ export default function ProductsPage() {
     }
 
     const availableCount = product.images
-      .map((src) => generatedImages[src] || brandedImages[src] || src)
+      .map((src) => brandedImages[src] || generatedImages[src] || src)
       .filter(isValidImageUrl).length;
 
     if (availableCount === 0 || selectedMainImage >= availableCount) {
@@ -511,10 +1062,32 @@ export default function ProductsPage() {
     }
   }, [product, generatedImages, brandedImages, selectedMainImage]);
 
+  useEffect(() => {
+    if (!product) {
+      setPriceDraft("");
+      setComparePriceDraft("");
+      return;
+    }
+
+    setPriceDraft(product.price > 0 ? product.price.toFixed(2) : "");
+    setComparePriceDraft(
+      product.originalPrice > 0 ? product.originalPrice.toFixed(2) : ""
+    );
+  }, [product]);
+
+  useEffect(() => {
+    if (!baseImportedProduct) return;
+
+    const activeStore = stores.find((store) => store.id === selectedStore);
+    const recalculated = applyStorePricingRules(baseImportedProduct, activeStore);
+    setProduct(recalculated);
+  }, [baseImportedProduct, selectedStore, stores]);
+
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setProduct(null);
+    setBaseImportedProduct(null);
     setOptimized(null);
     setPublished(false);
     setBrandedImages({});
@@ -539,7 +1112,7 @@ export default function ProductsPage() {
       const normalizedProduct: AliExpressProduct = {
         ...imported,
         title: sanitizeTitle(imported.title),
-        images: imported.images.filter(isValidImageUrl),
+        images: normalizeImportedImages(imported.images),
       };
 
       if (looksInvalidImportedProduct(normalizedProduct.title)) {
@@ -571,14 +1144,38 @@ export default function ProductsPage() {
         );
       }
 
-      setProduct(normalizedProduct);
+      const activeStore = stores.find((store) => store.id === selectedStore);
+      const pricedProduct = applyStorePricingRules(normalizedProduct, activeStore);
+
+      setBaseImportedProduct(normalizedProduct);
+      setProduct(pricedProduct);
+      const baseTitle = pricedProduct.title.trim();
+      const plainDescription = (normalizedProduct.description || "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      setEditTitle(baseTitle);
+      setEditDescription(createDefaultDescriptionHtml(normalizedProduct.description));
+      setEditTags("");
+      setEditSeoTitle(baseTitle.slice(0, 60));
+      setEditSeoDescription(plainDescription.slice(0, 155));
       setActiveTab("preview");
+      if (autoApplyLogoOnImport && selectedStore) {
+        const selectedStoreData = stores.find((store) => store.id === selectedStore);
+        if (selectedStoreData?.logo_path) {
+          void handleBrandAllImages({
+            sourceImages: normalizedProduct.images,
+            showToast: false,
+          });
+        }
+      }
       const p = normalizedProduct;
       const variantCount = p.variants?.length || 0;
       const optionCount = p.variantOptions?.length || 0;
       toast.success(
         `Produto importado! ${p.images.length} fotos` +
-        (variantCount > 0 ? `, ${variantCount} variantes (${optionCount} opções)` : "")
+        (variantCount > 0 ? `, ${variantCount} variantes (${optionCount} opções)` : "") +
+        `. Preco atual: ${formatPrice(pricedProduct.price, activeStore?.currency_code || "USD")}`
       );
     } catch {
       toast.error("Erro ao buscar produto");
@@ -631,7 +1228,18 @@ export default function ProductsPage() {
 
   async function handlePublish() {
     if (!product || !selectedStore) {
-      toast.error("Selecione uma loja e otimize o produto primeiro");
+      toast.error("Selecione uma loja e importe um produto.");
+      return;
+    }
+
+    const publishTitle = (editTitle || product.title).trim();
+    const publishDescriptionHtml = (editDescription || product.description || "").trim();
+    if (!publishTitle) {
+      toast.error("Informe um titulo antes de publicar.");
+      return;
+    }
+    if (!publishDescriptionHtml) {
+      toast.error("Informe uma descricao antes de publicar.");
       return;
     }
 
@@ -649,12 +1257,12 @@ export default function ProductsPage() {
         body: JSON.stringify({
           storeId: selectedStore,
           product: {
-            title: editTitle,
-            descriptionHtml: editDescription,
+            title: publishTitle,
+            descriptionHtml: publishDescriptionHtml,
             tags,
             images: product.images.map((src, i) => ({
-              src: generatedImages[src] || brandedImages[src] || src,
-              altText: `${editTitle} - ${i + 1}`,
+              src: brandedImages[src] || generatedImages[src] || src,
+              altText: `${publishTitle} - ${i + 1}`,
             })),
             ...(product.variants.length > 1 && product.variantOptions.length > 0
               ? {
@@ -682,9 +1290,10 @@ export default function ProductsPage() {
                   ],
                 }),
             seo: {
-              title: editSeoTitle,
-              description: editSeoDescription,
+              title: editSeoTitle || publishTitle,
+              description: editSeoDescription || publishTitle,
             },
+            publishToStorefront,
           },
         }),
       });
@@ -702,22 +1311,45 @@ export default function ProductsPage() {
         return;
       }
 
+      const storefrontPublication = data.result?.storefrontPublication as
+        | { ok?: boolean; reason?: string }
+        | undefined;
+
       const supabase = createClient();
       await supabase.from("products").insert({
         store_id: selectedStore,
         aliexpress_url: url,
         shopify_product_id: created?.product?.id || null,
-        title: editTitle,
+        title: publishTitle,
         original_title: product.title,
-        description: editDescription,
+        description: publishDescriptionHtml,
         original_description: product.description || "",
         price: product.price,
-        images: product.images.map((src) => generatedImages[src] || brandedImages[src] || src),
-        status: "published",
+        images: product.images.map((src) => brandedImages[src] || generatedImages[src] || src),
+        status: publishToStorefront ? "published" : "optimized",
       });
 
       setPublished(true);
-      toast.success(`"${editTitle}" publicado na Shopify!`);
+      if (publishToStorefront && storefrontPublication?.ok === false) {
+        console.warn("[products.importPublish] storefront publish failed", {
+          storeId: selectedStore,
+          productTitle: publishTitle,
+          reason: storefrontPublication.reason,
+        });
+        if (isMissingPublicationScope(storefrontPublication.reason)) {
+          toast.warning(
+            "Produto criado, mas faltam scopes de publicacao (read_publications/write_publications). Reinstale o app e reconecte a loja."
+          );
+        } else {
+          toast.warning(
+            `Produto criado, mas nao foi possivel publicar no storefront: ${storefrontPublication.reason || "erro desconhecido"}`
+          );
+        }
+      } else if (publishToStorefront) {
+        toast.success(`"${publishTitle}" publicado na Shopify e visivel na loja!`);
+      } else {
+        toast.success(`"${publishTitle}" salvo na Shopify como rascunho.`);
+      }
     } catch {
       toast.error("Erro ao publicar produto");
     } finally {
@@ -725,12 +1357,14 @@ export default function ProductsPage() {
     }
   }
 
-  const selectedStoreName = stores.find((s) => s.id === selectedStore)?.name;
+  const selectedStoreData = stores.find((s) => s.id === selectedStore);
+  const selectedStoreName = selectedStoreData?.name;
+  const activeCurrency = selectedStoreData?.currency_code || "USD";
   const previewTitle = editTitle || product?.title || "";
   const previewDescription = editDescription || product?.description || "";
   const previewImages = product
     ? product.images
-      .map((src) => generatedImages[src] || brandedImages[src] || src)
+      .map((src) => brandedImages[src] || generatedImages[src] || src)
       .filter(isValidImageUrl)
     : [];
   const selectedVariant = product?.variants.find((variant) =>
@@ -742,21 +1376,51 @@ export default function ProductsPage() {
   const previewOriginalPrice =
     selectedVariant?.originalPrice ?? product?.originalPrice ?? previewPrice;
 
+  if (!isHydrated) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2
+            className="text-3xl font-semibold text-foreground"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            Produtos
+          </h2>
+          <p
+            className="mt-1 text-base text-muted-foreground"
+            style={{ letterSpacing: "-0.01em" }}
+          >
+            Carregando...
+          </p>
+        </div>
+        <ProductSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <div>
-        <h2
-          className="text-3xl font-semibold text-foreground"
-          style={{ letterSpacing: "-0.03em" }}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2
+            className="text-3xl font-semibold text-foreground"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            Produtos
+          </h2>
+          <p
+            className="mt-1 text-base text-muted-foreground"
+            style={{ letterSpacing: "-0.01em" }}
+          >
+            Importe do AliExpress, otimize com IA e publique na Shopify
+          </p>
+        </div>
+        <Link
+          href="/products/catalog"
+          className="inline-flex h-10 items-center rounded-lg border border-border/50 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Produtos
-        </h2>
-        <p
-          className="mt-1 text-base text-muted-foreground"
-          style={{ letterSpacing: "-0.01em" }}
-        >
-          Importe do AliExpress, otimize com IA e publique na Shopify
-        </p>
+          Ver Catalogo completo
+        </Link>
       </div>
 
       {/* Config */}
@@ -771,9 +1435,9 @@ export default function ProductsPage() {
                 {stores.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Nenhuma loja conectada.{" "}
-                    <a href="/stores" className="underline hover:text-foreground transition-colors duration-200">
+                    <Link href="/stores" className="underline hover:text-foreground transition-colors duration-200">
                       Conectar loja
-                    </a>
+                    </Link>
                   </p>
                 ) : (
                   <Select
@@ -798,44 +1462,75 @@ export default function ProductsPage() {
                   Perfil da loja
                 </Label>
                 {selectedStore ? (
-                  (() => {
-                    const store = stores.find((s) => s.id === selectedStore);
-                    if (!store) return null;
-                    return store.niche ? (
-                      <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-border/50 bg-background/50">
-                        <Badge
-                          className="text-[11px]"
-                          style={{
-                            background: "oklch(0.72 0.19 155 / 10%)",
-                            color: "oklch(0.72 0.19 155)",
-                            border: "none",
-                          }}
-                        >
-                          {store.niche}
+                  selectedStoreData?.niche ? (
+                    <div className="flex h-10 items-center gap-2 rounded-md border border-border/50 bg-background/50 px-3">
+                      <Badge
+                        className="text-[11px]"
+                        style={{
+                          background: "oklch(0.72 0.19 155 / 10%)",
+                          color: "oklch(0.72 0.19 155)",
+                          border: "none",
+                        }}
+                      >
+                        {selectedStoreData.niche}
+                      </Badge>
+                      {selectedStoreData.logo_path && (
+                        <Badge variant="outline" className="text-[11px] border-border/30">
+                          Logo configurada
                         </Badge>
-                        {store.logo_path && (
-                          <Badge variant="outline" className="text-[11px] border-border/30">
-                            Logo configurada
-                          </Badge>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-border/50 bg-background/50">
-                        <p className="text-sm text-muted-foreground">
-                          Perfil incompleto.{" "}
-                          <a href="/stores" className="underline hover:text-foreground transition-colors">
-                            Configurar
-                          </a>
-                        </p>
-                      </div>
-                    );
-                  })()
+                      )}
+                      <Badge variant="outline" className="text-[11px] border-border/30">
+                        Moeda {selectedStoreData.currency_code || "USD"}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-border/50 bg-background/50">
+                      <p className="text-sm text-muted-foreground">
+                        Perfil incompleto.{" "}
+                        <Link href="/stores" className="underline hover:text-foreground transition-colors">
+                          Configurar
+                        </Link>
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <div className="h-10 flex items-center px-3 rounded-md border border-border/50 bg-background/50">
                     <p className="text-sm text-muted-foreground/50">Selecione uma loja</p>
                   </div>
                 )}
               </div>
+            </div>
+            <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={publishToStorefront}
+                  onChange={(e) => setPublishToStorefront(e.target.checked)}
+                  className="h-4 w-4 rounded border-border/70 bg-background"
+                />
+                <span className="text-foreground/90">
+                  Inserir automaticamente na loja (canal Online Store)
+                </span>
+              </label>
+              <p className="mt-1 pl-6 text-xs text-muted-foreground/80">
+                Marcado: publica ativo e disponivel no storefront. Desmarcado: salva como rascunho.
+              </p>
+            </div>
+            <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={autoApplyLogoOnImport}
+                  onChange={(e) => setAutoApplyLogoOnImport(e.target.checked)}
+                  className="h-4 w-4 rounded border-border/70 bg-background"
+                />
+                <span className="text-foreground/90">
+                  Aplicar logo automaticamente apos importar
+                </span>
+              </label>
+              <p className="mt-1 pl-6 text-xs text-muted-foreground/80">
+                Se a loja tiver logo configurada, todas as midias vao para o preview ja com marca.
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
@@ -872,6 +1567,245 @@ export default function ProductsPage() {
               </form>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {product && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle
+              className="text-[13px] font-medium uppercase text-muted-foreground"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              Preco e moeda do produto
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Ajuste valores manualmente e veja o preview atualizar em tempo real.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="border-border/40 text-[11px]">
+                Moeda ativa: {activeCurrency}
+              </Badge>
+              {selectedStoreData?.auto_convert_prices ? (
+                <Badge
+                  className="text-[11px]"
+                  style={{
+                    background: "oklch(0.72 0.19 155 / 12%)",
+                    color: "oklch(0.72 0.19 155)",
+                    border: "none",
+                  }}
+                >
+                  Conversao automatica ligada
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-border/40 text-[11px]">
+                  Conversao automatica desligada
+                </Badge>
+              )}
+              {selectedStoreData && (
+                <span className="text-xs text-muted-foreground/80">
+                  Regra da loja: taxa {selectedStoreData.currency_rate || 1} x markup{" "}
+                  {selectedStoreData.price_markup_percent || 0}%
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">Preco principal</Label>
+                <Input
+                  value={priceDraft}
+                  onChange={(e) => setPriceDraft(e.target.value)}
+                  inputMode="decimal"
+                  className="h-10 bg-background/50 border-border/50 text-sm"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">Preco de compare</Label>
+                <Input
+                  value={comparePriceDraft}
+                  onChange={(e) => setComparePriceDraft(e.target.value)}
+                  inputMode="decimal"
+                  className="h-10 bg-background/50 border-border/50 text-sm"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  className="h-10 w-full text-sm"
+                  onClick={handleApplyPriceDraft}
+                  style={{
+                    background: "oklch(0.72 0.19 155)",
+                    color: "oklch(0.13 0.02 155)",
+                  }}
+                >
+                  Aplicar precos
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">
+                  Ajuste em lote das variantes (%)
+                </Label>
+                <Input
+                  value={bulkMarkupDraft}
+                  onChange={(e) => setBulkMarkupDraft(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="Ex: 12 para subir 12%, -8 para reduzir 8%"
+                  className="h-10 bg-background/50 border-border/50 text-sm"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 border-border/50"
+                  onClick={handleApplyBulkMarkup}
+                >
+                  Aplicar markup
+                </Button>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 border-border/50"
+                  disabled={!baseImportedProduct}
+                  onClick={() => {
+                    if (!baseImportedProduct) return;
+                    const recalculated = applyStorePricingRules(baseImportedProduct, selectedStoreData);
+                    setProduct(recalculated);
+                    toast.success("Regras da loja reaplicadas aos precos.");
+                  }}
+                >
+                  Reaplicar regra da loja
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-border/50">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle
+                className="text-[13px] font-medium uppercase text-muted-foreground"
+                style={{ letterSpacing: "0.05em" }}
+              >
+                Produtos ativos da loja
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Leia, edite e otimize os produtos que ja estao ativos na Shopify.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 border-border/50"
+              disabled={!selectedStore || catalogRefreshing}
+              onClick={() => void loadCatalogProducts({ silent: true })}
+            >
+              {catalogRefreshing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!selectedStore ? (
+            <p className="text-sm text-muted-foreground">
+              Selecione uma loja para carregar os produtos ativos.
+            </p>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Input
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Buscar por titulo..."
+                  className="h-9 bg-background/50 border-border/50 text-sm"
+                />
+              </div>
+
+              {catalogLoading ? (
+                <div className="space-y-2">
+                  <div className="skeleton h-16 w-full rounded-md" />
+                  <div className="skeleton h-16 w-full rounded-md" />
+                  <div className="skeleton h-16 w-full rounded-md" />
+                </div>
+              ) : catalogProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum produto ativo encontrado para esta loja.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {catalogProducts.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-md border border-border/40 bg-background/40 p-2.5"
+                    >
+                      <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border/30 bg-background/50">
+                        {item.images.nodes[0]?.url ? (
+                          <Image
+                            src={item.images.nodes[0].url}
+                            alt={item.title}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.variants.nodes[0]?.price
+                            ? formatPrice(Number(item.variants.nodes[0].price), activeCurrency)
+                            : "Sem preco"}
+                          {" • "}
+                          {item.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 border-border/50 text-[11px]"
+                          onClick={() => openCatalogEditor(item)}
+                        >
+                          <Pencil className="mr-1 h-3 w-3" />
+                          Editar
+                        </Button>
+                        {getShopifyAdminProductUrl(item.id) && (
+                          <a
+                            href={getShopifyAdminProductUrl(item.id)!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex h-8 items-center rounded-md border border-border/50 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -996,6 +1930,181 @@ export default function ProductsPage() {
         </Card>
       )}
 
+      {product && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle
+              className="text-[13px] font-medium uppercase text-muted-foreground"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              Resumo da importacao
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Tudo o que foi trazido do anuncio para voce validar antes de publicar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-md border border-border/40 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Fotos</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{product.images.length}</p>
+              </div>
+              <div className="rounded-md border border-border/40 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Variantes</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{product.variants.length}</p>
+              </div>
+              <div className="rounded-md border border-border/40 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Opcoes de variacao</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{product.variantOptions.length}</p>
+              </div>
+              <div className="rounded-md border border-border/40 bg-background/40 p-3">
+                <p className="text-xs text-muted-foreground">Descricao</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {previewDescription ? "Importada" : "Vazia"}
+                </p>
+              </div>
+            </div>
+
+            {product.variantOptions.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border/35 bg-background/30 p-3">
+                <p className="text-xs font-medium uppercase text-muted-foreground" style={{ letterSpacing: "0.04em" }}>
+                  Opcoes encontradas
+                </p>
+                <div className="space-y-2">
+                  {product.variantOptions.map((option) => (
+                    <div key={option.name} className="space-y-1">
+                      <p className="text-sm font-medium text-foreground/90">
+                        {option.name} ({option.values.length})
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {option.values.slice(0, 12).map((value) => (
+                          <Badge key={`${option.name}-${value.name}`} variant="outline" className="border-border/35 text-[11px]">
+                            {value.name}
+                          </Badge>
+                        ))}
+                        {option.values.length > 12 && (
+                          <span className="text-xs text-muted-foreground">+{option.values.length - 12} mais</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {product && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle
+              className="text-[13px] font-medium uppercase text-muted-foreground"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              Customizacao de Midia (Logo)
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Ajuste posicao, tamanho e opacidade da logo. Ao aplicar, o preview atualiza automaticamente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">Posicao</Label>
+                <Select
+                  value={logoPosition}
+                  onValueChange={(value) => setLogoPosition((value as LogoPosition) ?? "bottom-right")}
+                >
+                  <SelectTrigger className="h-9 bg-background/50 border-border/50 text-xs">
+                    <SelectValue placeholder="Selecione a posicao" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOGO_POSITION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">
+                  Tamanho ({logoScalePercent}%)
+                </Label>
+                <input
+                  type="range"
+                  min={8}
+                  max={40}
+                  value={logoScalePercent}
+                  onChange={(e) => setLogoScalePercent(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">
+                  Margem ({logoMarginPercent}%)
+                </Label>
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  value={logoMarginPercent}
+                  onChange={(e) => setLogoMarginPercent(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-muted-foreground">
+                  Opacidade ({logoOpacityPercent}%)
+                </Label>
+                <input
+                  type="range"
+                  min={20}
+                  max={100}
+                  value={logoOpacityPercent}
+                  onChange={(e) => setLogoOpacityPercent(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => void handleBrandAllImages()}
+                disabled={
+                  brandingAll ||
+                  !selectedStore ||
+                  !stores.find((store) => store.id === selectedStore)?.logo_path
+                }
+                className="h-9 text-[13px]"
+                style={{
+                  background: "oklch(0.72 0.19 155)",
+                  color: "oklch(0.13 0.02 155)",
+                }}
+              >
+                {brandingAll ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Aplicando logo ({brandingProgress?.done ?? 0}/{brandingProgress?.total ?? 0})...
+                  </span>
+                ) : (
+                  <>
+                    <Stamp className="mr-1.5 h-3.5 w-3.5" />
+                    Aplicar logo em todas as midias
+                  </>
+                )}
+              </Button>
+              {!stores.find((store) => store.id === selectedStore)?.logo_path && (
+                <span className="text-xs text-muted-foreground">
+                  Configure a logo da loja na pagina Lojas para usar essa funcao.
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Loading skeleton */}
       {loading && !product && <ProductSkeleton />}
 
@@ -1090,11 +2199,11 @@ export default function ProductsPage() {
                             border: "none",
                           }}
                         >
-                          US${product.price.toFixed(2)}
+                          {formatPrice(product.price, activeCurrency)}
                         </Badge>
                         {product.originalPrice > 0 && (
                           <Badge variant="outline" className="text-xs border-border/50">
-                            De US${product.originalPrice.toFixed(2)}
+                            De {formatPrice(product.originalPrice, activeCurrency)}
                           </Badge>
                         )}
                         {product.rating > 0 && (
@@ -1317,16 +2426,16 @@ export default function ProductsPage() {
                           className="text-2xl font-bold"
                           style={{ color: "oklch(0.72 0.19 155)" }}
                         >
-                          US${previewPrice.toFixed(2)}
+                          {formatPrice(previewPrice, activeCurrency)}
                         </span>
                         {previewOriginalPrice > previewPrice && (
                           <span className="text-sm text-muted-foreground/50 line-through">
-                            US${previewOriginalPrice.toFixed(2)}
+                            {formatPrice(previewOriginalPrice, activeCurrency)}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground/70">
-                        ou 12x de US${(previewPrice / 12).toFixed(2)}
+                        ou 12x de {formatPrice(previewPrice / 12, activeCurrency)}
                       </p>
                     </div>
 
@@ -1375,6 +2484,43 @@ export default function ProductsPage() {
                     >
                       <ShoppingCart className="mr-2 h-4 w-4" />
                       Comprar agora
+                    </Button>
+
+                    <Button
+                      onClick={handlePublish}
+                      disabled={publishing || !selectedStore || published}
+                      className="w-full h-11 text-sm font-medium transition-all duration-200"
+                      style={
+                        published
+                          ? {
+                              background: "oklch(0.72 0.19 155 / 15%)",
+                              color: "oklch(0.72 0.19 155)",
+                            }
+                          : {
+                              background:
+                                publishing || !selectedStore
+                                  ? "oklch(0.72 0.19 155 / 30%)"
+                                  : "oklch(0.72 0.19 155)",
+                              color: "oklch(0.13 0.02 155)",
+                            }
+                      }
+                    >
+                      {published ? (
+                        <span className="flex items-center gap-2">
+                          <Check className="h-4 w-4" />
+                          Salvo na {selectedStoreName || "Shopify"}
+                        </span>
+                      ) : publishing ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Salvando na Shopify...
+                        </span>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-4 w-4" />
+                          Salvar na Shopify
+                        </>
+                      )}
                     </Button>
 
                     <div className="grid gap-2 text-xs text-muted-foreground/80">
@@ -1492,8 +2638,12 @@ export default function ProductsPage() {
                       )}
                     </Button>
                     <Button
-                      onClick={handleBrandAllImages}
-                      disabled={brandingAll || !stores.find((s) => s.id === selectedStore)?.logo_path}
+                      onClick={() => void handleBrandAllImages()}
+                      disabled={
+                        brandingAll ||
+                        !selectedStore ||
+                        !stores.find((s) => s.id === selectedStore)?.logo_path
+                      }
                       size="sm"
                       variant="outline"
                       className="h-9 text-[13px] font-medium border-border/50"
@@ -1501,7 +2651,7 @@ export default function ProductsPage() {
                       {brandingAll ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Aplicando...
+                          Aplicando ({brandingProgress?.done ?? 0}/{brandingProgress?.total ?? 0})...
                         </span>
                       ) : !stores.find((s) => s.id === selectedStore)?.logo_path ? (
                         "Envie a logo na pagina Lojas"
@@ -1516,12 +2666,77 @@ export default function ProductsPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 space-y-3 rounded-lg border border-border/30 bg-background/40 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Posicione a logo, ajuste tamanho e opacidade. A transparencia original do arquivo e preservada.
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px] text-muted-foreground">Posicao da logo</Label>
+                      <Select
+                        value={logoPosition}
+                        onValueChange={(value) => setLogoPosition((value as LogoPosition) ?? "bottom-right")}
+                      >
+                        <SelectTrigger className="h-9 bg-background/50 border-border/50 text-xs">
+                          <SelectValue placeholder="Selecione a posicao" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LOGO_POSITION_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px] text-muted-foreground">
+                        Tamanho da logo ({logoScalePercent}% da largura)
+                      </Label>
+                      <input
+                        type="range"
+                        min={8}
+                        max={40}
+                        value={logoScalePercent}
+                        onChange={(e) => setLogoScalePercent(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px] text-muted-foreground">
+                        Margem da borda ({logoMarginPercent}%)
+                      </Label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={10}
+                        value={logoMarginPercent}
+                        onChange={(e) => setLogoMarginPercent(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px] text-muted-foreground">
+                        Opacidade da logo ({logoOpacityPercent}%)
+                      </Label>
+                      <input
+                        type="range"
+                        min={20}
+                        max={100}
+                        value={logoOpacityPercent}
+                        onChange={(e) => setLogoOpacityPercent(Number(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {product.images.map((img, i) => {
                     const generated = generatedImages[img];
                     const branded = brandedImages[img];
-                    const displayImg = generated || branded || img;
+                    const displayImg = branded || generated || img;
                     const isGenerating = generatingImage === img;
+                    const isBranding = brandingImage === img;
 
                     return (
                       <div key={i} className="space-y-2">
@@ -1533,13 +2748,15 @@ export default function ProductsPage() {
                             className="object-cover"
                             unoptimized
                           />
-                          {isGenerating && (
+                          {(isGenerating || isBranding) && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "oklch(0.09 0.005 260 / 80%)" }}>
                               <Loader2 className="h-6 w-6 animate-spin" style={{ color: "oklch(0.72 0.19 155)" }} />
-                              <span className="text-[11px] text-muted-foreground">Gerando com IA...</span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {isGenerating ? "Gerando com IA..." : "Aplicando logo..."}
+                              </span>
                             </div>
                           )}
-                          {generated && !isGenerating && (
+                          {generated && !branded && !isGenerating && !isBranding && (
                             <div
                               className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
                               style={{
@@ -1550,7 +2767,7 @@ export default function ProductsPage() {
                               GERADA COM IA
                             </div>
                           )}
-                          {!generated && branded && !isGenerating && (
+                          {branded && !isGenerating && !isBranding && (
                             <div
                               className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
                               style={{
@@ -1563,14 +2780,29 @@ export default function ProductsPage() {
                           )}
                         </div>
                         <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-[11px] border-border/50 px-2"
+                            onClick={() => handleBrandImage(img)}
+                            disabled={
+                              isGenerating ||
+                              isBranding ||
+                              !selectedStore ||
+                              !stores.find((s) => s.id === selectedStore)?.logo_path
+                            }
+                            title="Aplicar logo nesta imagem"
+                          >
+                            <Stamp className="h-3 w-3" />
+                          </Button>
                           {!generated ? (
                             <Button
                               size="sm"
                               className="flex-1 h-8 text-[11px]"
-                              disabled={isGenerating}
+                              disabled={isGenerating || isBranding}
                               onClick={() => handleGenerateCleanImage(img)}
                               style={{
-                                background: isGenerating
+                                background: isGenerating || isBranding
                                   ? "oklch(0.72 0.19 155 / 30%)"
                                   : "oklch(0.72 0.19 155)",
                                 color: "oklch(0.13 0.02 155)",
@@ -1641,13 +2873,23 @@ export default function ProductsPage() {
                     {product.images.length > 0 && (
                       <div className="relative aspect-square overflow-hidden rounded-lg border border-border/50">
                         <Image
-                          src={generatedImages[product.images[0]] || brandedImages[product.images[0]] || product.images[0]}
+                          src={brandedImages[product.images[0]] || generatedImages[product.images[0]] || product.images[0]}
                           alt={editTitle}
                           fill
                           className="object-cover"
                           unoptimized
                         />
-                        {generatedImages[product.images[0]] && (
+                        {brandedImages[product.images[0]] ? (
+                          <div
+                            className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
+                            style={{
+                              background: "oklch(0.80 0.15 80 / 90%)",
+                              color: "oklch(0.15 0.02 80)",
+                            }}
+                          >
+                            COM LOGO
+                          </div>
+                        ) : generatedImages[product.images[0]] ? (
                           <div
                             className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
                             style={{
@@ -1657,7 +2899,7 @@ export default function ProductsPage() {
                           >
                             GERADA COM IA
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
                     <h3
@@ -1671,11 +2913,11 @@ export default function ProductsPage() {
                         className="text-lg font-bold"
                         style={{ color: "oklch(0.72 0.19 155)" }}
                       >
-                        US${product.price.toFixed(2)}
+                        {formatPrice(product.price, activeCurrency)}
                       </span>
                       {product.originalPrice > product.price && (
                         <span className="text-sm text-muted-foreground/50 line-through">
-                          US${product.originalPrice.toFixed(2)}
+                          {formatPrice(product.originalPrice, activeCurrency)}
                         </span>
                       )}
                     </div>
@@ -1843,6 +3085,114 @@ export default function ProductsPage() {
           </TabsContent>
         </Tabs>
       )}
+
+      <Dialog open={catalogEditorOpen} onOpenChange={setCatalogEditorOpen}>
+        <DialogContent className="border-border/50 bg-card max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle
+              className="text-lg font-semibold"
+              style={{ letterSpacing: "-0.02em" }}
+            >
+              Editar Produto Ativo
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-border/50 text-[13px]"
+                disabled={catalogOptimizing}
+                onClick={handleOptimizeCatalogProduct}
+              >
+                {catalogOptimizing ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Otimizando...
+                  </span>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Otimizar com IA
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                className="h-9 text-[13px]"
+                disabled={catalogSaving}
+                onClick={handleSaveCatalogProduct}
+                style={{
+                  background: "oklch(0.72 0.19 155)",
+                  color: "oklch(0.13 0.02 155)",
+                }}
+              >
+                {catalogSaving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Salvando...
+                  </span>
+                ) : (
+                  <>
+                    <Upload className="mr-1.5 h-3.5 w-3.5" />
+                    Salvar na Shopify
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">Titulo</Label>
+              <Input
+                value={catalogEditTitle}
+                onChange={(e) => setCatalogEditTitle(e.target.value)}
+                className="h-10 bg-background/50 border-border/50 text-sm"
+              />
+              <CharCounter current={catalogEditTitle.length} max={70} />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">Descricao (HTML)</Label>
+              <Textarea
+                value={catalogEditDescription}
+                onChange={(e) => setCatalogEditDescription(e.target.value)}
+                rows={8}
+                className="bg-background/50 border-border/50 font-mono text-xs"
+              />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-[13px] text-muted-foreground">Tags</Label>
+                <Input
+                  value={catalogEditTags}
+                  onChange={(e) => setCatalogEditTags(e.target.value)}
+                  className="h-10 bg-background/50 border-border/50 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[13px] text-muted-foreground">SEO titulo</Label>
+                <Input
+                  value={catalogEditSeoTitle}
+                  onChange={(e) => setCatalogEditSeoTitle(e.target.value)}
+                  className="h-10 bg-background/50 border-border/50 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">SEO descricao</Label>
+              <Textarea
+                value={catalogEditSeoDescription}
+                onChange={(e) => setCatalogEditSeoDescription(e.target.value)}
+                rows={2}
+                className="bg-background/50 border-border/50 text-sm"
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Image prompt dialog */}
       <Dialog open={imagePromptOpen} onOpenChange={setImagePromptOpen}>

@@ -5,6 +5,8 @@ const SCOPES = [
   "write_online_store_navigation",
   "read_products",
   "write_products",
+  "read_publications",
+  "write_publications",
   "read_content",
   "write_content",
   "read_themes",

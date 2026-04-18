@@ -23,6 +23,7 @@ import { FileText, Palette, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { StorePolicy } from "@/types";
+import Link from "next/link";
 
 interface StoreOption {
   id: string;
@@ -250,14 +251,14 @@ export default function OptimizerPage() {
                     <span className="text-[12px] text-muted-foreground">{store.niche}</span>
                   </div>
                 ) : (
-                  <div className="flex items-center h-10 px-3 rounded-md border border-border/50 bg-background/50">
-                    <p className="text-sm text-muted-foreground">
-                      Perfil incompleto.{" "}
-                      <a href="/stores" className="underline hover:text-foreground transition-colors">
-                        Configurar
-                      </a>
-                    </p>
-                  </div>
+                    <div className="flex items-center h-10 px-3 rounded-md border border-border/50 bg-background/50">
+                      <p className="text-sm text-muted-foreground">
+                        Perfil incompleto.{" "}
+                        <Link href="/stores" className="underline hover:text-foreground transition-colors">
+                          Configurar
+                        </Link>
+                      </p>
+                    </div>
                 );
               })()
             ) : (

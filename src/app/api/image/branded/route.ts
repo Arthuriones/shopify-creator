@@ -1,6 +1,106 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+type LogoPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "center-left"
+  | "center"
+  | "center-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+const VALID_POSITIONS = new Set<LogoPosition>([
+  "top-left",
+  "top-center",
+  "top-right",
+  "center-left",
+  "center",
+  "center-right",
+  "bottom-left",
+  "bottom-center",
+  "bottom-right",
+]);
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function getPositionCoordinates(
+  position: LogoPosition,
+  imageWidth: number,
+  imageHeight: number,
+  logoWidth: number,
+  logoHeight: number,
+  marginX: number,
+  marginY: number
+) {
+  const centerLeft = Math.round((imageWidth - logoWidth) / 2);
+  const centerTop = Math.round((imageHeight - logoHeight) / 2);
+
+  switch (position) {
+    case "top-left":
+      return { left: marginX, top: marginY };
+    case "top-center":
+      return { left: centerLeft, top: marginY };
+    case "top-right":
+      return { left: imageWidth - logoWidth - marginX, top: marginY };
+    case "center-left":
+      return { left: marginX, top: centerTop };
+    case "center":
+      return { left: centerLeft, top: centerTop };
+    case "center-right":
+      return { left: imageWidth - logoWidth - marginX, top: centerTop };
+    case "bottom-left":
+      return { left: marginX, top: imageHeight - logoHeight - marginY };
+    case "bottom-center":
+      return { left: centerLeft, top: imageHeight - logoHeight - marginY };
+    case "bottom-right":
+    default:
+      return {
+        left: imageWidth - logoWidth - marginX,
+        top: imageHeight - logoHeight - marginY,
+      };
+  }
+}
+
+async function applyOpacityToLogo(
+  logoBuffer: Buffer,
+  opacityPercent: number
+): Promise<Buffer> {
+  if (opacityPercent >= 100) {
+    return logoBuffer;
+  }
+
+  const opacity = clamp(opacityPercent, 1, 100) / 100;
+  const logoRaw = await sharp(logoBuffer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const output = Buffer.from(logoRaw.data);
+  for (let index = 3; index < output.length; index += 4) {
+    output[index] = Math.round(output[index] * opacity);
+  }
+
+  return sharp(output, {
+    raw: {
+      width: logoRaw.info.width,
+      height: logoRaw.info.height,
+      channels: logoRaw.info.channels,
+    },
+  })
+    .png()
+    .toBuffer();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,16 +113,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { imageUrl, storeId } = await request.json();
+    try {
+      const admin = createAdminClient();
+      const { data: buckets } = await admin.storage.listBuckets();
+      const hasProductImages = (buckets || []).some(
+        (bucket) => bucket.name === "product-images"
+      );
+      if (!hasProductImages) {
+        await admin.storage.createBucket("product-images", { public: true });
+      }
+    } catch {
+      // segue o fluxo; o upload vai falhar com erro explicito se o bucket realmente nao existir
+    }
+
+    const body = await request.json();
+    const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
+    const storeId = typeof body.storeId === "string" ? body.storeId : "";
+    const positionInput = typeof body.position === "string" ? body.position : "";
+    const logoScalePercent = clamp(asNumber(body.logoScalePercent, 20), 8, 40);
+    const marginPercent = clamp(asNumber(body.marginPercent, 3), 0, 10);
+    const logoOpacityPercent = clamp(asNumber(body.logoOpacityPercent, 100), 20, 100);
 
     if (!imageUrl || !storeId) {
       return NextResponse.json(
-        { error: "imageUrl e storeId obrigatórios" },
+        { error: "imageUrl e storeId sao obrigatorios." },
         { status: 400 }
       );
     }
 
-    // Buscar logo_path da loja
+    const position: LogoPosition = VALID_POSITIONS.has(positionInput as LogoPosition)
+      ? (positionInput as LogoPosition)
+      : "bottom-right";
+
     const { data: store } = await supabase
       .from("stores")
       .select("logo_path")
@@ -32,66 +154,76 @@ export async function POST(request: NextRequest) {
 
     if (!store?.logo_path) {
       return NextResponse.json(
-        { error: "Logo não configurada. Configure o perfil da loja primeiro." },
+        { error: "Logo nao configurada. Configure a loja primeiro." },
         { status: 400 }
       );
     }
 
-    // Baixar logo do Supabase Storage
     const { data: logoData, error: logoError } = await supabase.storage
       .from("store-logos")
       .download(store.logo_path);
 
     if (logoError || !logoData) {
       return NextResponse.json(
-        { error: "Erro ao carregar logo da loja" },
+        { error: "Erro ao carregar a logo da loja." },
         { status: 500 }
       );
     }
 
     const logoBuffer = Buffer.from(await logoData.arrayBuffer());
 
-    // Baixar imagem do produto
     const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
     if (!imgRes.ok) {
       return NextResponse.json(
-        { error: "Erro ao baixar imagem do produto" },
+        { error: "Erro ao baixar a imagem do produto." },
         { status: 400 }
       );
     }
-    const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
 
-    // Obter dimensões da imagem
-    const metadata = await sharp(imgBuffer).metadata();
+    const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+    const image = sharp(imgBuffer);
+    const metadata = await image.metadata();
     const width = metadata.width || 800;
     const height = metadata.height || 800;
 
-    // Redimensionar logo para ~20% da largura da imagem
-    const logoWidth = Math.round(width * 0.2);
+    const logoWidth = Math.max(24, Math.round(width * (logoScalePercent / 100)));
     const resizedLogo = await sharp(logoBuffer)
-      .resize(logoWidth)
+      .ensureAlpha()
+      .resize({ width: logoWidth, fit: "inside", withoutEnlargement: true })
       .png()
       .toBuffer();
 
-    // Obter dimensões da logo redimensionada
-    const logoMeta = await sharp(resizedLogo).metadata();
-    const logoH = logoMeta.height || 40;
+    const logoWithOpacity = await applyOpacityToLogo(resizedLogo, logoOpacityPercent);
+    const logoMeta = await sharp(logoWithOpacity).metadata();
+    const finalLogoWidth = logoMeta.width || logoWidth;
+    const finalLogoHeight = logoMeta.height || Math.round(logoWidth / 3);
 
-    // Compor: imagem + logo no canto inferior direito
-    const padding = Math.round(width * 0.03);
-    const result = await sharp(imgBuffer)
-      .resize(width, height, { fit: "cover" })
+    const marginX = Math.round(width * (marginPercent / 100));
+    const marginY = Math.round(height * (marginPercent / 100));
+    const coords = getPositionCoordinates(
+      position,
+      width,
+      height,
+      finalLogoWidth,
+      finalLogoHeight,
+      marginX,
+      marginY
+    );
+
+    const top = clamp(coords.top, 0, Math.max(0, height - finalLogoHeight));
+    const left = clamp(coords.left, 0, Math.max(0, width - finalLogoWidth));
+
+    const result = await image
       .composite([
         {
-          input: resizedLogo,
-          top: height - logoH - padding,
-          left: width - logoWidth - padding,
+          input: logoWithOpacity,
+          top,
+          left,
         },
       ])
       .png()
       .toBuffer();
 
-    // Upload para Supabase Storage (URL permanente para Shopify)
     const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-branded.png`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
@@ -101,11 +233,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error("[image/branded] Upload error:", uploadError);
-      return NextResponse.json(
-        { error: "Erro ao salvar imagem" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Erro ao salvar imagem." }, { status: 500 });
     }
 
     const { data: urlData } = supabase.storage

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -32,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { StoreSetup } from "@/types";
+import Link from "next/link";
 
 interface StoreOption {
   id: string;
@@ -191,12 +191,12 @@ export default function StoreSetupPage() {
               {stores.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Nenhuma loja conectada.{" "}
-                  <a
+                  <Link
                     href="/stores"
                     className="underline hover:text-foreground transition-colors duration-200"
                   >
                     Conectar loja
-                  </a>
+                  </Link>
                 </p>
               ) : (
                 <Select
@@ -240,9 +240,9 @@ export default function StoreSetupPage() {
                     <div className="flex items-center h-10 px-3 rounded-md border border-border/50 bg-background/50">
                       <p className="text-sm text-muted-foreground">
                         Perfil incompleto.{" "}
-                        <a href="/stores" className="underline hover:text-foreground transition-colors">
+                        <Link href="/stores" className="underline hover:text-foreground transition-colors">
                           Configurar
-                        </a>
+                        </Link>
                       </p>
                     </div>
                   );

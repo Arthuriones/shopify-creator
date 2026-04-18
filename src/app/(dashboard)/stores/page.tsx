@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +40,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeShopDomain } from "@/lib/shopify/domain";
+import { cn } from "@/lib/utils";
 import Image from "next/image";
 
 interface ConnectedStore {
@@ -52,6 +54,10 @@ interface ConnectedStore {
   brand_voice: string | null;
   store_description: string | null;
   logo_path: string | null;
+  currency_code: string;
+  auto_convert_prices: boolean;
+  currency_rate: number;
+  price_markup_percent: number;
   created_at: string;
 }
 
@@ -71,6 +77,13 @@ const BRAND_VOICE_OPTIONS = [
   { value: "minimal", label: "Minimalista e Direto" },
   { value: "fun", label: "Divertido e Descontraído" },
   { value: "custom", label: "Personalizado..." },
+];
+
+const CURRENCY_OPTIONS = [
+  { value: "USD", label: "USD - Dolar americano" },
+  { value: "BRL", label: "BRL - Real brasileiro" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - Libra esterlina" },
 ];
 
 function StoreSkeleton() {
@@ -107,6 +120,35 @@ function isProfileComplete(store: ConnectedStore): boolean {
   return !!(store.niche && store.logo_path);
 }
 
+async function ensureStorageBuckets() {
+  const res = await fetch("/api/storage/ensure-buckets", { method: "POST" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Nao foi possivel preparar o storage.");
+  }
+}
+
+function normalizeStorePricingDefaults(
+  store: Omit<
+    ConnectedStore,
+    "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
+  > &
+    Partial<
+      Pick<
+        ConnectedStore,
+        "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
+      >
+    >
+): ConnectedStore {
+  return {
+    ...store,
+    currency_code: store.currency_code || "USD",
+    auto_convert_prices: Boolean(store.auto_convert_prices),
+    currency_rate: Number(store.currency_rate) > 0 ? Number(store.currency_rate) : 1,
+    price_markup_percent: Number(store.price_markup_percent) || 0,
+  };
+}
+
 export default function StoresPage() {
   const [stores, setStores] = useState<ConnectedStore[]>([]);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -124,6 +166,10 @@ export default function StoresPage() {
   const [profileVoice, setProfileVoice] = useState("");
   const [profileCustomVoice, setProfileCustomVoice] = useState("");
   const [profileDescription, setProfileDescription] = useState("");
+  const [profileCurrencyCode, setProfileCurrencyCode] = useState("USD");
+  const [profileAutoConvertPrices, setProfileAutoConvertPrices] = useState(false);
+  const [profileCurrencyRate, setProfileCurrencyRate] = useState("1");
+  const [profilePriceMarkupPercent, setProfilePriceMarkupPercent] = useState("0");
   const [profileSaving, setProfileSaving] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -137,6 +183,9 @@ export default function StoresPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const assetsInputRef = useRef<HTMLInputElement>(null);
   const quickAssetsInputRef = useRef<HTMLInputElement>(null);
+  const normalizedShopDomain = normalizeShopDomain(shopDomain);
+  const isShopDomainValid =
+    shopDomain.trim().length === 0 || normalizedShopDomain !== null;
 
   useEffect(() => {
     loadStores();
@@ -156,16 +205,36 @@ export default function StoresPage() {
   async function loadStores() {
     setLoadingStores(true);
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
+      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
       .order("created_at", { ascending: false });
-    if (data) setStores(data);
+
+    if (error) {
+      const fallback = await supabase
+        .from("stores")
+        .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
+        .order("created_at", { ascending: false });
+
+      if (fallback.data) {
+        setStores(fallback.data.map((store) => normalizeStorePricingDefaults(store)));
+      }
+      setLoadingStores(false);
+      return;
+    }
+
+    if (data) setStores(data.map((store) => normalizeStorePricingDefaults(store)));
     setLoadingStores(false);
   }
 
   async function handleConnect(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!normalizedShopDomain) {
+      toast.error("Use o dominio da loja no formato sualoja.myshopify.com.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -173,7 +242,7 @@ export default function StoresPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          shopDomain: shopDomain.replace(/https?:\/\//, "").replace(/\/$/, ""),
+          shopDomain: normalizedShopDomain,
           clientId,
           clientSecret,
         }),
@@ -208,12 +277,27 @@ export default function StoresPage() {
 
   async function loadStoresAndReturn(): Promise<ConnectedStore[] | null> {
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
+      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
       .order("created_at", { ascending: false });
-    if (data) setStores(data);
-    return data;
+
+    if (error) {
+      const fallback = await supabase
+        .from("stores")
+        .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!fallback.data) return null;
+      const normalized = fallback.data.map((store) => normalizeStorePricingDefaults(store));
+      setStores(normalized);
+      return normalized;
+    }
+
+    if (!data) return null;
+    const normalized = data.map((store) => normalizeStorePricingDefaults(store));
+    setStores(normalized);
+    return normalized;
   }
 
   async function loadStoreAssets(storeId: string) {
@@ -242,6 +326,16 @@ export default function StoresPage() {
       setProfileCustomVoice("");
     }
     setProfileDescription(store.store_description || "");
+    setProfileCurrencyCode(store.currency_code || "USD");
+    setProfileAutoConvertPrices(Boolean(store.auto_convert_prices));
+    setProfileCurrencyRate(
+      Number.isFinite(store.currency_rate) ? String(store.currency_rate) : "1"
+    );
+    setProfilePriceMarkupPercent(
+      Number.isFinite(store.price_markup_percent)
+        ? String(store.price_markup_percent)
+        : "0"
+    );
     setLogoPreview(store.logo_path ? getLogoUrl(store.logo_path) : null);
     setLogoFile(null);
     setAssetFiles([]);
@@ -341,6 +435,8 @@ export default function StoresPage() {
     setQuickAssetsSaving(true);
 
     try {
+      await ensureStorageBuckets();
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -417,11 +513,27 @@ export default function StoresPage() {
       toast.error("Nicho é obrigatório");
       return;
     }
+    const parsedCurrencyRate = Number(profileCurrencyRate.replace(",", "."));
+    if (!Number.isFinite(parsedCurrencyRate) || parsedCurrencyRate <= 0) {
+      toast.error("Taxa de conversao deve ser maior que zero.");
+      return;
+    }
+    const parsedMarkupPercent = Number(
+      profilePriceMarkupPercent.replace(",", ".")
+    );
+    if (!Number.isFinite(parsedMarkupPercent) || parsedMarkupPercent < -100) {
+      toast.error("Markup invalido. Use um valor maior que -100.");
+      return;
+    }
 
     setProfileSaving(true);
     const supabase = createClient();
 
     try {
+      if (logoFile || assetFiles.length > 0) {
+        await ensureStorageBuckets();
+      }
+
       let logoPath = editingStore.logo_path;
       let userId: string | null = null;
 
@@ -497,6 +609,10 @@ export default function StoresPage() {
           brand_voice: brandVoice || null,
           store_description: profileDescription.trim() || null,
           logo_path: logoPath,
+          currency_code: profileCurrencyCode,
+          auto_convert_prices: profileAutoConvertPrices,
+          currency_rate: parsedCurrencyRate,
+          price_markup_percent: parsedMarkupPercent,
         })
         .eq("id", editingStore.id);
 
@@ -552,15 +668,14 @@ export default function StoresPage() {
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
-            render={
-              <Button
-                className="h-9 text-[13px] font-medium transition-all duration-200"
-                style={{
-                  background: "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
-                }}
-              />
-            }
+            className={cn(
+              buttonVariants({ size: "lg" }),
+              "text-[13px] font-medium transition-all duration-200"
+            )}
+            style={{
+              background: "oklch(0.72 0.19 155)",
+              color: "oklch(0.13 0.02 155)",
+            }}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
             Conectar Loja
@@ -577,15 +692,28 @@ export default function StoresPage() {
             <form onSubmit={handleConnect} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Dominio da Loja
+                  Dominio da Loja (.myshopify.com)
                 </Label>
                 <Input
                   placeholder="minha-loja.myshopify.com"
                   value={shopDomain}
                   onChange={(e) => setShopDomain(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   required
-                  className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
+                  className={`h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50 ${!isShopDomainValid ? "border-destructive/60 focus:border-destructive" : ""}`}
                 />
+                <p className="text-xs text-muted-foreground/70">
+                  Use o dominio interno da Shopify, exemplo:{" "}
+                  <span className="font-mono">sualoja.myshopify.com</span>.
+                </p>
+                {!isShopDomainValid && (
+                  <p className="text-xs text-destructive">
+                    Dominio invalido. O formato aceito eh apenas{" "}
+                    <span className="font-mono">*.myshopify.com</span>.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
@@ -633,7 +761,7 @@ export default function StoresPage() {
                     : "oklch(0.72 0.19 155)",
                   color: "oklch(0.13 0.02 155)",
                 }}
-                disabled={loading}
+                disabled={loading || !isShopDomainValid}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -878,9 +1006,26 @@ export default function StoresPage() {
                   </div>
                 </div>
                 {store.niche && (
-                  <Badge variant="outline" className="mt-2 w-fit text-[11px] border-border/30">
-                    {store.niche}
-                  </Badge>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
+                      {store.niche}
+                    </Badge>
+                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
+                      {store.currency_code || "USD"}
+                    </Badge>
+                    {store.auto_convert_prices && (
+                      <Badge
+                        className="w-fit text-[10px] font-medium"
+                        style={{
+                          background: "oklch(0.72 0.19 155 / 10%)",
+                          color: "oklch(0.72 0.19 155)",
+                          border: "none",
+                        }}
+                      >
+                        Conversao auto
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="flex items-center justify-between pt-0">
@@ -1116,6 +1261,79 @@ export default function StoresPage() {
               <p className="text-[11px] text-muted-foreground/50">
                 Quanto mais contexto, melhor a IA gera textos e descrições
               </p>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-border/40 bg-background/40 p-3.5">
+              <p className="text-[12px] font-medium uppercase text-muted-foreground" style={{ letterSpacing: "0.05em" }}>
+                Preco e moeda padrao
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-muted-foreground">
+                    Moeda padrao
+                  </Label>
+                  <Select
+                    value={profileCurrencyCode}
+                    onValueChange={(value) => setProfileCurrencyCode(value ?? "USD")}
+                  >
+                    <SelectTrigger className="h-10 bg-background/60 border-border/50 text-sm">
+                      <SelectValue placeholder="Selecione a moeda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map((currency) => (
+                        <SelectItem key={currency.value} value={currency.value}>
+                          {currency.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-muted-foreground">
+                    Taxa sobre USD
+                  </Label>
+                  <Input
+                    value={profileCurrencyRate}
+                    onChange={(e) => setProfileCurrencyRate(e.target.value)}
+                    placeholder="Ex: 5.65"
+                    inputMode="decimal"
+                    className="h-10 bg-background/60 border-border/50 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-muted-foreground">
+                    Markup padrao (%)
+                  </Label>
+                  <Input
+                    value={profilePriceMarkupPercent}
+                    onChange={(e) => setProfilePriceMarkupPercent(e.target.value)}
+                    placeholder="Ex: 25"
+                    inputMode="decimal"
+                    className="h-10 bg-background/60 border-border/50 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5 rounded-md border border-border/40 bg-background/60 p-2.5">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={profileAutoConvertPrices}
+                      onChange={(e) => setProfileAutoConvertPrices(e.target.checked)}
+                      className="h-4 w-4 rounded border-border/70 bg-background"
+                    />
+                    <span className="text-foreground/90">
+                      Converter preco automaticamente
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    Quando ativo, produtos importados ja chegam com a moeda da loja e o markup aplicado.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <Button
