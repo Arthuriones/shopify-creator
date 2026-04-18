@@ -5,6 +5,7 @@ import type {
   AliExpressVariantOption,
 } from "@/types";
 import { scrapeProductWithBrowser } from "./browser-scraper";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -41,6 +42,17 @@ const BLOCKED_PAGE_HINTS = [
   "rgv587_error",
   "/punish?",
 ];
+const DB_SECRET_KEYS = [
+  "BRIGHTDATA_API_KEY",
+  "BRIGHTDATA_ZONE",
+  "BRIGHTDATA_COUNTRY",
+  "BRIGHTDATA_PROXY_HOST",
+  "BRIGHTDATA_PROXY_PORT",
+  "BRIGHTDATA_PROXY_USERNAME",
+  "BRIGHTDATA_PROXY_PASSWORD",
+  "BRIGHTDATA_PROXY_INSECURE_TLS",
+] as const;
+const DB_SECRETS_CACHE_MS = 120000;
 
 type FetchAttempt = {
   url: string;
@@ -49,6 +61,21 @@ type FetchAttempt = {
   notFound: boolean;
   error?: string;
 };
+type BrightDataConfig = {
+  apiKey: string;
+  zone: string;
+  country: string;
+};
+type BrightDataNativeProxyConfig = {
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+  insecureTls: boolean;
+};
+type SecretMap = Record<string, string>;
+
+let cachedSecrets: { value: SecretMap; expiresAt: number } | null = null;
 
 export async function scrapeProduct(url: string): Promise<AliExpressProduct> {
   const cleanUrl = normalizeUrl(url);
@@ -81,7 +108,9 @@ export async function scrapeProduct(url: string): Promise<AliExpressProduct> {
 }
 
 async function fetchBestAliExpressHtml(url: string): Promise<string> {
-  const candidates = buildCandidateUrls(url);
+  const dbSecrets = await loadDbSecrets();
+  const directCandidates = buildDirectCandidateUrls(url);
+  const candidates = buildCandidateUrls(directCandidates);
   const attempts: FetchAttempt[] = [];
   let lastStatus = 0;
 
@@ -127,6 +156,65 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
     }
   }
 
+  const brightDataConfig = getBrightDataConfig(dbSecrets);
+  if (brightDataConfig) {
+    for (const candidate of directCandidates) {
+      try {
+        const brightData = await fetchWithBrightData(candidate, brightDataConfig);
+        const notFound = isLikelyNotFoundPage(brightData.html);
+        const blocked = isLikelyBlockedPage(brightData.html);
+        attempts.push({
+          url: `brightdata:${candidate}`,
+          status: brightData.statusCode,
+          blocked,
+          notFound,
+        });
+
+        if (notFound || blocked) continue;
+
+        return brightData.html;
+      } catch (error) {
+        attempts.push({
+          url: `brightdata:${candidate}`,
+          blocked: false,
+          notFound: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+  const brightDataNativeProxy = getBrightDataNativeProxyConfig(dbSecrets);
+  if (brightDataNativeProxy) {
+    for (const candidate of directCandidates) {
+      try {
+        const proxyResponse = await fetchWithBrightDataNativeProxy(
+          candidate,
+          buildAliHeaders(url),
+          brightDataNativeProxy
+        );
+        const notFound = isLikelyNotFoundPage(proxyResponse.html);
+        const blocked = isLikelyBlockedPage(proxyResponse.html);
+        attempts.push({
+          url: `brightdata-native:${candidate}`,
+          status: proxyResponse.statusCode,
+          blocked,
+          notFound,
+        });
+
+        if (notFound || blocked) continue;
+
+        return proxyResponse.html;
+      } catch (error) {
+        attempts.push({
+          url: `brightdata-native:${candidate}`,
+          blocked: false,
+          notFound: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
   console.warn("[aliexpress.scraper] html fetch failed", {
     sourceUrl: url,
     attempts,
@@ -134,7 +222,7 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
 
   if (attempts.some((attempt) => attempt.blocked)) {
     throw new Error(
-      "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Tente novamente em alguns minutos ou configure ALIEXPRESS_FETCH_PROXY_URL no deploy."
+      "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Configure ALIEXPRESS_FETCH_PROXY_URL, BRIGHTDATA_API_KEY/BRIGHTDATA_ZONE ou BRIGHTDATA_PROXY_* no deploy."
     );
   }
 
@@ -145,7 +233,7 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
   );
 }
 
-function buildCandidateUrls(inputUrl: string): string[] {
+function buildDirectCandidateUrls(inputUrl: string): string[] {
   const directUrls = new Set<string>();
   directUrls.add(inputUrl);
 
@@ -168,16 +256,15 @@ function buildCandidateUrls(inputUrl: string): string[] {
     directUrls.add(`https://pt.aliexpress.com/i/${productId}.html`);
   }
 
+  return [...directUrls];
+}
+
+function buildCandidateUrls(directUrls: string[]): string[] {
   const proxyTemplate = process.env.ALIEXPRESS_FETCH_PROXY_URL?.trim();
-  if (!proxyTemplate) {
-    return [...directUrls];
-  }
+  if (!proxyTemplate) return directUrls;
 
   const urls = new Set<string>(directUrls);
-  for (const directUrl of directUrls) {
-    urls.add(applyProxyTemplate(proxyTemplate, directUrl));
-  }
-
+  for (const directUrl of directUrls) urls.add(applyProxyTemplate(proxyTemplate, directUrl));
   return [...urls];
 }
 
@@ -206,6 +293,199 @@ function buildAliHeaders(refererUrl: string): Record<string, string> {
     "Upgrade-Insecure-Requests": "1",
     Cookie: DEFAULT_REGION_COOKIE,
   };
+}
+
+function getBrightDataConfig(dbSecrets: SecretMap): BrightDataConfig | null {
+  const apiKey = resolveSecret("BRIGHTDATA_API_KEY", dbSecrets);
+  const zone = resolveSecret("BRIGHTDATA_ZONE", dbSecrets);
+  if (!apiKey || !zone) return null;
+  const country = resolveSecret("BRIGHTDATA_COUNTRY", dbSecrets);
+
+  return {
+    apiKey,
+    zone,
+    country: country ? country.toLowerCase() : "br",
+  };
+}
+
+function getBrightDataNativeProxyConfig(
+  dbSecrets: SecretMap
+): BrightDataNativeProxyConfig | null {
+  const username = resolveSecret("BRIGHTDATA_PROXY_USERNAME", dbSecrets);
+  const password = resolveSecret("BRIGHTDATA_PROXY_PASSWORD", dbSecrets);
+  if (!username || !password) return null;
+
+  return {
+    host: resolveSecret("BRIGHTDATA_PROXY_HOST", dbSecrets) || "brd.superproxy.io",
+    port: resolveSecret("BRIGHTDATA_PROXY_PORT", dbSecrets) || "33335",
+    username,
+    password,
+    insecureTls:
+      (resolveSecret("BRIGHTDATA_PROXY_INSECURE_TLS", dbSecrets) || "true").toLowerCase() ===
+      "true",
+  };
+}
+
+async function loadDbSecrets(): Promise<SecretMap> {
+  const now = Date.now();
+  if (cachedSecrets && cachedSecrets.expiresAt > now) {
+    return cachedSecrets.value;
+  }
+
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("app_secrets")
+      .select("key,value")
+      .in("key", [...DB_SECRET_KEYS]);
+
+    if (error) {
+      console.warn("[aliexpress.scraper] failed to load app_secrets", {
+        reason: error.message,
+      });
+      return {};
+    }
+
+    const map: SecretMap = {};
+    for (const row of data ?? []) {
+      const key = String(row.key || "").trim();
+      const value = String(row.value || "").trim();
+      if (key && value) {
+        map[key] = value;
+      }
+    }
+
+    cachedSecrets = {
+      value: map,
+      expiresAt: now + DB_SECRETS_CACHE_MS,
+    };
+    return map;
+  } catch (error) {
+    console.warn("[aliexpress.scraper] app_secrets unavailable", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return {};
+  }
+}
+
+function resolveSecret(key: (typeof DB_SECRET_KEYS)[number], dbSecrets: SecretMap): string {
+  const envValue = process.env[key]?.trim();
+  if (envValue) return envValue;
+
+  const dbValue = dbSecrets[key]?.trim();
+  return dbValue || "";
+}
+
+async function fetchWithBrightData(
+  targetUrl: string,
+  config: BrightDataConfig
+): Promise<{ html: string; statusCode: number }> {
+  const response = await fetch("https://api.brightdata.com/request", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      zone: config.zone,
+      url: targetUrl,
+      method: "GET",
+      format: "raw",
+      country: config.country,
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  const payload = await response.text();
+  if (!response.ok) {
+    throw new Error(`Bright Data request failed (${response.status})`);
+  }
+
+  const extracted = extractBrightDataHtml(payload);
+  if (!extracted) {
+    throw new Error("Bright Data response sem HTML");
+  }
+
+  return {
+    html: extracted.html,
+    statusCode: extracted.statusCode || response.status,
+  };
+}
+
+async function fetchWithBrightDataNativeProxy(
+  targetUrl: string,
+  headers: Record<string, string>,
+  config: BrightDataNativeProxyConfig
+): Promise<{ html: string; statusCode: number }> {
+  const proxyUrl = `http://${encodeURIComponent(config.username)}:${encodeURIComponent(
+    config.password
+  )}@${config.host}:${config.port}`;
+
+  const undiciModule = await import("undici");
+  const agent = new undiciModule.ProxyAgent({
+    uri: proxyUrl,
+    requestTls: { rejectUnauthorized: !config.insecureTls },
+  });
+
+  try {
+    const requestInit = {
+      headers,
+      signal: AbortSignal.timeout(30000),
+      redirect: "follow" as RequestRedirect,
+      dispatcher: agent,
+    };
+    const response = await fetch(targetUrl, requestInit as RequestInit);
+    const html = await response.text();
+    return {
+      html,
+      statusCode: response.status,
+    };
+  } finally {
+    await agent.close();
+  }
+}
+
+function extractBrightDataHtml(
+  payload: string
+): { html: string; statusCode?: number } | null {
+  const parsed = safeJsonParse(payload);
+  if (!parsed || typeof parsed !== "object") {
+    if (payload.includes("<html") || payload.includes("<!DOCTYPE html")) {
+      return { html: payload };
+    }
+    return null;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const statusCode = toFiniteNumber(record.status_code) || undefined;
+  const objectOf = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+
+  const bodyCandidates = [
+    record.body,
+    objectOf(record.data)?.body,
+    objectOf(record.result)?.body,
+    objectOf(record.response)?.body,
+  ];
+
+  for (const candidate of bodyCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return { html: candidate, statusCode };
+    }
+  }
+
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | 0 {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
 }
 
 function extractAliProductId(url: string): string | null {
