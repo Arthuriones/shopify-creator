@@ -9,11 +9,44 @@ const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 const MTOP_PDP_ENDPOINT = "/h5/mtop.aliexpress.pdp.pc.query/1.0/";
+const IS_VERCEL = Boolean(process.env.VERCEL);
+
+type LambdaChromium = {
+  args: string[];
+  executablePath: () => Promise<string>;
+};
+
+async function launchAliBrowser() {
+  if (!IS_VERCEL) {
+    return chromium.launch({ headless: true });
+  }
+
+  try {
+    const chromiumModule = await import("@sparticuz/chromium");
+    const lambdaChromium = (chromiumModule.default ??
+      chromiumModule) as unknown as LambdaChromium;
+    const executablePath = await lambdaChromium.executablePath();
+
+    return chromium.launch({
+      headless: true,
+      executablePath,
+      args: [...lambdaChromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  } catch (error) {
+    console.warn("[aliexpress.browser] lambda chromium bootstrap failed", {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
+}
 
 export async function scrapeProductWithBrowser(
   url: string
 ): Promise<AliExpressProduct | null> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchAliBrowser();
   const context = await browser.newContext({
     locale: "pt-BR",
     userAgent: BROWSER_USER_AGENT,

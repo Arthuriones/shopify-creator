@@ -11,6 +11,7 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
 ];
+const DEFAULT_REGION_COOKIE = "aep_usuc_f=site=bra&region=BR&b_locale=pt_BR&c_tp=BRL";
 
 const PRODUCT_IMAGE_PATH_HINTS = ["/kf/", "/imgextra/", "/bao/uploaded/"];
 const BLOCKED_IMAGE_HINTS = [
@@ -29,11 +30,36 @@ const BLOCKED_IMAGE_HINTS = [
   "sprite",
   "lazy",
 ];
+const BLOCKED_PAGE_HINTS = [
+  "captcha interception",
+  "slide to verify",
+  "unusual traffic",
+  "robot check",
+  "____tmd____",
+  "x5secdata",
+  "fail_sys_user_validate",
+  "rgv587_error",
+  "/punish?",
+];
+
+type FetchAttempt = {
+  url: string;
+  status?: number;
+  blocked: boolean;
+  notFound: boolean;
+  error?: string;
+};
 
 export async function scrapeProduct(url: string): Promise<AliExpressProduct> {
   const cleanUrl = normalizeUrl(url);
 
-  const browserProduct = await scrapeProductWithBrowser(cleanUrl).catch(() => null);
+  const browserProduct = await scrapeProductWithBrowser(cleanUrl).catch((error) => {
+    console.warn("[aliexpress.scraper] browser scrape failed", {
+      url: cleanUrl,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  });
   if (browserProduct && browserProduct.title && browserProduct.images.length > 0) {
     return browserProduct;
   }
@@ -56,29 +82,60 @@ export async function scrapeProduct(url: string): Promise<AliExpressProduct> {
 
 async function fetchBestAliExpressHtml(url: string): Promise<string> {
   const candidates = buildCandidateUrls(url);
+  const attempts: FetchAttempt[] = [];
   let lastStatus = 0;
 
   for (const candidate of candidates) {
-    const res = await fetch(candidate, {
-      headers: {
-        "User-Agent": USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-      },
-      signal: AbortSignal.timeout(15000),
-      redirect: "follow",
-    });
+    try {
+      const res = await fetch(candidate, {
+        headers: buildAliHeaders(url),
+        signal: AbortSignal.timeout(20000),
+        redirect: "follow",
+      });
 
-    lastStatus = res.status;
-    if (!res.ok) continue;
+      lastStatus = res.status;
+      if (!res.ok) {
+        attempts.push({
+          url: candidate,
+          status: res.status,
+          blocked: false,
+          notFound: false,
+        });
+        continue;
+      }
 
-    const html = await res.text();
-    if (isLikelyNotFoundPage(html)) continue;
+      const html = await res.text();
+      const notFound = isLikelyNotFoundPage(html);
+      const blocked = isLikelyBlockedPage(html);
+      attempts.push({
+        url: candidate,
+        status: res.status,
+        blocked,
+        notFound,
+      });
 
-    return html;
+      if (notFound || blocked) continue;
+
+      return html;
+    } catch (error) {
+      attempts.push({
+        url: candidate,
+        blocked: false,
+        notFound: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  console.warn("[aliexpress.scraper] html fetch failed", {
+    sourceUrl: url,
+    attempts,
+  });
+
+  if (attempts.some((attempt) => attempt.blocked)) {
+    throw new Error(
+      "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Tente novamente em alguns minutos ou configure ALIEXPRESS_FETCH_PROXY_URL no deploy."
+    );
   }
 
   throw new Error(
@@ -89,14 +146,14 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
 }
 
 function buildCandidateUrls(inputUrl: string): string[] {
-  const urls = new Set<string>();
-  urls.add(inputUrl);
+  const directUrls = new Set<string>();
+  directUrls.add(inputUrl);
 
   try {
     const parsed = new URL(inputUrl);
     if (!parsed.searchParams.has("gatewayAdapt")) {
       parsed.searchParams.set("gatewayAdapt", "4itemAdapt");
-      urls.add(parsed.toString());
+      directUrls.add(parsed.toString());
     }
   } catch {
     // ignore
@@ -104,12 +161,51 @@ function buildCandidateUrls(inputUrl: string): string[] {
 
   const productId = extractAliProductId(inputUrl);
   if (productId) {
-    urls.add(`https://www.aliexpress.com/item/${productId}.html?gatewayAdapt=4itemAdapt`);
-    urls.add(`https://pt.aliexpress.com/item/${productId}.html?gatewayAdapt=4itemAdapt`);
-    urls.add(`https://m.aliexpress.com/item/${productId}.html`);
+    directUrls.add(`https://www.aliexpress.com/item/${productId}.html?gatewayAdapt=4itemAdapt`);
+    directUrls.add(`https://pt.aliexpress.com/item/${productId}.html?gatewayAdapt=4itemAdapt`);
+    directUrls.add(`https://m.aliexpress.com/item/${productId}.html`);
+    directUrls.add(`https://www.aliexpress.com/i/${productId}.html`);
+    directUrls.add(`https://pt.aliexpress.com/i/${productId}.html`);
+  }
+
+  const proxyTemplate = process.env.ALIEXPRESS_FETCH_PROXY_URL?.trim();
+  if (!proxyTemplate) {
+    return [...directUrls];
+  }
+
+  const urls = new Set<string>(directUrls);
+  for (const directUrl of directUrls) {
+    urls.add(applyProxyTemplate(proxyTemplate, directUrl));
   }
 
   return [...urls];
+}
+
+function applyProxyTemplate(template: string, url: string): string {
+  if (template.includes("{{url}}")) {
+    return template.replaceAll("{{url}}", encodeURIComponent(url));
+  }
+  if (template.includes("{url}")) {
+    return template.replaceAll("{url}", encodeURIComponent(url));
+  }
+  const separator = template.includes("?") ? "&" : "?";
+  return `${template}${separator}url=${encodeURIComponent(url)}`;
+}
+
+function buildAliHeaders(refererUrl: string): Record<string, string> {
+  return {
+    "User-Agent": USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    Referer: refererUrl,
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+    Cookie: DEFAULT_REGION_COOKIE,
+  };
 }
 
 function extractAliProductId(url: string): string | null {
@@ -148,6 +244,11 @@ function isLikelyNotFoundPage(html: string): boolean {
   );
 }
 
+function isLikelyBlockedPage(html: string): boolean {
+  const sample = html.slice(0, 20000).toLowerCase();
+  return BLOCKED_PAGE_HINTS.some((hint) => sample.includes(hint));
+}
+
 function isLikelyInvalidProduct(product: AliExpressProduct): boolean {
   const title = product.title.toLowerCase();
   return (
@@ -162,7 +263,7 @@ function normalizeUrl(url: string): string {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error("URL invÃƒÂ¡lida. Cole o link completo do produto.");
+    throw new Error("URL invalida. Cole o link completo do produto.");
   }
 
   const allowedHosts = [
@@ -226,6 +327,8 @@ function parseProductPage(html: string): AliExpressProduct {
       ...findMarkerMatches(scriptText, /__INIT_DATA__\s*=\s*/g),
       ...findMarkerMatches(scriptText, /__INITIAL_STATE__\s*=\s*/g),
       ...findMarkerMatches(scriptText, /_init_data_\s*=\s*/g),
+      ...findMarkerMatches(scriptText, /window\._d_c_\.DCData\s*=\s*/g),
+      ...findMarkerMatches(scriptText, /window\._page_config_\.prefetch\s*=\s*/g),
       ...findMarkerMatches(scriptText, /window\.__next_f\s*=\s*/g),
       ...findMarkerMatches(scriptText, /data\s*:\s*/g),
     ];
@@ -352,7 +455,7 @@ function safeJsonParse(text: string): unknown {
 
 function cleanProductTitle(title: string): string {
   return title
-    .replace(/\s*[-|â€“]\s*AliExpress.*$/i, "")
+    .replace(/\s*[-|\u2013]\s*AliExpress.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }

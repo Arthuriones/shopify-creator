@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { scrapeProduct } from "@/lib/aliexpress/scraper";
 import { createClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -24,6 +27,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to scrape product";
+    console.warn("[api.aliexpress] scrape failed", {
+      url,
+      userId: user.id,
+      reason: message,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
