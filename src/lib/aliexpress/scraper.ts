@@ -220,6 +220,28 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
     attempts,
   });
 
+  const brightDataAttempts = attempts.filter((attempt) =>
+    attempt.url.startsWith("brightdata:")
+  );
+  const brightDataNativeAttempts = attempts.filter((attempt) =>
+    attempt.url.startsWith("brightdata-native:")
+  );
+  const attemptMessages = [...brightDataAttempts, ...brightDataNativeAttempts]
+    .map((attempt) => `${attempt.status || "n/a"}:${attempt.error || ""}`.toLowerCase())
+    .join(" | ");
+
+  if (attemptMessages.includes("407")) {
+    throw new Error(
+      "Bright Data retornou erro 407 (proxy auth/conta). Verifique billing/conta ativa e credenciais da zona no Bright Data."
+    );
+  }
+
+  if (brightDataAttempts.some((attempt) => attempt.error?.includes("response sem HTML"))) {
+    throw new Error(
+      "A zona do Bright Data informada nao retornou HTML via API. Use uma zona Web Unlocker para BRIGHTDATA_API_KEY/BRIGHTDATA_ZONE ou mantenha apenas BRIGHTDATA_PROXY_*."
+    );
+  }
+
   if (attempts.some((attempt) => attempt.blocked)) {
     throw new Error(
       "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Configure ALIEXPRESS_FETCH_PROXY_URL, BRIGHTDATA_API_KEY/BRIGHTDATA_ZONE ou BRIGHTDATA_PROXY_* no deploy."
