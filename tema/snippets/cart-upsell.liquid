@@ -1,0 +1,230 @@
+{%- comment -%}
+  Upsell de carrinho – compatível com Vessel
+  - Mostra recomendações ("complementary") do 1º item do carrinho
+  - Monta na página de carrinho e no cart drawer
+  - Não depende de seções do Dawn
+
+  Instruções de uso:
+  1) Salve como snippets/cart-upsell-vessel.liquid
+  2) Render nos locais indicados (ver após o código)
+{%- endcomment -%}
+
+{%- assign IS_CART_PAGE = true -%}
+{%- assign INITIAL_CART_JSON = cart | json -%}
+
+<div id="upsell-carousel-template" hidden>
+  <div class="upsell-carousel">
+    <h2 class="upsell-carousel__title">Você também pode gostar</h2>
+    <div class="upsell-carousel__viewport">
+      <div class="upsell-carousel__inner"></div>
+      <button type="button" class="upsell-carousel__btn upsell-carousel__btn--prev" aria-label="Produto anterior">‹</button>
+      <button type="button" class="upsell-carousel__btn upsell-carousel__btn--next" aria-label="Próximo produto">›</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .upsell-carousel { background: var(--color-background, #fff); border-radius: 8px; box-shadow: 0 2px 8px rgb(0 0 0 / .08); overflow: hidden; display: grid; gap: 8px; }
+  .upsell-carousel__title { font-size: 1.1rem; font-weight: 600; margin: 0; padding: 14px 16px; }
+  .upsell-carousel__viewport { position: relative; overflow: hidden; }
+  .upsell-carousel__inner { display: flex; transition: transform .3s ease-in-out; will-change: transform; }
+  .upsell-card { flex: 0 0 100%; padding: 14px 16px; box-sizing: border-box; display:flex; gap:12px; align-items: center; }
+  .upsell-card__img { width: 84px; height: 84px; border-radius: 6px; object-fit: cover; background: #f4f4f4; flex-shrink:0; }
+  .upsell-card__meta { min-width:0; }
+  .upsell-card__title { font-size: .95rem; margin: 0 0 4px; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .upsell-card__price { color: #666; font-size: .9rem; margin: 0 0 8px; }
+  .upsell-card__btn { background: var(--color-foreground, #111); color: var(--color-background, #fff); border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+  .upsell-card__btn:hover { filter: brightness(1.05); }
+  .upsell-carousel__btn { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; border: none; background: rgb(255 255 255 / .85); cursor: pointer; }
+  .upsell-carousel__btn--prev { left: 8px; }
+  .upsell-carousel__btn--next { right: 8px; }
+  .upsell-carousel__btn:hover { background: rgb(255 255 255 / .95); }
+  /* Tema dark-friendly */
+  .color-scheme-inverse .upsell-carousel { background: var(--color-background, #111); color: var(--color-foreground, #fff); }
+  .color-scheme-inverse .upsell-card__price { color: #aaa; }
+</style>
+
+<script>
+(function(){
+  const IS_CART_PAGE = {{ IS_CART_PAGE | json }};
+  const INITIAL_CART = {{ INITIAL_CART_JSON | replace: '</', '<\/' }};
+  const ROOT = window.Shopify?.routes?.root || '/';
+
+  // Locais padrão do Vessel onde vamos montar
+  function findCartPageMount(){
+    // tente dentro da seção de itens do carrinho (Vessel varia, então testamos alguns)
+    return (
+      document.querySelector('#main-cart-items .js-contents') ||
+      document.querySelector('.main-cart-items .js-contents') ||
+      document.querySelector('cart-items .js-contents') ||
+      document.querySelector('[data-cart-items]') ||
+      document.querySelector('form[action*="/cart"]')
+    );
+  }
+  function findCartDrawerMount(){
+    // principais containers do drawer em temas modernos
+    const drawer = document.querySelector('cart-drawer, cart-drawer-component, [data-cart-drawer], .cart-drawer');
+    if(!drawer) return null;
+    // onde inserir (logo após a lista ou antes do footer)
+    return (
+      drawer.querySelector('.cart-drawer__items') ||
+      drawer.querySelector('[data-cart-items]') ||
+      drawer.querySelector('table > tbody') ||
+      drawer.querySelector('.drawer__content') ||
+      drawer
+    );
+  }
+
+  // Cria um carrossel DOM a partir do template
+  function createCarousel(){
+    const tpl = document.getElementById('upsell-carousel-template');
+    return tpl ? tpl.firstElementChild.cloneNode(true) : null;
+  }
+
+  async function fetchCart(){
+    try{
+      const r = await fetch(ROOT + 'cart.js', { credentials: 'same-origin' });
+      if(!r.ok) throw new Error('cart.js error');
+      return await r.json();
+    }catch(e){ console.warn(e); return null; }
+  }
+
+  async function fetchRecommendations(productId){
+    try{
+      const url = `${ROOT}recommendations/products.json?product_id=${productId}&limit=20&intent=complementary`;
+      const r = await fetch(url, { credentials: 'same-origin' });
+      if(!r.ok) throw new Error('recs error');
+      const data = await r.json();
+      return data?.products || [];
+    }catch(e){ console.warn(e); return []; }
+  }
+
+  function formatMoney(cents){
+    try{
+      return (cents/100).toLocaleString(document.documentElement.lang || 'pt-BR', {
+        style:'currency', currency: (window.Shopify && Shopify.currency && Shopify.currency.active) || 'BRL'
+      });
+    }catch(_){ return 'R$ ' + (cents/100).toFixed(2); }
+  }
+
+  function buildCardHTML(product){
+    const variant = (product.variants || []).find(v => v.available) || product.variants?.[0];
+    if(!variant) return '';
+    const img = product.featured_image || product.images?.[0];
+    const imgUrl = typeof img === 'string' ? img : img?.src || '';
+    return `
+      <div class="upsell-card">
+        <img class="upsell-card__img" src="${imgUrl}" alt="${product.title.replace(/"/g, '&quot;')}" loading="lazy">
+        <div class="upsell-card__meta">
+          <h3 class="upsell-card__title">${product.title}</h3>
+          <p class="upsell-card__price">${formatMoney(variant.price)}</p>
+          <button class="upsell-card__btn" data-variant-id="${variant.id}">Adicionar</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function addToCart(variantId){
+    const r = await fetch(ROOT + 'cart/add.js', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'same-origin',
+      body: JSON.stringify({ id: variantId, quantity: 1 })
+    });
+    if(!r.ok) throw new Error('ATC failed');
+    // Avise o tema que o carrinho mudou (Vessel costuma ouvir esse tipo de evento)
+    document.dispatchEvent(new CustomEvent('theme:cart:updated'));
+    return r.json();
+  }
+
+  function initCarouselBehavior(container, products){
+    const inner = container.querySelector('.upsell-carousel__inner');
+    const prev = container.querySelector('.upsell-carousel__btn--prev');
+    const next = container.querySelector('.upsell-carousel__btn--next');
+    if(!inner) return;
+
+    // conteúdo
+    inner.innerHTML = products.map(buildCardHTML).join('');
+
+    // sem produtos? some.
+    if(!inner.children.length){
+      container.remove();
+      return;
+    }
+
+    let idx = 0;
+    function update(){ inner.style.transform = `translateX(-${idx * 100}%)`; }
+    prev?.addEventListener('click', () => { idx = (idx - 1 + inner.children.length) % inner.children.length; update(); });
+    next?.addEventListener('click', () => { idx = (idx + 1) % inner.children.length; update(); });
+
+    // ATC
+    inner.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.upsell-card__btn');
+      if(!btn) return;
+      btn.disabled = true;
+      try{
+        await addToCart(btn.dataset.variantId);
+      }catch(err){ console.warn(err); }
+      finally{ btn.disabled = false; }
+    });
+  }
+
+  async function mountUpsell(where){
+    const cart = await fetchCart() || INITIAL_CART;
+    const firstItem = cart?.items?.[0];
+    if(!firstItem) return;
+
+    const recs = await fetchRecommendations(firstItem.product_id);
+    // não mostrar produtos já no carrinho
+    const picked = recs.filter(p => !cart.items.some(i => i.product_id === p.id));
+    if(!picked.length) return;
+
+    // instancia e injeta
+    const el = createCarousel();
+    if(!el) return;
+
+    // quando montando no drawer, colocamos um ID distinto
+    if (where.isDrawer) el.id = 'upsell-carousel-drawer';
+    else el.id = 'upsell-carousel-page';
+
+    // Evita duplicar
+    const already = document.getElementById(el.id);
+    if (already) already.remove();
+
+    where.mountPoint.appendChild(el);
+    initCarouselBehavior(el, picked);
+  }
+
+  // Encontre pontos de montagem
+  async function init(){
+    // Página de carrinho
+    if (IS_CART_PAGE){
+      const pageMount = findCartPageMount();
+      if (pageMount) await mountUpsell({ mountPoint: pageMount, isDrawer: false });
+    }
+    // Drawer
+    const drawerMount = findCartDrawerMount();
+    if (drawerMount) await mountUpsell({ mountPoint: drawerMount, isDrawer: true });
+  }
+
+  // Observa o cart drawer para remontar quando re-renderiza
+  function watchDrawer(){
+    const drawer = document.querySelector('cart-drawer, cart-drawer-component, [data-cart-drawer], .cart-drawer');
+    if(!drawer || window.__UPS_SELL_OBSERVED__) return;
+    window.__UPS_SELL_OBSERVED__ = true;
+    const obs = new MutationObserver((muts)=>{
+      // qualquer troca grande, tentamos remontar
+      const drawerMount = findCartDrawerMount();
+      if (drawerMount) init();
+    });
+    obs.observe(drawer, { childList:true, subtree:true });
+  }
+
+  // Eventos do tema (tentamos vários nomes comuns)
+  ['theme:cart:updated','cart:updated','vessel:cart:updated'].forEach(evt=>{
+    document.addEventListener(evt, init, { passive:true });
+  });
+
+  document.addEventListener('DOMContentLoaded', ()=>{ init(); watchDrawer(); });
+})();
+</script>

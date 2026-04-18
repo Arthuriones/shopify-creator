@@ -1,0 +1,197 @@
+{% assign unique_id = 'ba_slider_' | append: section.id %}
+
+<main class="ba_main {{ unique_id }}">
+  <div class="container before_after-content">
+    <div class="before_after-heading">
+      <h3 class="before_after-heading">{{ section.settings.ba_heading }}</h3>
+    </div>
+    <div class="before_after-paragraph">
+      {% if section.settings.show_content == true %} <p>{{ section.settings.ba_content }}</p> {% endif %}
+    </div>
+  </div>
+  
+   <div class="container before_after">
+    <div class="image-container">
+      <div class="before_img">
+        <!-- Imagem Desktop -->
+        <img
+          class="image-before slider-image desktop-image{% if section.settings.grayscale_before %} grayscale{% endif %}"
+          src="{{ section.settings.bf_image | image_url }}"
+          alt="Imagem antes - Desktop"
+          loading="lazy"
+        >
+        <!-- Imagem Mobile -->
+        {% if section.settings.bf_image_mobile %}
+          <img
+            class="image-before slider-image mobile-image{% if section.settings.grayscale_before %} grayscale{% endif %}"
+            src="{{ section.settings.bf_image_mobile | image_url }}"
+            alt="Imagem antes - Mobile"
+            loading="lazy"
+          >
+        {% endif %}
+        <span class="before_badge ba_badge" {% unless section.settings.show_badge %}style="display: none;"{% endunless %}>
+          Antes
+        </span>
+      </div>
+      <div class="after_img">
+        <!-- Imagem Desktop -->
+        <img
+          class="image-after slider-image desktop-image"
+          src="{{ section.settings.af_image | image_url }}"
+          alt="Imagem depois - Desktop"
+          loading="lazy"
+        >
+        <!-- Imagem Mobile -->
+        {% if section.settings.af_image_mobile %}
+          <img
+            class="image-after slider-image mobile-image"
+            src="{{ section.settings.af_image_mobile | image_url }}"
+            alt="Imagem depois - Mobile"
+            loading="lazy"
+          >
+        {% endif %}
+        <span class="after_badge ba_badge" {% unless section.settings.show_badge %}style="display: none;"{% endunless %}>
+          Depois
+        </span>
+      </div>
+    </div>
+    
+    <input
+      type="range"
+      min="0"
+      max="100"
+      value="50"
+      aria-label="Porcentagem da foto antes mostrada"
+      class="ba-slider"
+    >
+    <div class="slider-line" aria-hidden="true"></div>
+    <div class="slider-button" aria-hidden="true">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="30"
+        height="30"
+        fill="currentColor"
+        viewBox="0 0 256 256"
+        aria-hidden="true"
+      >
+        <rect width="256" height="256" fill="none"></rect>
+        <line
+          x1="128" y1="40" x2="128" y2="216"
+          fill="none" stroke="currentColor"
+          stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+        ></line>
+        <line
+          x1="96" y1="128" x2="16" y2="128"
+          fill="none" stroke="currentColor"
+          stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+        ></line>
+        <polyline
+          class="before_arrow"
+          points="48 160 16 128 48 96"
+          fill="none" stroke="currentColor"
+          stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+        ></polyline>
+        <line
+          x1="160" y1="128" x2="240" y2="128"
+          fill="none" stroke="currentColor"
+          stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+        ></line>
+        <polyline
+          class="after_arrow"
+          points="208 96 240 128 208 160"
+          fill="none" stroke="currentColor"
+          stroke-linecap="round" stroke-linejoin="round" stroke-width="16"
+        ></polyline>
+      </svg>
+    </div>
+  </div>
+</main>
+
+{% schema %}
+{
+  "name": "Antes e Depois",
+  "settings": [
+    {
+      "id": "bf_image",
+      "type": "image_picker",
+      "label": "Imagem Antes (Desktop)"
+    },
+    {
+      "id": "bf_image_mobile",
+      "type": "image_picker",
+      "label": "Imagem Antes (Mobile)"
+    },
+    {
+      "id": "af_image",
+      "type": "image_picker",
+      "label": "Imagem Depois (Desktop)"
+    },
+    {
+      "id": "af_image_mobile",
+      "type": "image_picker",
+      "label": "Imagem Depois (Mobile)"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_badge",
+      "label": "Mostrar labels antes e depois",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "grayscale_before",
+      "label": "Escala de Cinza para Imagem Antes",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_content",
+      "label": "Mostrar conteúdo",
+      "default": false
+    },
+    {
+      "id": "ba_heading",
+      "type": "text",
+      "label": "Título"
+    },
+    {
+      "id": "ba_content",
+      "type": "richtext",
+      "label": "Conteúdo"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Antes e Depois v"
+    }
+  ]
+}
+{% endschema %}
+
+<!-- CSS condicional mínimo -->
+<style>
+  {% if section.settings.show_content == true %}
+    .{{ unique_id }} .container {
+      width: calc(100% - 20px);
+    }
+  {% else %}
+    .{{ unique_id }} .container {
+      width: 100%;
+      margin: 0 auto;
+    }
+  {% endif %}
+</style>
+
+<!-- Carregamento otimizado de assets -->
+<link rel="stylesheet" href="{{ 'section-before-after.css' | asset_url }}" media="all">
+
+<script src="{{ 'section-before-after.js' | asset_url }}" defer></script>
+
+<script>
+  // Inicialização segura após carregamento
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initializeBeforeAfterSlider === 'function') {
+      initializeBeforeAfterSlider('{{ unique_id }}');
+    }
+  });
+</script>

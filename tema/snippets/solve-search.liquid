@@ -1,0 +1,76 @@
+<script>
+(function () {
+  // 1) Marcar navegação a partir da busca preditiva
+  document.addEventListener('click', function (e) {
+    const link = e.target.closest('.predictive-search-form a, predictive-search a, [data-predictive-search] a');
+    if (link) {
+      try { sessionStorage.setItem('cameFromPredictiveSearch', '1'); } catch (err) {}
+    }
+  }, { capture: true });
+
+  document.addEventListener('submit', function (e) {
+    const form = e.target.closest('form');
+    if (!form) return;
+    if (
+      form.classList.contains('predictive-search-form') ||
+      form.matches('[data-predictive-search] form') ||
+      form.closest('.predictive-search-form')
+    ) {
+      try { sessionStorage.setItem('cameFromPredictiveSearch', '1'); } catch (err) {}
+    }
+  }, true);
+
+  // 2) Função que força o fechamento de qualquer modal/drawer de busca
+  function forceCloseSearch() {
+    // <details> usados como drawer de busca
+    document.querySelectorAll('details[open]').forEach(function (d) {
+      if (d.querySelector('.predictive-search-form, predictive-search, [data-predictive-search]')) {
+        d.removeAttribute('open');
+      }
+    });
+
+    // <dialog> ou modais customizados
+    document.querySelectorAll('dialog[open], .modal[open], .search-modal[open]').forEach(function (dlg) {
+      if (
+        dlg.matches('.search-modal, [data-modal="search"]') ||
+        dlg.querySelector('.predictive-search-form, predictive-search, [data-predictive-search]')
+      ) {
+        if (typeof dlg.close === 'function') dlg.close();
+        dlg.removeAttribute('open');
+        dlg.classList.remove('is-active', 'active', 'open');
+      }
+    });
+
+    // Classes de scroll lock comuns
+    document.documentElement.classList.remove('no-scroll', 'modal-open');
+    document.body.classList.remove('no-scroll', 'modal-open');
+
+    // Alguns temas reabrem ao focar o input (open-on-focus). Desarma temporariamente.
+    document.querySelectorAll('[data-open-on-focus="true"]').forEach(function (el) {
+      el.setAttribute('data-open-on-focus', 'false');
+    });
+  }
+
+  // 3) Ao carregar a nova página, não reabrir a busca
+  document.addEventListener('DOMContentLoaded', function () {
+    const flag = sessionStorage.getItem('cameFromPredictiveSearch');
+    if (flag === '1') {
+      // Evita auto-open por querystring (?q=...)
+      try {
+        const url = new URL(location.href);
+        if (url.searchParams.has('q')) {
+          url.searchParams.delete('q');
+          history.replaceState({}, '', url);
+        }
+      } catch (err) {}
+
+      // Fecha já e fecha de novo depois (caso scripts do tema rodem após)
+      setTimeout(forceCloseSearch, 0);
+      setTimeout(forceCloseSearch, 300);
+
+      // Limpa flag
+      sessionStorage.removeItem('cameFromPredictiveSearch');
+    }
+  });
+})();
+</script>

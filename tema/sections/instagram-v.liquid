@@ -1,0 +1,738 @@
+
+  
+<style>
+
+ :root {
+     --hashtag-color: {{section.settings.hashtag_color}};
+    --insta-btn-color: {{section.settings.insta-btn_color}};
+    --insta-fonte-color: {{section.settings.insta-fonte_color}};
+
+  --titulo-celular: {{section.settings.titulo_celular}}px;
+     --titulo-desk: {{section.settings.titulo_desk}}px;
+
+     --insta-icon-mobile: {{section.settings.tamanho_icon_mobile}}px;
+ --insta-icon-desktop: {{section.settings.tamanho_icon_desktop}}px;
+}
+  /* ---------- DIMENSÕES BÁSICAS (sem mudanças) ---------- */
+  #images-carousel-{{ section.id }}          { width:100%; }
+  #images-carousel-{{ section.id }} .images-carousel-container { margin:0 auto; }
+  #images-carousel-{{ section.id }} .section-heading{
+    text-align:{{ section.settings.heading_alignment }};
+    margin:0 0 35px;
+    font-size:{% if section.settings.heading_size == 'small' %}24px{% elsif section.settings.heading_size == 'medium' %}32px{% else %}40px{% endif %};
+  }
+  #images-carousel-{{ section.id }} .images-carousel-wrapper{ position:relative; overflow:hidden; }
+  #images-carousel-{{ section.id }} .images-carousel-slider{ overflow:hidden; position:relative; width:100%; }
+  #images-carousel-{{ section.id }} .slider-track{ display:flex; gap:15px; transition:transform .5s ease-in-out; will-change:transform; }
+
+  /* Largura de cada slide (desktop) */
+  #images-carousel-{{ section.id }} .slide{
+    flex:0 0 calc((100% - ({{ section.settings.visible_images | minus:1 }} * 15px)) / {{ section.settings.visible_images }});
+  }
+  /* Largura de cada slide (mobile) */
+  @media(max-width:767px){
+    #images-carousel-{{ section.id }} .slide{
+      flex:0 0 calc((100% - ({{ section.settings.visible_mobile | minus:1 }} * 15px)) / {{ section.settings.visible_mobile }});
+    }
+  }
+  #images-carousel-{{ section.id }} .slide img.carousel-image{
+    width:100%; object-fit:cover;
+    {% case section.settings.image_design %}
+      {% when "square" %}   aspect-ratio:1/1;
+      {% when "circle" %}   aspect-ratio:1/1; border-radius:50%;
+      {% when "portrait" %} aspect-ratio:2/3;
+    {% endcase %}
+    {% if section.settings.image_shadow %}box-shadow:0 4px 8px rgba(0,0,0,.2);{% endif %}
+  }
+
+  /* ---------- ARROWS ---------- */
+  #images-carousel-{{ section.id }} .arrow{
+    background:{{ section.settings.arrow_bg_color }};
+    color:#fff; border:none; width:40px; height:40px; font-size:20px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    position:absolute; top:50%; transform:translateY(-50%);
+    border-radius:{% if section.settings.arrow_shape == "circle" %}50%{% else %}0{% endif %};
+    transition:opacity .3s;
+  }
+  #images-carousel-{{ section.id }} .left-arrow { left:5px; }
+  #images-carousel-{{ section.id }} .right-arrow{ right:5px; }
+
+  /* → visibilidade das setas */
+  /* desktop (≥768 px): escondidas até o hover */
+  @media(min-width:768px){
+    #images-carousel-{{ section.id }} .arrow{ opacity:0; pointer-events:none; }
+    #images-carousel-{{ section.id }} .images-carousel-wrapper:hover .arrow{
+      opacity:1; pointer-events:auto;
+    }
+  }
+  /* mobile (≤767 px): setas nunca aparecem */
+  @media(max-width:767px){
+    #images-carousel-{{ section.id }} .arrow{ display:none; }
+  }
+
+  /* ---------- DOTS (só mobile) ---------- */
+  @media(max-width:767px){
+    #images-carousel-{{ section.id }} .carousel-dots{
+      display:flex; justify-content:center; gap:6px; margin-top:10px;
+    }
+    #images-carousel-{{ section.id }} .carousel-dots .dot{
+      width:6px; height:6px; border-radius:50%; background:#d0d0d0; transition:background .3s;
+    }
+    #images-carousel-{{ section.id }} .carousel-dots .dot.active{ background:#606060; }
+  }
+
+  /* mantém o slider abaixo de tudo */
+#images-carousel-{{ section.id }} .images-carousel-slider{
+  position: relative;     /* já existe – apenas garanta que ficou */
+  z-index: 1;             /* NOVO */
+}
+
+/* garante que as setas fiquem sempre por cima */
+#images-carousel-{{ section.id }} .arrow{
+  z-index: 100;           /* NOVO – qualquer valor alto funciona */
+}
+
+.instagram__image {
+  display: block;
+  height: 200px;
+  width: 200px;
+  border-radius: var(--block-border-radius-reduced);
+  overflow: hidden;
+  border: 0.1px solid #ccc;
+  -webkit-user-select: none;
+          user-select: none;
+}
+
+.gallery__caption {
+  display: table-caption;
+  caption-side: bottom;
+  margin-top: 16px;
+  padding: 0 5px;
+  font-size:13px;
+}
+
+.perfil-image{
+  width: 23px;
+    height: 23px;
+    border-radius: 100%;
+    box-shadow: 0px 0px 0 2px #e43e4f;
+    margin-right: 5px;
+}
+  
+
+  
+  .instagram_icons{
+    width:200px;
+    margin-top:5px;
+    margin-bottom:5px
+  }
+  
+  @media screen and (min-width: 1000px) {
+    .perfil-image{
+          margin-bottom: -1.1px;
+    }
+    .instagram__image {
+  display: block;
+  height: 300px;
+  width: 300px;
+    }
+    .instagram_icons{
+    width:300px;
+    margin-top:11px;
+      margin-bottom:15px
+
+  }
+  }
+  .instaborda{
+     width: 25pt;
+    height: 25pt;
+    border-radius: 50%;
+    display: table-cell;
+    vertical-align: middle;
+    margin-bottom: 5px;
+    background-image: linear-gradient(45deg, #ff0, #f00, #90c);
+  }
+
+  .legendainsta{
+      font-size:12px;
+      width: 100%;
+      text-align: left;
+      padding: 8px 0;
+      line-height: 1.4;
+   }
+    @media screen and (min-width: 1000px) {
+     .legendainsta{
+     font-size: 13px;
+     padding: 10px 0;
+       }
+  }
+
+  /* Ajustes para o container da legenda */
+  .gallery__caption {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 0;
+    padding: 0 5px;
+  }
+
+.section__color-wrapper.vertical-breather {
+    padding-bottom: 10px !important;
+    padding-top: 10px !important;
+}
+
+
+  @media screen and (max-width: 800px) {
+  p.titulo_insta{
+    font-size: var(--titulo-celular);
+    font-weight: 600;
+    text-align: center;
+    display: flex;
+    text-align: center;
+        align-content: center;
+        align-items: center;
+        justify-content: center;
+  }
+  
+.images-carousel-container {
+    width: 90% !important;
+}
+
+img.instagram_icon_principal {
+        
+  width:  var(--insta-icon-mobile);
+  min-width:  20px;
+       display: block;
+    margin: 0px 8px 0px 0px !important;
+  display: initial !important;
+}
+  }
+
+ @media screen and (min-width: 800px) {
+  p.titulo_insta{
+    display: flex;
+        font-size: var(--titulo-desk);
+        font-weight: 600;
+        text-align: center;
+        align-content: center;
+        align-items: center;
+        justify-content: center;
+  }
+  
+img.instagram_icon_principal {
+        width: var(--insta-icon-desktop);
+        min-width:  20px;
+       display: block;
+    margin: 0px 8px 0px 0px !important;
+  display: initial !important;
+}
+  }
+
+  
+.instagram_icons {
+        width: 100%;
+        padding: 0 5px;
+    }
+
+  .fotoperfil {
+    padding-left: 5px;
+    padding-top: 5px;
+    padding-bottom: 4px;
+    line-height: 1;
+    letter-spacing: 0.01rem;
+}
+
+
+element.style {
+}
+span.pontoinsta {
+    display: flex;
+    flex-direction: row-reverse;
+    position: relative;
+    margin-bottom: -23px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding-right: 2px;
+}
+</style>
+
+
+{%- comment -%}
+  The outer container always spans 100% width. Inside, we wrap both the heading and slider in a common container
+  whose width is controlled by the full_width setting.
+{%- endcomment -%}
+<div id="images-carousel-{{ section.id }}" class="page-width images-carousel-section" style="background-color: {{ section.settings.section_bg_color }}; padding-top: {{ section.settings.section_padding_top }}px; padding-bottom: {{ section.settings.section_padding_bottom }}px;">
+  <div class="images-carousel-container" style="width: {% if section.settings.full_width %}100%{% else %}80%{% endif %}; margin: 0 auto;">
+    {% if section.settings.section_title != blank %}
+      <p class="titulo_insta">
+             <img src="{{ 'instagram.svg' | asset_url }}" alt="instagram" loading="lazy" class="instagram_icon_principal">{{ section.settings.section_title | escape }} </p>
+    {% endif %}
+    <div class="images-carousel-wrapper">
+      {% if section.settings.show_arrows %}
+        <button class="arrow left-arrow">❮</button>
+      {% endif %}
+      <div class="images-carousel-slider">
+        <div class="slider-track">
+          {% for block in section.blocks %}
+            <div class="slide">
+              {% if block.settings.image != blank %}
+                <span class="pontoinsta">...</span>
+                <div class="fotoperfil" style="font-weight: 600;display: flex;flex-direction: row;align-items: center; margin-bottom: 3px;">
+                  {%- if section.settings.image_perfil != blank  -%}  <img class="perfil-image" src="{{ section.settings.image_perfil | img_url: image_size }}" alt="Perfil do instagram">
+                  {%- endif -%}
+                  {{ section.settings.meuarroba | escape }}</div>
+                 <img
+                    class="carousel-image"
+                    src="{{ block.settings.image | img_url: section.settings.image_size }}"
+                    alt="{{ block.settings.image.alt | escape }}"
+                  />
+              {% endif %}
+         
+              <div>
+                <img src="{{ 'Instaiconsmarcos.png' | asset_url }}" alt="Icones instagram" loading="lazy" class="instagram_icons">
+              </div>
+
+              {%- if block.settings.caption != blank -%}
+                <figcaption class="gallery__caption rte legendainsta">
+                  <span>{{- block.settings.caption -}}</span>
+                  <span class="hashtags" style="color:var(--hashtag-color)">{{- block.settings.captionhashtag -}}</span>
+                </figcaption>
+              {%- endif -%}
+            </div>
+          {% endfor %}
+        
+          {%- comment -%}
+            Clone the first N slides (where N = visible_images) for seamless looping
+          {%- endcomment -%}
+          {% for block in section.blocks limit: section.settings.visible_images %}
+            <div class="slide clone">
+              <span class="pontoinsta">...</span>
+              <div class="fotoperfil" style="font-weight: 600;display: flex;flex-direction: row;align-items: center; margin-bottom: 3px;">
+                  {%- if section.settings.image_perfil != blank  -%}  <img class="perfil-image" src="{{ section.settings.image_perfil | img_url: image_size }}" alt="Perfil do instagram">
+                  {%- endif -%}
+                  {{ section.settings.meuarroba | escape }}</div>
+              {% if block.settings.image != blank %}
+                <img class="carousel-image" src="{{ block.settings.image | img_url: section.settings.image_size }}" alt="Carousel Image">
+              {% endif %}
+              
+              <div>
+                <img src="{{ 'Instaiconsmarcos.png' | asset_url }}" alt="Icones instagram" loading="lazy" class="instagram_icons">
+              </div>
+
+              {%- if block.settings.caption != blank -%}
+                <figcaption class="gallery__caption rte legendainsta">
+                  <span>{{- block.settings.caption -}}</span>
+                  <span class="hashtags" style="color:var(--hashtag-color)">{{- block.settings.captionhashtag -}}</span>
+                </figcaption>
+              {%- endif -%}
+            </div>
+          {% endfor %}
+        </div>
+      </div><!-- images-carousel-slider -->
+      {% if section.settings.show_arrows %}
+        <button class="arrow right-arrow">❯</button>
+      {% endif %}
+    </div><!-- images-carousel-wrapper -->
+
+    <!-- Dots para mobile -->
+    <div class="carousel-dots"></div>
+  </div><!-- images-carousel-container -->
+
+
+{%- if section.settings.button_text != blank -%}
+              <div style="    margin-top: 30px !important;
+    margin-bottom: 20px !important;
+    justify-self: center;
+    width: 100%;
+        display: flex
+;
+    flex-wrap: nowrap;
+    justify-content: center;">
+                <a class="button button--primary" 
+    style="background: var(--insta-btn-color) !important;
+    height: 32px !important;
+    padding: 20px;
+    line-height: 1;
+    font-size: 14px;
+    letter-spacing: 0.05rem;
+    color: var(--insta-fonte-color) !important;" 
+
+    href="{{ section.settings.button_url }}">{{ section.settings.button_text }}</a>
+              </div>
+            {%- endif -%}
+
+
+</div><!-- images-carousel-section -->
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const container  = document.getElementById('images-carousel-{{ section.id }}');
+  if (!container) return;
+
+  /* --------- ELEMENTOS --------- */
+  const track      = container.querySelector('.slider-track');
+  const slides     = container.querySelectorAll('.slide');
+  const realCount  = {{ section.blocks.size }};
+  const clones     = container.querySelectorAll('.clone').length;
+  const leftArrow  = container.querySelector('.left-arrow');
+  const rightArrow = container.querySelector('.right-arrow');
+  const dotsWrap   = container.querySelector('.carousel-dots');
+
+  /* --------- MEDIÇÃO DINÂMICA --------- */
+  let gap = 0, slideWidth = 0, index = 0;
+  const measure = () => {
+    gap        = parseFloat(getComputedStyle(track).gap || 0);
+    slideWidth = slides[0].getBoundingClientRect().width + gap;
+    track.style.transition = 'none';
+    track.style.transform  = `translateX(-${index * slideWidth}px)`;
+  };
+  measure();
+
+  /* --------- DOTS --------- */
+  const dots = Array.from({ length: realCount }, (_, i) => {
+    const d = document.createElement('span');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    dotsWrap.appendChild(d);
+    return d;
+  });
+  const updateDots = () => {
+    const active = index % realCount;
+    dots.forEach((d, i) => d.classList.toggle('active', i === active));
+  };
+
+  /* --------- AUTO-PLAY RESETÁVEL --------- */
+  const autoplay     = {{ section.settings.autoplay | json }};
+  const speed        = {{ section.settings.autoplay_speed | json }};
+  let autoTimer;
+
+  const startAutoplay = () => {
+    if (!autoplay) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      next(true);                 // true => vem do autoplay
+    }, speed);
+  };
+
+  /* --------- MOVIMENTO --------- */
+  const go = dir => {
+    index += dir;
+    track.style.transition = 'transform .5s ease-in-out';
+    track.style.transform  = `translateX(-${index * slideWidth}px)`;
+  };
+  const next = (fromAuto = false) => {
+    go(1);
+    if (!fromAuto) startAutoplay();  // reset se veio de clique/swipe
+  };
+  const prev = () => {
+    go(-1);
+    startAutoplay();
+  };
+
+  track.addEventListener('transitionend', () => {
+    if (index >= slides.length - clones) { index = 0; track.style.transition = 'none'; }
+    if (index < 0)                       { index = slides.length - clones - 1; track.style.transition = 'none'; }
+    track.style.transform = `translateX(-${index * slideWidth}px)`;
+    void track.offsetWidth;              // força repaint
+    track.style.transition = 'transform .5s ease-in-out';
+    updateDots();
+    startAutoplay();                     // reinicia após cada animação
+  });
+
+  /* --------- CONTROLES --------- */
+  rightArrow?.addEventListener('click', next);
+  leftArrow ?.addEventListener('click', prev);
+
+  /* --------- SWIPE MOBILE --------- */
+  let startX = 0, delta = 0;
+  track.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchmove',  e => { delta  = e.touches[0].clientX - startX; }, { passive: true });
+  track.addEventListener('touchend',   () => {
+    if (Math.abs(delta) > 50) (delta < 0 ? next : prev)();
+    delta = 0;
+  });
+
+  /* --------- RESIZE --------- */
+  window.addEventListener('resize', () => {
+    measure();
+  });
+
+  /* --------- INICIAR --------- */
+  startAutoplay();
+});
+</script>
+
+{% schema %}
+{
+  "name": "Instagram v",
+  "settings": [
+     {
+      "type": "range",
+      "id": "titulo_celular",
+      "min": 14,
+      "max": 22,
+      "step": 1,
+      "unit": "px",
+      "label": "Tamanho da fonte no celular",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "titulo_desk",
+      "min": 14,
+      "max": 30,
+      "step": 1,
+      "unit": "px",
+      "label": "Tamanho da fonte no desktop",
+      "default": 20
+    },
+    {
+      "type": "range",
+      "id": "tamanho_icon_mobile",
+      "min": 15,
+      "max": 25,
+      "step": 1,
+      "unit": "px",
+      "label": "Tamanho do ícone no celular",
+      "default": 22
+    },
+    {
+      "type": "range",
+      "id": "tamanho_icon_desktop",
+      "min": 14,
+      "max": 30,
+      "step": 1,
+      "unit": "px",
+      "label": "Tamanho do ícone no desktop",
+      "default": 24
+    },
+    {
+      "type": "text",
+      "id": "meuarroba",
+      "label": "@ da sua loja",
+      "default": "@minhalojanoinsta"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_perfil",
+      "label": "Foto do perfil",
+      "info": "200 x 200 px. ATENÇÃO, UTILIZE UMA IMAGEM QUADRADA DE PROPORÇÃO 1:1"
+    },
+    {
+      "type": "color",
+      "id": "hashtag_color",
+      "label": "Cor das hashtags",
+      "default": "#1DA1F2"
+    },
+    {
+      "type": "color",
+      "id": "insta-btn_color",
+      "label": "Cor do botão",
+      "default": "#000"
+    },
+    {
+      "type": "color",
+      "id": "insta-fonte_color",
+      "label": "Cor da fonte do botão",
+      "default": "#fff"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Texto do botão"
+    },
+    {
+      "type": "url",
+      "id": "button_url",
+      "label": "Link do perfil Instagram da loja"
+    },
+    {
+      "type": "text",
+      "id": "section_title",
+      "label": "Section Title",
+      "default": "Siga-nos no Instagram"
+    },
+    {
+      "type": "select",
+      "id": "heading_alignment",
+      "label": "Section Title Alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "heading_size",
+      "label": "Section Title Size",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ],
+      "default": "medium"
+    },
+    {
+      "type": "checkbox",
+      "id": "full_width",
+      "label": "Full Width Section",
+      "default": false
+    },
+    {
+      "type": "color",
+      "id": "section_bg_color",
+      "label": "Section Background Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "section_padding_top",
+      "label": "Section Top Padding (px)",
+      "min": 0,
+      "max": 200,
+      "step": 5,
+      "default": 20
+    },
+    {
+      "type": "range",
+      "id": "section_padding_bottom",
+      "label": "Section Bottom Padding (px)",
+      "min": 0,
+      "max": 200,
+      "step": 5,
+      "default": 20
+    },
+    {
+      "type": "checkbox",
+      "id": "autoplay",
+      "label": "Enable Auto Slide",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "autoplay_speed",
+      "label": "Auto Slide Speed (ms)",
+      "min": 1000,
+      "max": 9000,
+      "step": 500,
+      "default": 3000
+    },
+    {
+      "type": "checkbox",
+      "id": "show_arrows",
+      "label": "Show Arrows",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "arrow_shape",
+      "label": "Arrow Shape",
+      "options": [
+        { "value": "circle", "label": "Circle" },
+        { "value": "square", "label": "Square" }
+      ],
+      "default": "circle"
+    },
+    {
+      "type": "color",
+      "id": "arrow_bg_color",
+      "label": "Arrow Background Color",
+      "default": "#000000"
+    },
+    {
+      "type": "range",
+      "id": "visible_images",
+      "label": "Visible Images (Desktop)",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "visible_mobile",
+      "label": "Visible Images (Mobile)",
+      "min": 1,
+      "max": 3,
+      "step": 1,
+      "default": 1
+    },
+    {
+      "type": "select",
+      "id": "image_design",
+      "label": "Image Design",
+      "options": [
+        { "value": "square", "label": "Square" },
+        { "value": "circle", "label": "Circle" },
+        { "value": "portrait", "label": "Portrait" }
+      ],
+      "default": "square"
+    },
+    {
+      "type": "select",
+      "id": "image_size",
+      "label": "Image Size",
+      "options": [
+        { "value": "200x200", "label": "Small (200x200)" },
+        { "value": "300x300", "label": "Medium (300x300)" },
+        { "value": "400x400", "label": "Large (400x400)" }
+      ],
+      "default": "300x300"
+    },
+    {
+      "type": "checkbox",
+      "id": "image_shadow",
+      "label": "Add Image Shadow",
+      "default": false
+    }
+  ],
+  "blocks": [
+    {
+      "type": "image",
+      "name": "Instagram Image",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "image",
+          "label": "Image"
+        },
+        {
+          "type": "text",
+          "id": "caption",
+          "label": "Caption",
+          "default": "Legenda do post"
+        },
+        {
+          "type": "text",
+          "id": "captionhashtag",
+          "label": "Hashtags",
+          "default": "#hashtag #exemplo"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Instagram v",
+      "blocks": [
+        {
+          "type": "image"
+        },
+        {
+          "type": "image"
+        },
+        {
+          "type": "image"
+        },
+        {
+          "type": "image"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

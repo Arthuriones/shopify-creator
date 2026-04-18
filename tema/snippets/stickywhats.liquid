@@ -1,0 +1,51 @@
+<a href="https://wa.me/{{ settings.whats_num_sticky }}" class="whatsapp-button-sticky" target="_blank"> 
+  <style>
+    .whatsapp-button-sticky{
+    position: fixed;
+    right: 8px;
+    bottom: 16px;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    border-radius: 50%;
+    z-index: 9999;
+    transition: all 0.3s ease-in-out;
+    }
+  
+
+@media screen and (max-width: 1000px) {
+ .whatsapp-button-sticky{
+    bottom: 150px !important;
+    z-index: 999;
+     }
+  }
+      </style>
+      <img loading="eager" src="{{ 'vWpp.png' | asset_url }}" width="25px" height="100%" alt="WhatsApp Logo">
+    </a>
+
+
+
+{%- if settings.show_sticky_whatsd == false-%}
+  <style>
+  @media screen and (min-width: 1000px) {
+ .whatsapp-button-sticky{
+    display: none !Important;
+     }
+  }
+    </style>
+{%- endif -%}
+
+
+
+
+
+{%- if settings.show_sticky_whatsm == false -%}
+  <style>
+  @media screen and (max-width: 1000px) {
+ .whatsapp-button-sticky{
+    display: none !Important;
+     }
+  }
+    </style>
+{%- endif -%}

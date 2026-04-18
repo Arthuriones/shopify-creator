@@ -1,0 +1,135 @@
+
+  {% render 'v-frete-local' %}
+
+
+{% schema %}
+{
+  "name": "Frete Localização",
+  "tag": null,
+  "settings": [
+     {
+      "type": "range",
+      "id": "marginlocal1-top",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "marginlocal1-bottom",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+        {
+        "type": "range",
+        "id": "bordaboxfretelocal",
+        "min": 0,
+        "max": 50,
+        "step": 1,
+        "unit": "px",
+        "label": "Arredondamento Borda Externa",
+        "default": 5
+      },
+       {
+        "type": "range",
+        "id": "bordaboxfretelocali",
+        "min": 0,
+        "max": 50,
+        "step": 1,
+        "unit": "px",
+        "label": "Arredondamento fundo icone",
+        "default": 5
+      },
+      {
+        "type": "text",
+        "id": "frete1_frasegratis",
+        "label": "Tipo de Frete",
+        "default": "Frete Grátis"
+      },
+       {
+        "type": "text",
+        "id": "frete1_para",
+        "label": "para",
+        "default": "para"
+      },
+      {
+        "type": "text",
+        "id": "frete1_regiao",
+        "label": "e região",
+        "default": "e Região"
+      },
+      {
+        "type": "color",
+        "id": "product_free_shipping_color",
+        "label": "Cor do Frete Grátis",
+        "default": "#000"
+      },
+        {
+        "type": "text",
+        "id": "frete1_frase",
+        "label": "Prazo de entrega ou envio",
+        "info": "Recomendações: Utilize no máximo 4 palavras para o texto ficar uniforme em todos os dispositiveis móveis",
+        "default": "Prazo de envio de 2 a 5 dias"
+      },
+      {
+        "type": "color",
+        "id": "product_free_shipping_color2",
+        "label": "Cor do prazo",
+        "default": "#8f8f8f"
+      },
+      {
+        "type": "checkbox",
+        "id": "frete1_caminhao",
+        "label": "Usar simbolo Caminhão",
+        "info": "Primeira opção de frete, com simbolo do caminhão",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "frete1_correios",
+        "label": "Usar simbolo Correios",
+        "info": "Primeira opção de frete, com simbolo dos correios. Opção apenas disponível se a box do caminhão estiver desativada",
+        "default": false
+      },
+      {
+        "type": "color",
+        "id": "product_truck_background",
+        "label": "Cor do fundo do caminhão de Frete",
+        "default": "#00c3ee"
+      },
+      {
+        "type": "color",
+        "id": "product_truck_color",
+        "label": "Cor do caminhão de Frete",
+        "default": "#fff"
+      },
+
+      {
+        "type": "color",
+        "id": "product_localization_color",
+        "label": "Cor da localização",
+        "default": "#36b376"
+      },
+      {
+        "type": "color",
+        "id": "color_frete_fundo",
+        "label": "Cor do fundo do box",
+        "default": "#fff"
+      }
+    
+  ],
+  "presets": [
+    {
+      "name": "Frete Localização",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

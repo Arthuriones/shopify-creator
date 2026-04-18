@@ -1,0 +1,361 @@
+{%- capture section_settings -%}
+{
+  "stackable": {% if section.settings.layout == 'vertical' and section.settings.stack_products == false %}false{% else %}true{% endif %},
+  "layout": {{ section.settings.layout | json }}
+}
+
+{%- endcapture -%}
+
+<style>
+  :root{
+    --countdown_background    : {{ section.settings.cronometro_background }};
+    --countdown_timer_color    : {{ section.settings.cronometro_fonte }};
+    --countdown_desc_color    : {{ section.settings.cronometro_textos }};
+    --countdown_frase_cor    : {{ section.settings.cronometro_frase_cor }};
+    --countdown_frase    : {{ section.settings.cronometro_frase_fonte }}px;
+     --countdown_frase_mobile    : {{ section.settings.cronometro_frase_fonte_mobile }}px;
+     --countdown_mim   : {{ section.settings.cronometro_frase_mim }}px;
+    --countdown_mid   : {{ section.settings.cronometro_frase_mid }}px;
+     --countdown_msm   : {{ section.settings.cronometro_frase_msm }}px;
+    --countdown_msd   : {{ section.settings.cronometro_frase_msd }}px;
+  }
+</style>
+
+<section id="sumiraozerar" class="section" data-section-id="{{ section.id }}" data-section-type="featured-collection" data-section-settings='{{ section_settings }}'>
+ 
+  <div class="container">
+
+<style>
+
+  
+.countdown-ofertas{
+    margin:0 auto;
+    margin-bottom: var(--countdown_mid);
+    margin-top: var(--countdown_msd);
+    text-align:center
+}
+
+ @media only screen and (max-width: 767px){
+   .countdown-ofertas{
+   margin-bottom: var(--countdown_mim) !important;
+   margin-top: var(--countdown_msm) !important;
+   margin:0 auto;
+   text-align:center
+   }
+ } 
+
+  
+.countdown-ofertas .texto-ofertas{
+    display:inline-block;
+    margin-right:10px;
+    text-align:center;
+    vertical-align:middle;
+    max-width:600px;
+    overflow:hidden;
+    white-space:pre;
+    text-overflow:ellipsis
+}
+.countdown-ofertas .texto-ofertas span{
+    font-size:var(--countdown_frase);
+    color:var(--countdown_frase_cor);
+    font-weight: 600;
+}
+.countdown-ofertas ul{
+    margin:0 auto;
+    padding:0;
+    display:inline-block;
+    text-align:center;
+    vertical-align:middle
+}
+.countdown-ofertas ul li{
+    line-height:20px;
+    display:inline-block;
+    width:59px;
+    text-align:center;
+    margin:0 2px;
+    padding:12px 0;
+    -webkit-border-radius:5px;
+    -moz-border-radius:5px;
+    border-radius:5px;
+    box-shadow:0 3px 6px #64646430;
+    background-color:var(--countdown_background)
+}
+.countdown-dias{
+    margin-right:8px!important
+}
+.countdown-ofertas .tempo-a{
+    display:contents;
+    font-size:25px;
+    font-weight:700;
+    width:30px;
+    text-align:center;
+    color:var(--countdown_timer_color)
+}
+.countdown-ofertas .tempo-b{
+    display:block;
+    font-size:13px;
+    line-height:13px;
+    color:var(--countdown_desc_color)
+}
+.countdown-ofertas ul>strong{
+    display:inline-block;
+    position:relative;
+    top:-10px;
+    font-size:25px;
+    font-weight:700
+}
+.countdown-ofertas .link{
+    display:block;
+    text-align:right;
+    margin-top:10px
+}
+@media only screen and (max-width: 767px){
+    .countdown-ofertas .texto-ofertas{
+        max-width:inherit;
+        white-space:inherit;
+        margin:0
+    }
+    .countdown-ofertas .texto-ofertas{
+        margin-bottom:10px
+    }
+    .countdown-ofertas .texto-ofertas span{
+        font-size:var(--countdown_frase_mobile);
+        line-height:21px
+    }
+    .countdown-ofertas ul li{
+        width:45px;
+        padding:9px 0
+    }
+}
+.ofertas-destaque{
+    text-align:center;
+    -webkit-border-radius:5px;
+    -moz-border-radius:5px;
+    border-radius:5px;
+    font-size:14px;
+    padding:3px 0;
+    margin-top:10px;
+    background-color:var(--special_offer_background);
+    cursor:pointer
+}
+.ofertas-destaque i{
+    margin-right:5px;
+    color:var(--special_offer_star_color)
+}
+.ofertas-destaque strong{
+    font-weight:700;
+    color:#fff;
+    color:var(--special_offer_color)
+}
+  
+</style>
+
+
+<div class="countdown-ofertas">
+        <div class="texto-ofertas">
+          <span>{{ section.settings.cronometro_frase }}</span>
+        </div>
+
+        <ul class="1647436697e002c185-countdown-ofertas">
+    <li>
+        <span id="1647436697e002c185-dias" class="tempo-a"></span>
+        <span class="tempo-b">{{section.settings.cronometro_dias}}</span>
+    </li>
+
+    <li>
+        <span id="1647436697e002c185-hrs" class="tempo-a"></span>
+        <span class="tempo-b">{{section.settings.cronometro_horas}}</span>
+    </li>
+
+    <strong>:</strong>
+
+    <li>
+        <span id="1647436697e002c185-min" class="tempo-a" style=""></span>
+        <span class="tempo-b">{{section.settings.cronometro_min}}</span>
+    </li>
+
+    <strong>:</strong>
+
+    <li>
+        <span id="1647436697e002c185-seg" class="tempo-a"></span>
+        <span class="tempo-b" style="">{{section.settings.cronometro_seg}}</span>
+    </li>
+</ul>
+
+
+<script>
+      const datafinal = ('{{ section.settings.cronometro_termino }}')
+        </script>
+  
+<script>
+    function start() {
+        var tempo = new Date(datafinal).getTime() + (3 * 60 * 60 * 1000) - 500; // Adiciona 3 horas e subtrai 0.5 segundo
+
+        var c = setInterval(function () {
+            var agora = new Date().getTime();
+            var distancia = tempo - agora;
+            
+            var dias = Math.floor(distancia / (1000 * 60 * 60 * 24));
+            var hrs = Math.floor((distancia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            var min = Math.floor((distancia % (1000 * 60 * 60)) / (1000 * 60));
+            var seg = Math.floor((distancia % (1000 * 60)) / 1000);
+
+            document.getElementById('1647436697e002c185' + '-dias').innerHTML = dias;
+            document.getElementById('1647436697e002c185' + '-hrs').innerHTML = hrs;
+            document.getElementById('1647436697e002c185' + '-min').innerHTML = min;
+            document.getElementById('1647436697e002c185' + '-seg').innerHTML = seg;
+
+            if (distancia <= 0) {
+                clearInterval(c);
+                document.getElementById('sumiraozerar').style.display = "none";
+            }
+        }, 1000);
+    }
+
+    document.addEventListener('shopify:section:load', function () {
+        start();
+    });
+    start();
+</script>
+
+
+
+
+      </div>
+
+  </div>
+
+  
+</section>
+
+{% schema %}
+{
+  "name": "Cronometro v",
+  "settings": [
+     {
+        "type": "text",
+        "id": "cronometro_termino",
+        "label": "Dia final Cronometro",
+        "info": "Coloque a data final do cronômetro na configuração ANO-MES-DIA (AAAA-MM-DD) conforme o exemplo: 2023-08-31. OBS: Salve para visualizar as alterações de data no cronômetro",
+        "default": "2023-08-31"
+      },
+    {
+        "type": "text",
+        "id": "cronometro_frase",
+        "label": "Frase Cronometro",
+        "default": "ESSAS OFERTAS ACABAM EM:"
+      },
+
+
+ {
+        "type": "text",
+        "id": "cronometro_dias",
+        "label": "Dias",
+        "default": "dias"
+      },
+ {
+        "type": "text",
+        "id": "cronometro_horas",
+        "label": "horas",
+        "default": "hrs"
+      },
+{
+        "type": "text",
+        "id": "cronometro_min",
+        "label": "Minutos",
+        "default": "min"
+      },
+      {
+        "type": "text",
+        "id": "cronometro_seg",
+        "label": "segundos",
+        "default": "seg"
+      },
+    {
+        "type": "range",
+        "id": "cronometro_frase_fonte",
+        "label": "Fonte da Frase Desktop",
+        "min": 10,
+        "max": 25,
+        "step": 1,
+        "default": 18
+      },
+    {
+        "type": "range",
+        "id": "cronometro_frase_fonte_mobile",
+        "label": "Fonte da Frase Mobile",
+        "min": 10,
+        "max": 25,
+        "step": 1,
+        "default": 16
+      },
+     {
+        "type": "range",
+        "id": "cronometro_frase_mid",
+        "label": "Margem inferior Desktop",
+        "min": -100,
+        "max": 100,
+        "step": 2,
+        "default": 0
+      },
+    {
+        "type": "range",
+        "id": "cronometro_frase_msd",
+        "label": "Margem superior Desktop",
+        "min": -100,
+        "max": 100,
+        "step": 2,
+        "default": 0
+      },
+     {
+        "type": "range",
+        "id": "cronometro_frase_mim",
+        "label": "Margem inferior Mobile",
+        "min": -100,
+        "max": 100,
+        "step": 2,
+        "default": 0
+      },
+      {
+        "type": "range",
+        "id": "cronometro_frase_msm",
+        "label": "Margem superior Mobile",
+        "min": -100,
+        "max": 100,
+        "step": 2,
+        "default": 0
+      },
+    {
+        "type": "color",
+        "id": "cronometro_frase_cor",
+        "label": "Cor da fonte da Frase",
+        "default": "#000"
+      },
+   {
+        "type": "color",
+        "id": "cronometro_background",
+        "label": "Background Cronometro",
+        "default": "#000"
+      },
+     {
+        "type": "color",
+        "id": "cronometro_fonte",
+        "label": "Fonte dos números",
+        "default": "#fff"
+      } ,
+     {
+        "type": "color",
+        "id": "cronometro_textos",
+        "label": "Dias, horas, min, seg",
+        "default": "#00ffe1"
+      } 
+  ],
+  "presets": [
+    {
+      "category": "Collection",
+      "name": "Cronometro v",
+      "settings": {}
+    }
+  ]
+}
+{% endschema %}

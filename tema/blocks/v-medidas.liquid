@@ -1,0 +1,243 @@
+{% if product.tags contains 'medidas1' %}
+          {% render 'v-medidas'%}{% endif %}
+   
+    {% if product.tags contains 'medidas2' %}
+         {% render 'v-medidas'%}{% endif %}
+
+    
+    {% if product.tags contains 'medidas3' %}
+         {% render 'v-medidas'%}{% endif %}
+  
+    
+    {% if product.tags contains 'medidas4' %}
+         {% render 'v-medidas'%}{% endif %}
+  
+   
+    {% if product.tags contains 'medidas5' %}
+         {% render 'v-medidas'%}{% endif %}
+
+
+
+{% schema %}
+{
+  "name": "Tabela Medidas",
+  "tag": null,
+  "settings": [
+   
+
+    
+     {
+        "type": "header",
+        "content": "Botão de medidas em pop-up"
+      },
+      {
+        "type": "paragraph",
+        "content": "Como Usar"
+      },
+        {
+        "type": "paragraph",
+        "content": "Primeiramente, vá até as seções da pagina do produto, acesse Informações do produto > Informações > Grupo e adicione o bloco Tabela de Medidas dentro do grupo. Arraste o bloco para cima ou para baixo do seletor de variantes, ou onde achar adequado. O script só será ativado quando houver uma das tags de ativação no produto"
+      },
+      {
+        "type": "paragraph",
+        "content": "Vá até o produto onde deseja que o popup apareça. Definas as seguintes tags, medidas1 ou medidas2 ou .... até medidas5. Caso adicione a tag medidas1 a imagem referente ao Produto Tipo 1 será apresentada"
+      },
+      {
+        "type": "paragraph",
+        "content": "Aviso: Você definir até 5 imagens diferentes para tamanho. Ex: Tamanho para tenis, camisa, calça, saia, etc."
+      },
+      {
+      "type": "range",
+      "id": "margin-topmedida",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margin-bottommedida",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+  
+      {
+        "type": "text",
+        "id": "popup_button-text",
+        "label": "Nome que aparece no botão",
+        "info": "Por padrão fica sendo 'MEDIDAS'",
+        "default": "CONFIRA SUAS MEDIDAS"
+      },
+      {
+        "type": "color",
+        "id": "popup_size-color",
+        "label": "Cor do Botão de Medidas",
+        "info": "Troque a cor do botão aqui",
+        "default": "#2b3948"
+      },
+      {
+        "type": "color",
+        "id": "popup_text_medidas-color",
+        "label": "Cor da palavra",
+        "info": "Defina uma cor para o texto",
+        "default": "#ffffff"
+      },
+      {
+        "type": "range",
+        "id": "popup_border",
+        "min": 0,
+        "max": 30,
+        "step": 1,
+        "unit": "px",
+        "label": "Borda arredondada do botão",
+        "info": "Para deixar sem deixe em 0",
+        "default": 6
+      },
+      {
+        "type": "color",
+        "id": "popup_show-color",
+        "label": "Cor da caixa do pop-up",
+        "info": "Box que abre ao clicar no botão",
+        "default": "#fff"
+      },
+      {
+        "type": "color",
+        "id": "popup_text-color",
+        "label": "Cores no Pop-Up",
+        "info": "Defina uma cor para o título, o X e a borda.",
+        "default": "#000"
+      },
+      {
+        "type": "color",
+        "id": "icon_popup_titulo",
+        "label": "Cor título",
+        "info": "Defina uma cor para o titulo dentro do popup",
+        "default": "#000"
+      },
+      {
+        "type": "paragraph",
+        "content": "—————————————————"
+      },
+      {
+        "type": "text",
+        "id": "size-product",
+        "label": "Tipo de Produto 1",
+        "info": "Defina aqui o nome do tipo de produto, exemplo: anel, pulseira, sapato...",
+        "default": "Tamanho do..."
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_pc",
+        "label": "Medidas na versão Desktop",
+        "info": "Formatos aceito: png, jpg ou gif. Recomendado 1400x800px.  Por padrão, o seletor de imagem aparece vazio ao recarregar o personalizar. Verifique se a imagem foi carregada clicando no botão e habilitando o script"
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_celular",
+        "label": "Medidas na versão Celular",
+        "info": "Formatos aceito: png, jpg ou gif. Recomendado 900x1200px."
+      },
+      {
+        "type": "paragraph",
+        "content": "—————————————————"
+      },
+      {
+        "type": "text",
+        "id": "size-product2",
+        "label": "Tipo de Produto 2",
+        "info": "Defina aqui o nome do tipo de produto, exemplo: anel, pulseira, sapato..."
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_pc2",
+        "label": "Medidas na versão Desktop",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_celular2",
+        "label": "Medidas na versão Celular",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "paragraph",
+        "content": "—————————————————"
+      },
+      {
+        "type": "text",
+        "id": "size-product3",
+        "label": "Tipo de Produto 3",
+        "info": "Defina aqui o nome do tipo de produto, exemplo: anel, pulseira, sapato..."
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_pc3",
+        "label": "Medidas na versão Desktop",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_celular3",
+        "label": "Medidas na versão Celular",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "paragraph",
+        "content": "—————————————————"
+      },
+      {
+        "type": "text",
+        "id": "size-product4",
+        "label": "Tipo de Produto 4",
+        "info": "Defina aqui o nome do tipo de produto, exemplo: anel, pulseira, sapato..."
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_pc4",
+        "label": "Medidas na versão Desktop",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_celular4",
+        "label": "Medidas na versão Celular",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "paragraph",
+        "content": "—————————————————"
+      },
+      {
+        "type": "text",
+        "id": "size-product5",
+        "label": "Tipo de Produto 5",
+        "info": "Defina aqui o nome do tipo de produto, exemplo: anel, pulseira, sapato..."
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_pc5",
+        "label": "Medidas na versão Desktop",
+        "info": "Formatos aceito: png, jpg ou gif"
+      },
+      {
+        "type": "image_picker",
+        "id": "sizeproduct_celular5",
+        "label": "Medidas na versão Celular",
+        "info": "Formatos aceito: png, jpg ou gif"
+      }
+    
+  ],
+  "presets": [
+    {
+      "name": "Tabela Medidas",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

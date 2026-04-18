@@ -1,0 +1,73 @@
+
+  {% render 'cronometro' %}
+
+
+{% schema %}
+{
+  "name": "Bandeiras de Pagamento",
+  "tag": null,
+  "settings": [
+    { "type": "text",  "id": "frase",     "label": "Frase do topo", "default": "Desconto de Natal!" },
+    { "type": "range", "id": "frase_font_size", "label": "Tamanho da fonte da frase (px)", "min": 12, "max": 64, "step": 1, "default": 22 },
+    { "type": "checkbox", "id": "frase_bold", "label": "Frase em negrito", "default": true },
+
+    { "type": "text",  "id": "subfrase",  "label": "Frase abaixo (ex.: Acaba em:)", "default": "Acaba em:" },
+    { "type": "range", "id": "sub_font_size",  "label": "Tamanho da fonte da frase abaixo (px)", "min": 10, "max": 48, "step": 1, "default": 16 },
+    { "type": "checkbox", "id": "sub_bold", "label": "Frase abaixo em negrito", "default": false },
+
+    { "type": "header", "content": "Ícone" },
+{
+  "type": "select",
+  "id": "icone_estilo",
+  "label": "Estilo do ícone",
+  "default": "fill",
+  "options": [
+    { "value": "fill", "label": "Cronometro" },
+    { "value": "stroke", "label": "relogio" }
+  ]
+},
+{
+  "type": "range",
+  "id": "icone_tamanho",
+  "label": "Tamanho do ícone (px)",
+  "min": 12, "max": 64, "step": 1,
+  "default": 20
+},
+{
+  "type": "range",
+  "id": "icone_espessura",
+  "label": "Espessura do traço (px)",
+  "min": 1, "max": 6, "step": 1,
+  "default": 2,
+  "info": "Usado apenas quando o estilo do ícone é relogio"
+},
+
+    { "type": "text",  "id": "data_fim",  "label": "Data de término", "info": "DD/MM/AAAA ou AAAA-MM-DD", "default": "28/11/2025" },
+    { "type": "text",  "id": "hora_fim",  "label": "Hora de término (opcional)", "info": "HH ou HH:MM", "default": "23:59" },
+
+    { "type": "header", "content": "Rótulos das unidades" },
+    { "type": "text", "id": "rotulo_dias",  "label": "Rótulo de dias",     "default": "dias" },
+    { "type": "text", "id": "rotulo_horas", "label": "Rótulo de horas",    "default": "horas" },
+    { "type": "text", "id": "rotulo_min",   "label": "Rótulo de minutos",  "default": "min" },
+    { "type": "text", "id": "rotulo_seg",   "label": "Rótulo de segundos", "default": "seg" },
+
+    { "type": "header", "content": "Aparência" },
+    { "type": "color", "id": "bg_bloco",      "label": "Cor de fundo do bloco",    "default": "#F6F6F6" },
+    { "type": "color", "id": "bg_numeros",    "label": "Fundo dos números",        "default": "#E8E8E8" },
+    { "type": "color", "id": "cor_numeros",   "label": "Cor dos números",          "default": "#111111" },
+    { "type": "color", "id": "cor_frase",     "label": "Cor das frases",           "default": "#111111" },
+    { "type": "color", "id": "cor_relogio",   "label": "Cor do ícone do relógio",  "default": "#111111" },
+    { "type": "range", "id": "arredondamento","label": "Arredondamento (px)", "min": 0, "max": 100, "step": 1, "default": 12 },
+
+    { "type": "header", "content": "Margens" },
+    { "type": "range", "id": "margem_superior", "label": "Margem superior (px)", "min": -80, "max": 100, "step": 2, "default": 8 },
+    { "type": "range", "id": "margem_inferior", "label": "Margem inferior (px)", "min": -80, "max": 100, "step": 2, "default": 16 }
+  ],
+  "presets": [
+    {
+      "name": "Cronometro Ofertas",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,627 @@
+{% if request.page_type == 'product' and product.options contains 'Quantidade' %}
+{%- assign q_index = -1 -%}
+{%- for opt in product.options -%}
+  {%- if opt == 'Quantidade' -%}{%- assign q_index = forloop.index0 -%}{%- endif -%}
+{%- endfor -%}
+{%- if q_index >= 0 -%}
+
+<style>
+  /* Oculta o variant-picker deste produto até o script sinalizar que está pronto */
+  variant-picker[data-product-id="{{ product.id }}"]{
+    visibility:hidden;
+  }
+  variant-picker[data-product-id="{{ product.id }}"].picker-ready{
+    visibility:visible;
+  }
+
+  /* O bloco de kits também só aparece quando estiver posicionado */
+  .tt-swatches-container[data-product-id="{{ product.id }}"]{ visibility:hidden; }
+  .tt-swatches-container[data-product-id="{{ product.id }}"].kits-ready{ visibility:visible; }
+</style>
+
+<style>
+  .tt-swatches-container { margin: 0; }
+  .tt-options-swatch { padding: 0 !important; }
+  .tt-options-swatch li { list-style:none; margin:15px 0 0; }
+  .tt-options-swatch li a{
+    padding:13px 5px!important; background:#fff!important; border:1px solid #dcdcdc;
+    width:100%; border-radius: var(--arredondakit,8px);
+    display:flex; align-items:center; justify-content:space-around;
+  }
+  .tt-options-swatch li.active a{ border:2px solid var(--kit_cor_selecionado,#111); }
+  .selector-bola{ height:18px; width:18px; border:3px solid #dcdcdc; border-radius: var(--arredondakitbola,50%); }
+  .text-left{ text-align:left!important; display:flex; flex-direction:column; align-items:flex-start; line-height:15px; }
+  .selector-total-antigo{ color:#999; font-size:14px!important; text-decoration:line-through; }
+  .selector-total-variante{ font-size:14px; font-weight:700; color:#000; margin-bottom:5px; }
+  .selector-desconto{ font-size:13px; color:var(--kit_cor_desconto_letra,#2e7d32); margin:0; display:inline-block; }
+  .selector-mais-vendido{    position: absolute;
+    margin: 0 0 4px 0;
+    text-align: center;
+    font-size: 12px;
+    background: var(--kit_cor_vendido, #ffeb3b);
+    color: var(--kit_cor_vendido_fonte, #000);
+    padding: 3px 8px;
+    border-radius: 5px;
+    display: flex;
+    font-weight: 600;
+    margin-top: -70px !important;
+    right: 10px;
+  }
+  .product-form__option.hidden { display: none !important; }
+.tt-wrapper {
+    margin-top: -20px;
+}
+  
+</style>
+
+<!-- container do kits (será movido para o lugar do fieldset "Quantidade") -->
+<div class="tt-swatches-container tt-swatches-container-js"
+     data-kits-v
+     data-product-id="{{ product.id }}"
+     data-q-index="{{ q_index }}"
+     data-option-names='{{ product.options | json | escape }}'>
+
+  <div class="tt-wrapper">
+    <div class="tt-title-options" style="display:none;">Quantidade: <span class="current_option_name">1 unidade</span></div>
+    <ul class="tt-options-swatch options-large">
+
+      <!-- 1 unidade -->
+      <li id="kit-1" style="width:100%;">
+        <a href="#!" data-value="1 unidade">
+          <div class="col-1" style="margin-left:-17px;margin-right:-51px;"><div id="bola1" class="selector-bola"></div></div>
+          <div class="col-4 text-left">
+            <p class="new-selector-nome-variante">1 unidade</p>
+            <p class="selector-desconto">
+              {{ settings.kit_label_desc1 }}
+              {% assign v1 = nil %}
+              {% for v in product.variants %}{% if v.options[q_index] == '1 unidade' %}{% assign v1 = v %}{% break %}{% endif %}{% endfor %}
+              {% if v1 and v1.compare_at_price > 0 %}
+                {{ v1.compare_at_price | minus: v1.price | times: 100.0 | divided_by: v1.compare_at_price | round }}%
+              {% else %}0%{% endif %}
+              {{ settings.kit_label_desc2 | default: 'OFF' }}
+            </p>
+          </div>
+          <div class="col-7 text-left">
+            {% if v1 %}
+              <p style="margin:0; display:inline-flex; flex-direction:column-reverse;">
+                <span class="selector-total-antigo">{{ v1.compare_at_price | money }}</span>
+                <span class="selector-total-variante">{{ v1.price | money }}</span>
+              </p>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+
+      <!-- 2 unidades -->
+      <li id="kit-2" style="width:100%;">
+        <a href="#!" data-value="2 unidades">
+          <div class="col-1" style="margin-left:-17px;margin-right:-51px;"><div id="bola2" class="selector-bola"></div></div>
+          <div class="col-4 text-left">
+            <p class="new-selector-nome-variante">2 unidades</p>
+            <p class="selector-desconto">
+              {{ settings.kit_label_desc1  }}
+              {% assign v2 = nil %}
+              {% for v in product.variants %}{% if v.options[q_index] == '2 unidades' %}{% assign v2 = v %}{% break %}{% endif %}{% endfor %}
+              {% if v2 and v2.compare_at_price > 0 %}
+                {{ v2.compare_at_price | minus: v2.price | times: 100.0 | divided_by: v2.compare_at_price | round }}%
+              {% else %}0%{% endif %}
+              {{ settings.kit_label_desc2 | default: 'OFF' }}
+            </p>
+          </div>
+          <div class="col-7 text-left">
+            
+            {% if v2 %}
+              <p style="margin:0; display:inline-flex; flex-direction:column-reverse;">
+                <span class="selector-total-antigo">{{ v2.compare_at_price | money }}</span>
+                <span class="selector-total-variante">{{ v2.price | money }}</span>
+              </p>
+            {% endif %}
+            
+          </div>
+          <p class="selector-mais-vendido">{{ settings.kit_label_vendido | default: 'Mais vendido' }}</p>
+        </a>
+      </li>
+
+      <!-- 3 unidades -->
+      <li id="kit-3" style="width:100%;">
+        <a href="#!" data-value="3 unidades">
+          <div class="col-1" style="margin-left:-17px;margin-right:-51px;"><div id="bola3" class="selector-bola"></div></div>
+          <div class="col-4 text-left">
+            <p class="new-selector-nome-variante">3 unidades</p>
+            <p class="selector-desconto">
+              {{ settings.kit_label_desc1 }}
+              {% assign v3 = nil %}
+              {% for v in product.variants %}{% if v.options[q_index] == '3 unidades' %}{% assign v3 = v %}{% break %}{% endif %}{% endfor %}
+              {% if v3 and v3.compare_at_price > 0 %}
+                {{ v3.compare_at_price | minus: v3.price | times: 100.0 | divided_by: v3.compare_at_price | round }}%
+              {% else %}0%{% endif %}
+              {{ settings.kit_label_desc2 | default: 'OFF' }}
+            </p>
+          </div>
+          <div class="col-7 text-left">
+            {% if v3 %}
+              <p style="margin:0; display:inline-flex; flex-direction:column-reverse;">
+                <span class="selector-total-antigo">{{ v3.compare_at_price | money }}</span>
+                <span class="selector-total-variante">{{ v3.price | money }}</span>
+              </p>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  // --- Polyfill CSS.escape (Safari antigo etc.) ---
+  if (!window.CSS || !CSS.escape) {
+    window.CSS = window.CSS || {};
+    CSS.escape = function (s) {
+      return String(s)
+        .replace(/[\0-\x1f\x7f-\x9f]/g, '')
+        .replace(/[\s"#$%&'()*+,.\/:;<=>?@\[\\\]^`{|}~]/g, '\\$&');
+    };
+  }
+
+  const VARIANTS = {{ product.variants | json }};
+  const OPTION_NAMES = {{ product.options | json }};
+  const PRODUCT_ID = {{ product.id }};
+
+  const container = (function(){
+    const prev = document.currentScript.previousElementSibling;
+    if (prev && prev.classList && prev.classList.contains('tt-swatches-container')) return prev;
+    return document.querySelector('.tt-swatches-container');
+  })();
+  if (!container) return;
+
+  // Não roda no Quick Add
+  if (container.closest('.quick-add-modal__content')) { container.remove(); return; }
+
+  // Limpa onclicks inline do HTML
+  container.querySelectorAll('a[data-value]').forEach(a => a.removeAttribute('onclick'));
+
+  // Lista de valores de kit na ordem exibida (ex.: ["1 unidade","2 unidades","3 unidades"])
+  const KIT_VALUES = Array.from(container.querySelectorAll('a[data-value]')).map(a => a.getAttribute('data-value'));
+  const norm = s => (s||'').toString().trim().toLowerCase();
+
+  function getForm(){
+    return container.closest('product-form-component')?.querySelector('form.shopify-product-form')
+        || document.querySelector('form.shopify-product-form');
+  }
+
+  function currentVariant(){
+    const form = getForm(); if (!form) return null;
+    const id = form.querySelector('input[name="id"]')?.value;
+    return VARIANTS.find(v => String(v.id) === String(id)) || null;
+  }
+
+  function selectedOptionsFromForm(){
+    const form = getForm(); if (!form) return [];
+    return OPTION_NAMES.map((name)=>{
+      const r = form.querySelector(`input[type="radio"][name="options[${CSS.escape(name)}]"]:checked`);
+      if (r) return r.value;
+      const s = form.querySelector(`select[name="options[${CSS.escape(name)}]"]`);
+      if (s) return s.value;
+      return null;
+    });
+  }
+
+  function detectQtyIndex(){
+    let idx = OPTION_NAMES.findIndex(n => /quantidade/i.test(n));
+    if (idx >= 0) return idx;
+    const targets = KIT_VALUES.map(norm);
+    for (let i=0;i<OPTION_NAMES.length;i++){
+      if (VARIANTS.some(v => targets.includes(norm(v.options[i])))) return i;
+    }
+    return -1;
+  }
+  const Q_INDEX = detectQtyIndex();
+  if (Q_INDEX < 0) { container.style.display = 'none'; return; }
+
+  function optionsWithQty(value){
+    const base = selectedOptionsFromForm();
+    const cv = currentVariant();
+    for (let i=0;i<OPTION_NAMES.length;i++){
+      if (!base[i] && cv) base[i] = cv.options[i];
+    }
+    base[Q_INDEX] = value;
+    return base;
+  }
+
+  function findVariantByOptions(vals){
+    // preferir disponível
+    let v = VARIANTS.find(v => v.options.length===vals.length && v.options.every((opt,i)=>opt===vals[i] && v.available));
+    if (v) return v;
+    return VARIANTS.find(v => v.options.length===vals.length && v.options.every((opt,i)=>opt===vals[i])) || null;
+  }
+
+  function setActiveUI(value){
+    const target = norm(value);
+    container.querySelectorAll('.tt-options-swatch li').forEach(li=>{
+      li.classList.remove('active');
+      const bola = li.querySelector('.selector-bola');
+      if (bola) bola.style.cssText = 'border:3px solid #dcdcdc;';
+      const a = li.querySelector('a[data-value]');
+      if (a && norm(a.getAttribute('data-value'))===target){
+        li.classList.add('active');
+        if (bola) bola.style.cssText = 'background-color: var(--kit_cor_bolinha,#111); box-shadow:0 0 0 2px var(--kit_cor_bolinha,#111)';
+      }
+    });
+    const cur = container.querySelector('.current_option_name');
+    if (cur) cur.textContent = value || '';
+  }
+
+  function refreshKits(){
+    container.querySelectorAll('.tt-options-swatch li').forEach(li=>{
+      const a = li.querySelector('a[data-value]'); if (!a) return;
+      const val = a.getAttribute('data-value');
+      const variant = findVariantByOptions(optionsWithQty(val));
+      const enabled = !!variant;
+      li.classList.toggle('disabled', !enabled);
+      a.setAttribute('aria-disabled', String(!enabled));
+    });
+  }
+
+  let selectedQtyValue = null;
+
+  function initSelectedQty(){
+    const cv = currentVariant();
+    if (cv) selectedQtyValue = cv.options[Q_INDEX];
+    if (!selectedQtyValue) {
+      for (const val of KIT_VALUES) {
+        const v = findVariantByOptions(optionsWithQty(val));
+        if (v) { selectedQtyValue = val; break; }
+      }
+    }
+    if (!selectedQtyValue) selectedQtyValue = KIT_VALUES[0] || null;
+    setActiveUI(selectedQtyValue);
+  }
+
+function goToVariantMedia(variant){
+  try{
+    if(!variant) return;
+    var mediaId = (variant.featured_media && variant.featured_media.id) || (variant.featured_image && variant.featured_image.id);
+    if(!mediaId) return;
+
+    // escopo do produto
+    var prodScope = container.closest('.product-information, .product-details, section[data-section-type="main-product"], .product, .shopify-section') || document;
+    var gallery = prodScope.querySelector('media-gallery');
+    if(!gallery) return;
+
+    // 1) tenta achar o índice pelo dialog (tem id="product-<mediaId>-<n>")
+    var index = null;
+    var zoomItems = gallery.querySelectorAll('.dialog-zoomed-gallery li[id^="product-"]');
+    if(zoomItems.length){
+      zoomItems.forEach(function(li, i){
+        var m = li.id.match(/^product-(\d+)-/);
+        if(m && String(m[1]) === String(mediaId)) index = i;
+      });
+    }
+
+    // 2) fallback: elementos que tenham data-media-id
+    if(index == null){
+      var candidates = Array.from(gallery.querySelectorAll('[data-media-id]'));
+      var idx2 = candidates.findIndex(function(el){ return String(el.getAttribute('data-media-id')) === String(mediaId); });
+      if(idx2 >= 0) index = idx2;
+    }
+
+    // 3) último recurso
+    if(index == null) index = 0;
+
+    // tenta API do slideshow
+    var slideshow = gallery.querySelector('slideshow, .slideshow');
+    if(slideshow){
+      if(typeof slideshow.goTo === 'function') slideshow.goTo(index);
+      else if(typeof slideshow.select === 'function') slideshow.select(index);
+      slideshow.dispatchEvent(new CustomEvent('select', { detail:{ index }, bubbles:true }));
+      slideshow.dispatchEvent(new CustomEvent('slideshow:select', { detail:{ index }, bubbles:true }));
+    }
+
+    // tenta clicar nos controles (thumbnails/dots) como fallback
+    var thumbs = gallery.querySelectorAll('.slideshow-controls__thumbnails .slideshow-control');
+    if(thumbs[index]) thumbs[index].click();
+    var dots = gallery.querySelectorAll('.slideshow-controls__dots .slideshow-control');
+    if(dots[index]) dots[index].click();
+  }catch(e){}
+}
+
+function findQtyFieldset(){
+  const form = getForm(); if (!form) return null;
+  const picker = form.closest('.product-details')?.querySelector('variant-picker') || form.querySelector('variant-picker');
+  if (!picker) return null;
+
+  // procura pelo fieldset cujo <legend> = "Quantidade"
+  let fs = null;
+  const want = (OPTION_NAMES[Q_INDEX] || '').toString().trim().toLowerCase();
+  picker.querySelectorAll('fieldset').forEach(el=>{
+    const lg = el.querySelector('legend');
+    if (!fs && lg && lg.textContent.trim().toLowerCase() === want) fs = el;
+  });
+  return fs;
+}
+
+
+function findPicker(){
+  const form = getForm();
+  return form?.closest('.product-details')?.querySelector('variant-picker')
+      || form?.querySelector('variant-picker');
+}
+
+// “Clica”/altera o controle do picker para um option específico
+function setPickerOptionByValue(optionName, value){
+  const picker = findPicker(); if (!picker) return;
+
+  // acha o fieldset pelo <legend>
+  const want = (optionName || '').toString().trim().toLowerCase();
+  let fs = null;
+  picker.querySelectorAll('fieldset').forEach(el=>{
+    const lg = el.querySelector('legend');
+    if (!fs && lg && lg.textContent.trim().toLowerCase().startsWith(want)) fs = el;
+  });
+  if (!fs) return;
+
+  // 1) radios (botões / swatches / imagem)
+  const radio = fs.querySelector(`input[type="radio"][value="${CSS.escape(value)}"]`);
+  if (radio) {
+    if (!radio.checked) {
+      // simula interação real para disparar todos os listeners do web-component
+      ['pointerdown','mousedown','click','change','input'].forEach(type=>{
+        try { radio.dispatchEvent(new Event(type, {bubbles:true})); } catch(e){}
+      });
+    }
+    return;
+  }
+
+  // 2) select (dropdowns)
+  const select = fs.querySelector('select[name^="options["]');
+  if (select && select.value !== value) {
+    select.value = value;
+    ['change','input'].forEach(type=>{
+      try { select.dispatchEvent(new Event(type, {bubbles:true})); } catch(e){}
+    });
+  }
+}
+
+// Alinha TODAS as opções do picker com a variante desejada
+function syncVariantInPicker(variant){
+  if (!variant) return;
+  for (let i = 0; i < OPTION_NAMES.length; i++){
+    setPickerOptionByValue(OPTION_NAMES[i], variant.options[i]);
+  }
+}
+
+
+
+  function applyVariant(variant){
+  if (!variant) return;
+  const form = getForm(); if (!form) return;
+// Garante que o variant-picker “enxergue” a seleção completa
+syncVariantInPicker(variant);
+
+  // 1) atualiza o input "id" do formulário
+  const idInput = form.querySelector('input[name="id"]');
+  if (idInput && String(idInput.value) !== String(variant.id)) {
+    idInput.value = variant.id;
+    idInput.dispatchEvent(new Event('change', {bubbles:true}));
+    idInput.dispatchEvent(new InputEvent('input', {bubbles:true}));
+  }
+
+  // 2) força a seleção da opção Quantidade nos CONTROLES OFICIAIS do Variant Picker
+  const qName  = OPTION_NAMES[Q_INDEX];
+  const qValue = variant.options[Q_INDEX];
+
+  // 2a) caso exista um <select name="options[Quantidade]"> (modo dropdown)
+  const sel = form.querySelector(`select[name="options[${CSS.escape(qName)}]"]`);
+  if (sel && sel.value !== qValue) {
+    sel.value = qValue;
+    sel.dispatchEvent(new Event('change', {bubbles:true}));
+    sel.dispatchEvent(new InputEvent('input', {bubbles:true}));
+  }
+
+  // 2b) modo BUTTONS do Vessel (inputs com name "Quantidade-<block>-<product>")
+  const fs = findQtyFieldset();
+  if (fs) {
+    const btn = fs.querySelector(`input[type="radio"][value="${CSS.escape(qValue)}"]`);
+    if (btn && !btn.checked) {
+      btn.checked = true;
+      // dispara nos alvos que o web-component escuta
+      btn.dispatchEvent(new Event('change', {bubbles:true}));
+      btn.dispatchEvent(new InputEvent('input', {bubbles:true}));
+    }
+  }
+
+  // 3) UI do bloco de kits
+  setActiveUI(qValue);
+
+  // 4) eventos de variante (amplos)
+  const detail = { variant, productId: PRODUCT_ID };
+  document.dispatchEvent(new CustomEvent('variantUpdate',    { detail, bubbles:true }));
+  document.dispatchEvent(new CustomEvent('variant:update',   { detail, bubbles:true }));
+  document.dispatchEvent(new CustomEvent('variant:change',   { detail, bubbles:true }));
+  document.dispatchEvent(new CustomEvent('variantChanged',   { detail, bubbles:true }));
+  document.dispatchEvent(new CustomEvent('product:variant-change', { detail, bubbles:true }));
+
+  // 5) mantém URL coerente (?variant=)
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('variant', variant.id);
+    history.replaceState({}, '', url);
+  } catch(e) {}
+
+  // 6) Fallback: tentar mover a galeria para a mídia da variante (caso o tema não tenha reagido)
+  goToVariantMedia(variant);
+
+  // 7) Atualização de preço (se você manteve o <product-price> visível)
+  try {
+    const scope = container.closest('.product-details') || document;
+    ['variant:update','variantChange','ThemeEvents:variantUpdate'].forEach((ev) => {
+      scope.dispatchEvent(new CustomEvent(ev, { detail: { variant }, bubbles: true }));
+    });
+
+    const priceEls = scope.querySelectorAll('product-price, [data-product-price]');
+    const fmt = (cents) => {
+      if (window.Shopify && Shopify.formatMoney) {
+        const fmtStr =
+          (window.theme && window.theme.moneyFormat) ||
+          (window.Shopify && window.Shopify.money_format) ||
+          '${{amount}}';
+        return Shopify.formatMoney(cents, fmtStr);
+      }
+      const cur = (window.Shopify && Shopify.currency && Shopify.currency.active) || 'BRL';
+      return (cents / 100).toLocaleString(undefined, { style: 'currency', currency: cur });
+    };
+
+    priceEls.forEach((el) => {
+      const isWebComp = el.tagName.toLowerCase() === 'product-price';
+      if (isWebComp) {
+        el.setAttribute('price', variant.price);
+        if (variant.compare_at_price && variant.compare_at_price > variant.price) {
+          el.setAttribute('compare-at-price', variant.compare_at_price);
+        } else {
+          el.removeAttribute('compare-at-price');
+        }
+        if (typeof el.setVariant === 'function') el.setVariant(variant);
+        if (typeof el.update === 'function') el.update(variant);
+        el.dispatchEvent(new CustomEvent('price:update', { detail: { variant }, bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        const current = el.querySelector('[data-price-current], .price__current, [data-price]');
+        const compare = el.querySelector('[data-price-compare], .price__compare, .price__was');
+        if (current) current.textContent = fmt(variant.price);
+        if (compare) {
+          if (variant.compare_at_price && variant.compare_at_price > variant.price) {
+            compare.textContent = fmt(variant.compare_at_price);
+            compare.style.display = '';
+          } else {
+            compare.textContent = '';
+            compare.style.display = 'none';
+          }
+        }
+      }
+    });
+  } catch (e) {}
+}
+
+  function selectQty(value){
+    selectedQtyValue = value;
+    const v = findVariantByOptions(optionsWithQty(value));
+    if (v) applyVariant(v);
+    refreshKits();
+  }
+
+  // mantém o kit ao trocar outra opção (ex.: Cor)
+  function maintainQtyAfterOtherChange(){
+    if (!selectedQtyValue) return;
+    const current = currentVariant();
+    let wanted = findVariantByOptions(optionsWithQty(selectedQtyValue));
+
+    if (!wanted) {
+      // fallback: primeiro kit disponível na ordem dos botões
+      for (const val of KIT_VALUES) {
+        const cand = findVariantByOptions(optionsWithQty(val));
+        if (cand) { selectedQtyValue = val; wanted = cand; break; }
+      }
+    }
+
+    if (wanted && (!current || String(wanted.id) !== String(current.id))) {
+      applyVariant(wanted);
+    }
+    setActiveUI(selectedQtyValue);
+    refreshKits();
+  }
+
+  // Clique dos kits
+  container.addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-value]');
+    if (!a) return;
+    e.preventDefault();
+    if (a.closest('li')?.classList.contains('disabled')) return;
+    selectQty(a.getAttribute('data-value'));
+  });
+
+  function placeAndHideNative(){
+    const form = getForm(); if (!form) return false;
+    const picker = form.closest('.product-details')?.querySelector('variant-picker') || form.querySelector('variant-picker');
+    if (!picker) return false;
+    let qFieldset = picker.querySelector(`fieldset:has([name="options[${CSS.escape(OPTION_NAMES[Q_INDEX])}]"])`);
+    if (!qFieldset) {
+      picker.querySelectorAll('fieldset').forEach(fs=>{
+        const lg = fs.querySelector('legend');
+        if (lg && /quantidade/i.test(lg.textContent.trim())) qFieldset = fs;
+      });
+    }
+    if (!qFieldset) return false;
+    if (container.nextElementSibling !== qFieldset) {
+      qFieldset.parentNode.insertBefore(container, qFieldset);
+    }
+    qFieldset.classList.add('hidden');
+    return true;
+  }
+
+  let raf = null;
+ function scheduleRefresh(){
+  if (raf) return;
+  raf = requestAnimationFrame(()=>{
+    raf = null;
+    const placed = placeAndHideNative();
+    if (placed) {
+      container.classList.add('kits-ready');                    // já tinha sugerido
+      // 👉 NOVO: libera o variant-picker junto com os kits
+      const form   = getForm();
+      const picker = form?.closest('.product-details')?.querySelector('variant-picker') || form?.querySelector('variant-picker');
+      if (picker) picker.classList.add('picker-ready');
+    }
+    maintainQtyAfterOtherChange();
+    bindOptionChange();
+  });
+}
+
+  function bindOptionChange(){
+    const form = getForm(); if (!form) return;
+    OPTION_NAMES.forEach((name, i)=>{
+      if (i === Q_INDEX) return;
+      const radios = form.querySelectorAll(`input[type="radio"][name="options[${CSS.escape(name)}]"]`);
+      radios.forEach(r=>{
+        r.removeEventListener('change', scheduleRefresh);
+        r.addEventListener('change', scheduleRefresh);
+      });
+      const select = form.querySelector(`select[name="options[${CSS.escape(name)}]"]`);
+      if (select) {
+        select.removeEventListener('change', scheduleRefresh);
+        select.addEventListener('change', scheduleRefresh);
+      }
+    });
+  }
+
+  function mount(){
+  const placed = placeAndHideNative();
+  if (placed) {
+    container.classList.add('kits-ready');
+    const form   = getForm();
+    const picker = form?.closest('.product-details')?.querySelector('variant-picker') || form?.querySelector('variant-picker');
+    if (picker) picker.classList.add('picker-ready');            // 👉 NOVO
+  }
+  initSelectedQty();
+  refreshKits();
+  bindOptionChange();
+
+  const form = getForm();
+  const picker = form?.closest('.product-details')?.querySelector('variant-picker') || form?.querySelector('variant-picker');
+  if (picker) {
+    const mo = new MutationObserver(scheduleRefresh);
+    mo.observe(picker, {childList:true, subtree:true});
+  }
+}
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, {once:true});
+  } else {
+    mount();
+  }
+})();
+</script>
+
+{%- endif -%}
+{% endif %}

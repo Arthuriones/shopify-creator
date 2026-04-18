@@ -1,0 +1,816 @@
+{% comment %}
+  X Slideshow (isolado) — classes prefixadas xss-*
+  - Imagem desktop + mobile via <picture>
+  - Efeito: slide ou fade
+  - Autoplay e dots
+  - Tamanhos: preserve_ratio / small / medium / large
+{% endcomment %}
+
+{%- if section.blocks.size > 1 -%}
+  {%- assign has_multiple = true -%}
+{%- else -%}
+  {%- assign has_multiple = false -%}
+{%- endif -%}
+
+<section id="xss-{{ section.id }}" class="xss-section is-booting" data-autoplay="{{ section.settings.autoplay }}" data-effect="{{ section.settings.carousel_effect }}" data-speed="{{ section.settings.cycle_speed | times: 1000 }}">
+  {%- if section.settings.edge_to_edge == false -%}
+    <div class="xss-container">
+  {%- endif -%}
+
+<div
+  class="xss-slider xss--{{ section.settings.section_size | replace: '_','-' }} xss--effect-{{ section.settings.carousel_effect }} {% if section.settings.edge_to_edge %}xss--edge2edge{% endif %}"
+  data-equalize="{{ section.settings.equalize_heights }}"
+>
+      <div class="xss-viewport">
+      <div class="xss-track">
+        {%- for block in section.blocks -%}
+          {%- liquid
+            assign desktop = block.settings.image
+            assign mobile  = block.settings.mobile_image | default: desktop
+            assign aspect_d = desktop.aspect_ratio | default: 2.0
+            assign aspect_m = mobile.aspect_ratio  | default: aspect_d
+          -%}
+
+<div
+  class="xss-slide{% if forloop.first %} is-active{% endif %}"
+  id="xss-slide-{{ block.id }}"
+  role="tabpanel"
+  aria-labelledby="xss-tab-{{ forloop.index0 }}-{{ section.id }}"
+  aria-hidden="{% if forloop.first %}false{% else %}true{% endif %}"
+  tabindex="{% if forloop.first %}0{% else %}-1{% endif %}"
+  {{ block.shopify_attributes }}>
+   <div class="xss-slide__inner xss-pos--{{ block.settings.content_position | default: 'middle_center' | replace: '_','-' }}" style="--xss-aspect-desktop: {{ aspect_d }}; --xss-aspect-mobile: {{ aspect_m }};">
+              <div class="xss-media">
+                {%- if desktop -%}
+                  <picture class="xss-picture">
+                    {%- if mobile -%}
+                      <source media="(max-width: 749px)"
+                        srcset="
+                          {{ mobile | image_url: width: 600 }} 600w,
+                          {{ mobile | image_url: width: 900 }} 900w,
+                          {{ mobile | image_url: width: 1200 }} 1200w"
+                        sizes="100vw">
+                    {%- endif -%}
+                    <source media="(min-width: 750px)"
+                      srcset="
+                        {{ desktop | image_url: width: 1200 }} 1200w,
+                        {{ desktop | image_url: width: 1600 }} 1600w,
+                        {{ desktop | image_url: width: 1920 }} 1920w,
+                        {{ desktop | image_url: width: 2560 }} 2560w,
+                        {{ desktop | image_url: width: 3840 }} 3840w"
+                      sizes="100vw">
+                    <img
+                      class="xss-img"
+                      src="{{ desktop | image_url: width: 1600 }}"
+                      width="{{ desktop.width }}" height="{{ desktop.height }}"
+                      alt="{{ desktop.alt | escape }}"
+                      loading="{% if forloop.index0 <= 1 %}eager{% else %}lazy{% endif %}"
+                      {% if forloop.first %}fetchpriority="high"{% endif %}>
+                  </picture>
+                {%- else -%}
+                  <div class="xss-placeholder"></div>
+                {%- endif -%}
+
+                {%- if block.settings.show_overlay -%}
+                  {%- assign overlay_alpha = block.settings.overlay_opacity | divided_by: 100.0 -%}
+                  <span class="xss-overlay" style="--xss-overlay: {{ '#000000' | color_modify: 'alpha', overlay_alpha }};"></span>
+                {%- endif -%}
+              </div>
+
+              {%- if block.settings.title != blank -%}
+  {%- assign has_title = true -%}
+{%- else -%}
+  {%- assign has_title = false -%}
+{%- endif -%}
+
+{%- if block.settings.content != blank -%}
+  {%- assign has_text = true -%}
+{%- else -%}
+  {%- assign has_text = false -%}
+{%- endif -%}
+
+{%- if block.settings.link != blank and block.settings.button_text != blank -%}
+  {%- assign has_btn = true -%}
+{%- else -%}
+  {%- assign has_btn = false -%}
+{%- endif -%}
+
+              {%- if has_title or has_text or has_btn -%}
+                <div class="xss-content" style="--xss-text: {{ block.settings.text_color }};">
+                  {%- if has_title -%}
+                    <h2 class="xss-title">{{ block.settings.title | escape }}</h2>
+                  {%- endif -%}
+                  {%- if has_text -%}
+                    <p class="xss-text">{{ block.settings.content | escape | newline_to_br }}</p>
+                  {%- endif -%}
+                  {%- if has_btn -%}
+                    <a href="{{ block.settings.link }}" class="xss-button" style="--xss-btn-bg: {{ block.settings.button_background }}; --xss-btn-color: {{ block.settings.button_text_color }};">{{ block.settings.button_text | escape }}</a>
+                  {%- endif -%}
+                </div>
+              {%- endif -%}
+
+              {%- if block.settings.link != blank and block.settings.button_text == blank -%}
+                <a class="xss-link-cover" href="{{ block.settings.link }}" aria-label="{{ block.settings.title | default: 'Slide' | escape }}"></a>
+              {%- endif -%}
+            </div>
+
+            {% style %}
+              #xss-slide-{{ block.id }} { color: {{ block.settings.text_color }}; }
+              #xss-slide-{{ block.id }} .xss-button {
+                background: {{ block.settings.button_background }};
+                color: {{ block.settings.button_text_color }};
+              }
+              #xss-slide-{{ block.id }} .xss-button:hover {
+                filter: brightness(0.95);
+              }
+            {% endstyle %}
+          </div>
+        {%- endfor -%}
+      </div>
+
+   {%- if has_multiple -%}
+  <div class="xss-dots" role="tablist" aria-label="Slideshow dots">
+    {%- for block in section.blocks -%}
+      {%- assign dot_id = 'xss-tab-' | append: forloop.index0 | append: '-' | append: section.id -%}
+      <button
+        id="{{ dot_id }}"
+        class="xss-dot{% if forloop.first %} is-active{% endif %}"
+        role="tab"
+        aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+        aria-controls="xss-slide-{{ block.id }}"
+        tabindex="{% if forloop.first %}0{% else %}-1{% endif %}"
+        data-xss-go="{{ forloop.index0 }}"
+        aria-label="Ir para o slide {{ forloop.index }}"
+        type="button"
+      ></button>
+    {%- endfor -%}
+  </div>
+{%- endif -%}
+
+
+      {%- if has_multiple and section.settings.show_arrows_desktop -%}
+  <button class="xss-arrow xss-prev" aria-label="Anterior" type="button">
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button class="xss-arrow xss-next" aria-label="Próximo" type="button">
+    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+{%- endif -%}
+    </div>
+  </div>
+
+  {%- if section.settings.edge_to_edge == false -%}
+    </div>
+  {%- endif -%}
+</section>
+
+
+<script>
+(function(){
+  function markFirstXSS(){
+    // remove a marca de todas
+    document.querySelectorAll('.xss-section.xss--hero-offset')
+      .forEach(el => el.classList.remove('xss--hero-offset'));
+
+    // marca a primeira seção de slide encontrada na página
+    var first = document.querySelector('.xss-section');
+    if (first) first.classList.add('xss--hero-offset');
+  }
+
+  // marca agora
+  markFirstXSS();
+
+  // e remarca quando a seção for recarregada / reordenada no editor
+  document.addEventListener('shopify:section:load', markFirstXSS);
+  document.addEventListener('shopify:section:reorder', markFirstXSS);
+})();
+</script>
+
+{% stylesheet %}
+  /* ---------- Container isolado ---------- */
+  .xss-container{
+    width:min(100%, 83%);
+    margin-inline:auto;
+  }
+
+  /* ---------- Slider base ---------- */
+  .xss-slider{ position:relative; width:100%; }
+  .xss-viewport{ position:relative; overflow:hidden; width:100%; }
+  .xss-track{ width:100%; height:100%; position:relative; }
+
+  .xss-slide{
+    width:100%;
+    height:100%;
+  }
+
+  .xss-slide__inner{
+    position:relative;
+    width:100%;
+    height:100%;
+    display:grid;
+    place-items:center; /* fallback */
+  }
+
+  /* ---------- Media (imagem/video) ---------- */
+  .xss-media{
+    position:relative;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+  }
+
+  /* preserve_ratio usa aspect-ratio; no mobile troca para a razão mobile se existir */
+  .xss--preserve-ratio .xss-media{
+    aspect-ratio: var(--xss-aspect-desktop, 2 / 1);
+    height:auto;
+  }
+  @media (max-width: 749px){
+    .xss--preserve-ratio .xss-media{
+      aspect-ratio: var(--xss-aspect-mobile, var(--xss-aspect-desktop, 2 / 1));
+    }
+  }
+
+.xss-slider {margin-top:-2px}
+
+  .xss-picture, .xss-img{
+    display:block;
+    width:100%;
+    height:100%;
+  }
+  .xss-picture{ position:absolute; inset:0; }
+  .xss-img{ object-fit:cover; object-position:center; }
+
+  .xss-overlay{
+    position:absolute; inset:0; pointer-events:none;
+    background: var(--xss-overlay, transparent);
+  }
+
+  .xss-link-cover{
+    position:absolute; inset:0; z-index: 3;
+  }
+
+  /* ---------- Conteúdo ---------- */
+  .xss-content{
+    position:absolute; inset:0; z-index:4;
+    display:grid;
+    padding: clamp(12px, 4vw, 48px);
+    color: var(--xss-text, #fff);
+  }
+  .xss-title{ font-size: clamp(1.5rem, 3.5vw, 3rem); line-height:1.1; margin:0 0 .5em 0; }
+  .xss-text{ font-size: clamp(1rem, 1.5vw, 1.125rem); margin:0 0 1rem 0; max-width: 60ch; }
+  .xss-button{
+    display:inline-block; padding: .85em 1.25em; border-radius: 8px;
+    background: var(--xss-btn-bg, #fff);
+    color: var(--xss-btn-color, #000);
+    text-decoration:none; font-weight:600;
+  }
+
+  /* Posições (desktop). No mobile centraliza. */
+  .xss-pos--top-left .xss-content{ align-content:start; justify-items:start; }
+  .xss-pos--top-center .xss-content{ align-content:start; justify-items:center; }
+  .xss-pos--top-right .xss-content{ align-content:start; justify-items:end; }
+  .xss-pos--middle-left .xss-content{ align-content:center; justify-items:start; }
+  .xss-pos--middle-center .xss-content{ align-content:center; justify-items:center; }
+  .xss-pos--middle-right .xss-content{ align-content:center; justify-items:end; }
+  .xss-pos--bottom-left .xss-content{ align-content:end; justify-items:start; }
+  .xss-pos--bottom-center .xss-content{ align-content:end; justify-items:center; }
+  .xss-pos--bottom-right .xss-content{ align-content:end; justify-items:end; }
+
+  @media (max-width: 749px){
+    .xss-content{ align-content:center !important; justify-items:center !important; text-align:center; }
+    .xss-text{ margin-left:auto; margin-right:auto; }
+  }
+
+  /* ---------- Alturas (size != preserve_ratio) ---------- */
+  .xss--small  .xss-media{ min-height: clamp(280px, 45vh, 520px); }
+  .xss--medium .xss-media{ min-height: clamp(320px, 65vh, 680px); }
+  .xss--large  .xss-media{ min-height: clamp(360px, 85vh, 860px); }
+
+  /* ---------- Dots ---------- */
+/* ---------- Dots (redondos e configuráveis) ---------- */
+.xss-dots{
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  display:flex; gap:15px; z-index:5;
+  align-items:center;           /* evita esticar vertical */
+  --dot: 12px;                  /* tamanho padrão */
+  --dot-active: 12px;           /* tamanho quando ativo (pode ser > para “pulsar”) */
+}
+
+.xss-dots .xss-dot{
+  flex: 0 0 auto;               /* não deixa o flex esticar */
+  width: var(--dot);
+  aspect-ratio: 1 / 1;          /* garante círculo usando só width */
+  border-radius: 9999px;        /* círculo perfeito */
+  border: 0;
+  padding: 0;
+  line-height: 0;
+  display: inline-block;
+  background: rgba(255,255,255,.45);
+  -webkit-appearance: none;     /* mata estilo nativo do botão (iOS/Safari) */
+  appearance: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.xss-dots .xss-dot.is-active{
+  width: var(--dot-active);
+  background:#fff;
+}
+
+/* Fallback para browsers sem aspect-ratio */
+@supports not (aspect-ratio: 1 / 1){
+  .xss-dots .xss-dot{ height: var(--dot); }
+  .xss-dots .xss-dot.is-active{ height: var(--dot-active); }
+}
+
+  /* ---------- Efeitos ---------- */
+
+  /* SLIDE: track em linha, translateX */
+  .xss--effect-slide .xss-track{
+    display:flex;
+    transition: transform .6s cubic-bezier(.2,.7,.2,1);
+  }
+  .xss--effect-slide .xss-slide{
+    flex: 0 0 100%;
+  }
+
+  /* FADE: slides sobrepostos */
+  .xss--effect-fade .xss-track{
+    position:relative;
+  }
+  .xss--effect-fade .xss-slide{
+    position:absolute; inset:0; opacity:0; transition: opacity .5s ease;
+  }
+  .xss--effect-fade .xss-slide.is-active{ opacity:1; position:absolute; inset:0; }
+
+
+/* habilita gesto horizontal sem bloquear o scroll vertical da página */
+.xss-viewport{ touch-action: pan-y; }
+
+/* durante o arrasto, não permitir clique de navegação e muda cursor */
+.is-dragging .xss-link-cover{ pointer-events: none; }
+.is-dragging, .is-dragging *{ cursor: grabbing !important; }
+
+/* gesto horizontal suave sem travar o scroll vertical */
+.xss-viewport{ touch-action: pan-y; }
+
+/* estado durante o arrasto (bloqueia clique nos links de cobertura) */
+.is-dragging .xss-link-cover{ pointer-events: none; }
+.is-dragging, .is-dragging *{ cursor: grabbing !important; }
+
+/* setas sem fundo (apenas ícone) — visíveis só no desktop */
+.xss-arrow{
+  position:absolute; top:50%; transform:translateY(-50%);
+  border:0; background:transparent; padding:.25rem;
+  color:#fff; cursor:pointer; z-index:6; line-height:0;
+}
+.xss-arrow:focus-visible{ outline:2px solid currentColor; outline-offset:2px; }
+.xss-prev{ left:12px; } .xss-next{ right:12px; }
+@media (max-width: 989px){ .xss-arrow{ display:none; } }
+
+/* melhora suavidade do translate */
+.xss--effect-slide .xss-track{ will-change: transform; }
+
+/* cor de fundo leve para evitar “flash branco” até a imagem pintar */
+.xss-img{ background-color: rgba(0,0,0,.04); }
+
+.xss--effect-slide .xss-track{ will-change: transform; }
+.xss-img{ background-color: rgba(0,0,0,.04); }
+
+/* garante que as setas recebam o clique mesmo com overlays */
+.xss-arrow{ pointer-events:auto; }
+
+
+/* quando a equalização estiver ativa, usa a menor altura (maior aspect) para todos */
+.xss--preserve-ratio[data-equalize-active="true"] .xss-media{
+  aspect-ratio: var(--xss-eq-aspect-desktop, 2/1);
+}
+@media (max-width: 749px){
+  .xss--preserve-ratio[data-equalize-active="true"] .xss-media{
+    aspect-ratio: var(--xss-eq-aspect-mobile, var(--xss-eq-aspect-desktop, 2/1));
+  }
+}
+.xss-section:not(.xss--edge2edge) .xss-viewport{ overflow:hidden; }
+.xss-section:not(.xss--edge2edge) .xss-picture{ left:1px; right:-1px; }
+
+#xss-{{ section.id }} .xss-slider[data-booting] .xss-track{
+  transition: none !important;
+}
+{% endstylesheet %}
+
+<script>
+(function(){
+  const root = document.getElementById('xss-{{ section.id }}');
+  if (!root) return;
+
+  const effect   = root.dataset.effect || 'slide';
+  const autoplay = root.dataset.autoplay === 'true';
+  const speed    = parseInt(root.dataset.speed || '5000', 10);
+  const TRANSITION_MS = 600; // alinhar ao CSS
+
+  const slider   = root.querySelector('.xss-slider');
+  const viewport = root.querySelector('.xss-viewport');
+  const track    = root.querySelector('.xss-track');
+  const slidesReal = Array.from(root.querySelectorAll('.xss-slide'));
+  const dots     = Array.from(root.querySelectorAll('.xss-dot'));
+  const btnPrev  = root.querySelector('.xss-prev');
+  const btnNext  = root.querySelector('.xss-next');
+
+  const hasMultiple = slidesReal.length > 1;
+  const isSlide = (root.dataset.effect || 'slide') === 'slide';
+
+  // ========= 1) Desliga a transition APENAS no boot (CSS injetado) =========
+  (function injectBootCss(){
+    const css = `#xss-{{ section.id }} .xss-slider[data-booting] .xss-track{transition:none !important;}`;
+    const s = document.createElement('style');
+    s.setAttribute('data-xss-boot-style','{{ section.id }}');
+    s.textContent = css;
+    document.head.appendChild(s);
+  })();
+  slider.setAttribute('data-booting',''); // flag de boot -> sem transition
+  track.style.visibility = 'hidden';      // evita qualquer flash 1º paint
+
+  // ========= Helpers px-exatos =========
+  const W = () => Math.floor(viewport.getBoundingClientRect().width);
+  const setTranslate = (px) => { track.style.transform = `translate3d(${px}px,0,0)`; };
+
+  let items = slidesReal.slice(); // em slide vira [cloneLast, ...reais, cloneFirst]
+  let index = 0;                  // em slide = índice em 'items'; em fade = real
+  let timer = null;
+  let isAnimating = false;
+  let endTimer = null;
+
+  // (opcional) equalização de alturas quando preserve-ratio
+  const wantsEqualize = slider && slider.dataset.equalize === 'true';
+  function equalizeHeights(){
+    if (!wantsEqualize) return;
+    if (!slider.classList.contains('xss--preserve-ratio')) return;
+    const inners = Array.from(root.querySelectorAll('.xss-slide__inner'));
+    let maxAspectD = 0, maxAspectM = 0;
+    inners.forEach(el => {
+      const d = parseFloat(el.style.getPropertyValue('--xss-aspect-desktop')) || 2;
+      const m = parseFloat(el.style.getPropertyValue('--xss-aspect-mobile'))  || d;
+      if (d > maxAspectD) maxAspectD = d;
+      if (m > maxAspectM) maxAspectM = m;
+    });
+    slider.style.setProperty('--xss-eq-aspect-desktop', maxAspectD || 2);
+    slider.style.setProperty('--xss-eq-aspect-mobile',  maxAspectM || (maxAspectD || 2));
+    slider.setAttribute('data-equalize-active', 'true');
+  }
+
+  // fixa largura (px) para cada slide (inclui clones)
+  function applySlideWidths(){
+    if (!isSlide) return W();
+    const w = W();
+    items.forEach(s => {
+      s.style.minWidth = w + 'px';
+      s.style.maxWidth = w + 'px';
+      s.style.flex = `0 0 ${w}px`; // evita basis em %
+    });
+    return w;
+  }
+  function refreshPosition(){
+    const w = applySlideWidths();
+    if (isSlide) setTranslate(-index * w);
+  }
+
+  function finishBootReveal(){
+    // remove flag (volta transition) e revela o track na tela
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        slider.removeAttribute('data-booting'); // transition volta a valer
+        track.style.visibility = '';            // aparece já no lugar
+      });
+    });
+  }
+
+  /* ---------- Loop infinito (slide) ---------- */
+  if (isSlide && hasMultiple) {
+    const firstClone = slidesReal[0].cloneNode(true);
+    const lastClone  = slidesReal[slidesReal.length - 1].cloneNode(true);
+    [firstClone, lastClone].forEach(c => {
+      c.removeAttribute('id'); c.removeAttribute('role');
+      c.setAttribute('aria-hidden','true'); c.setAttribute('tabindex','-1');
+      c.classList.add('is-clone');
+    });
+    track.insertBefore(lastClone, slidesReal[0]);
+    track.appendChild(firstClone);
+    items = Array.from(track.querySelectorAll('.xss-slide'));
+
+    index = 1;              // começa no primeiro real
+    refreshPosition();      // posiciona SEM transição (data-booting ativo)
+    finishBootReveal();     // reativa transição e mostra
+  } else {
+    // sem clones (fade ou 1 slide)
+    refreshPosition();      // posiciona SEM transição (data-booting ativo)
+    finishBootReveal();     // reativa transição e mostra
+  }
+
+  // equaliza após montar clones
+  equalizeHeights();
+
+  /* ---------- Helpers ---------- */
+  function realIndex(){
+    if (!isSlide) return index;
+    if (!hasMultiple) return 0;
+    if (index === 0) return slidesReal.length - 1;
+    if (index === items.length - 1) return 0;
+    return index - 1;
+  }
+  function updateDots(){
+    const ri = realIndex();
+    dots.forEach((d, k) => d.classList.toggle('is-active', k === ri));
+  }
+  function updateA11y(){
+    const ri = realIndex();
+    dots.forEach((tab, k) => {
+      const a = (k === ri);
+      tab.setAttribute('aria-selected', a ? 'true' : 'false');
+      tab.setAttribute('tabindex', a ? '0' : '-1');
+    });
+    slidesReal.forEach((panel, k) => {
+      const a = (k === ri);
+      panel.setAttribute('aria-hidden', a ? 'false' : 'true');
+      panel.setAttribute('tabindex', a ? '0' : '-1');
+    });
+  }
+  function setActive(i, {animate=true} = {}){
+    if (!hasMultiple) return;
+    if (isSlide) {
+      index = i;
+      // aqui a transição já está ligada após o boot
+      track.style.transition = animate ? '' : 'none';
+      setTranslate(-index * W());
+    } else {
+      index = (i + slidesReal.length) % slidesReal.length;
+      slidesReal.forEach((s, k) => s.classList.toggle('is-active', k === index));
+    }
+    updateDots(); updateA11y();
+  }
+  function snapIfClone(){
+    if (!isSlide || !hasMultiple) return;
+    if (index === 0) setActive(slidesReal.length, {animate:false});
+    else if (index === items.length - 1) setActive(1, {animate:false});
+  }
+
+  /* ---------- Preload vizinhos ---------- */
+  function ensureLoaded(img){
+    if (!img) return;
+    const pre = new Image();
+    if (img.srcset) pre.srcset = img.srcset;
+    if (img.sizes)  pre.sizes  = img.sizes;
+    pre.src = img.currentSrc || img.src;
+    if (pre.decode) pre.decode().catch(()=>{});
+  }
+  function getImgByItemIndex(i){
+    const list = isSlide ? items : slidesReal;
+    const el = list[(i + list.length) % list.length];
+    return el ? el.querySelector('img.xss-img') : null;
+  }
+  function preloadAround(centerReal){
+    [centerReal, centerReal+1, centerReal-1].forEach(r => {
+      const i = isSlide ? (r + 1) : r;
+      ensureLoaded(getImgByItemIndex(i));
+    });
+  }
+
+  /* ---------- Navegação ---------- */
+  function finishAnimation(){
+    isAnimating = false;
+    if (endTimer) { clearTimeout(endTimer); endTimer = null; }
+    preloadAround(realIndex());
+  }
+  function goTo(i){
+    if (!hasMultiple || isAnimating) return;
+    isAnimating = true;
+    setActive(i, {animate:true});
+    if (!isSlide) { endTimer = setTimeout(finishAnimation, 520); return; }
+    endTimer = setTimeout(() => { snapIfClone(); finishAnimation(); }, TRANSITION_MS + 120);
+  }
+  const next = () => goTo(index + 1);
+  const prev = () => goTo(index - 1);
+
+  /* ---------- Autoplay ---------- */
+  function start(){ if (autoplay && hasMultiple){ stop(); timer = setInterval(next, speed); } }
+  function stop(){ if (timer){ clearInterval(timer); timer = null; } }
+
+  /* ---------- Dots ---------- */
+  dots.forEach((btn, k) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      isSlide ? goTo(k + 1) : goTo(k);
+      start();
+    });
+  });
+  const dotsWrap = root.querySelector('.xss-dots');
+  if (dotsWrap) {
+    dotsWrap.addEventListener('keydown', (e) => {
+      const ri = realIndex();
+      if (e.key === 'ArrowRight'){ e.preventDefault(); dots[(ri + 1) % dots.length]?.focus(); isSlide ? goTo(index + 1) : goTo(ri + 1); }
+      else if (e.key === 'ArrowLeft'){ e.preventDefault(); dots[(ri - 1 + dots.length) % dots.length]?.focus(); isSlide ? goTo(index - 1) : goTo(ri - 1); }
+    });
+  }
+
+  /* ---------- Setas ---------- */
+  if (btnPrev && btnNext) {
+    btnPrev.addEventListener('click', (e)=>{ e.preventDefault(); stop(); prev(); start(); });
+    btnNext.addEventListener('click', (e)=>{ e.preventDefault(); stop(); next(); start(); });
+  }
+
+  /* ---------- Swipe ---------- */
+  let startX=0, currentX=0, dragging=false, moved=false, suppressClick=false;
+  function onPointerDown(e){
+    if (!hasMultiple) return;
+    startX = (e.clientX ?? e.touches?.[0]?.clientX ?? 0);
+    currentX = startX; dragging = true; moved = false; stop();
+    if (e.target?.setPointerCapture && e.pointerId != null) { try { e.target.setPointerCapture(e.pointerId); } catch(_){} }
+  }
+  function onPointerMove(e){
+    if (!dragging) return;
+    const x = (e.clientX ?? e.touches?.[0]?.clientX ?? 0);
+    const dx = x - startX; currentX = x;
+    if (!moved && Math.abs(dx) > 6){ moved = true; root.classList.add('is-dragging'); track.style.transition = 'none'; }
+    if (moved){
+      const w = Math.max(1, W());
+      const base = -index * w;
+      setTranslate(base + dx);
+    }
+  }
+  function onPointerUp(){
+    if (!dragging) return; dragging = false;
+    if (!moved){ start(); return; }
+    track.style.transition = ''; // reativa para a volta / próximo
+    const dx = currentX - startX;
+    const thresholdPx = Math.max(0.18 * W(), 50);
+    if (Math.abs(dx) >= thresholdPx){ dx < 0 ? next() : prev(); } else { setActive(index); }
+    root.classList.remove('is-dragging'); moved = false; suppressClick = true; start();
+  }
+  const optsPassive = {passive:true};
+  if (window.PointerEvent) {
+    viewport.addEventListener('pointerdown', onPointerDown, optsPassive);
+    viewport.addEventListener('pointermove', onPointerMove, optsPassive);
+    window.addEventListener('pointerup', onPointerUp, optsPassive);
+    window.addEventListener('pointercancel', onPointerUp, optsPassive);
+  } else {
+    viewport.addEventListener('touchstart', onPointerDown, optsPassive);
+    viewport.addEventListener('touchmove', onPointerMove, optsPassive);
+    window.addEventListener('touchend', onPointerUp, optsPassive);
+    window.addEventListener('touchcancel', onPointerUp, optsPassive);
+    viewport.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+  }
+  root.addEventListener('click', function(e){
+    if (!suppressClick) return; suppressClick = false;
+    if (e.target.closest('.xss-arrow')) return;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+
+  track.addEventListener('transitionend', () => {
+    if (!isSlide) return;
+    snapIfClone();
+    isAnimating = false;
+    if (endTimer) { clearTimeout(endTimer); endTimer = null; }
+    preloadAround(realIndex());
+  });
+
+  // Ajustes reativos
+  slidesReal.forEach(sl => {
+    const img = sl.querySelector('img.xss-img');
+    if (img && !img.complete) img.addEventListener('load', refreshPosition, { once: true });
+  });
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(() => refreshPosition()).observe(viewport);
+  }
+
+  // Estado inicial
+  if (!isSlide) { slidesReal.forEach((s, k) => s.classList.toggle('is-active', k === 0)); index = 0; }
+  updateDots();
+  updateA11y();
+  preloadAround(realIndex());
+  start();
+
+  // Reposiciona sem animação em resize explícito
+  window.addEventListener('resize', () => {
+    setActive(index, {animate:false});
+  }, {passive:true});
+})();
+</script>
+
+{% schema %}
+{
+  "name": "X Slideshow (isolado)",
+  "class": "xss-section-wrapper",
+  "max_blocks": 8,
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "edge_to_edge",
+      "label": "Largura total (sem margens laterais)",
+      "default": true
+    },
+    {
+  "type": "checkbox",
+  "id": "show_arrows_desktop",
+  "label": "Mostrar setas no desktop",
+  "default": true
+},
+{
+  "type": "checkbox",
+  "id": "equalize_heights",
+  "label": "Uniformizar altura pelos menores (desktop e mobile)",
+  "info": "Válido apenas quando Tamanho/altura = Preservar proporção.",
+  "default": true
+},
+    {
+      "type": "select",
+      "id": "section_size",
+      "label": "Tamanho/altura",
+      "options": [
+        { "value": "preserve_ratio", "label": "Preservar proporção da imagem" },
+        { "value": "small",          "label": "Pequeno" },
+        { "value": "medium",         "label": "Médio" },
+        { "value": "large",          "label": "Grande" }
+      ],
+      "default": "preserve_ratio"
+    },
+    {
+      "type": "select",
+      "id": "carousel_effect",
+      "label": "Efeito",
+      "options": [
+        { "value": "slide", "label": "Deslizar" },
+        { "value": "fade",  "label": "Desvanecer" }
+      ],
+      "default": "slide"
+    },
+    {
+      "type": "checkbox",
+      "id": "autoplay",
+      "label": "Trocar automaticamente",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "cycle_speed",
+      "min": 3,
+      "max": 10,
+      "step": 1,
+      "unit": "s",
+      "label": "Trocar a cada",
+      "default": 5
+    }
+  ],
+  "blocks": [
+    {
+      "type": "slide",
+      "name": "Slide",
+      "settings": [
+        { "type": "image_picker", "id": "image", "label": "Imagem (desktop)", "info": "Ex.: 2160×720px" },
+        { "type": "image_picker", "id": "mobile_image", "label": "Imagem (mobile)", "info": "Ex.: 750×1100px (opcional)" },
+        { "type": "checkbox", "id": "show_overlay", "label": "Aplicar overlay para legibilidade", "default": false },
+        { "type": "range", "id": "overlay_opacity", "label": "Opacidade do overlay", "min": 0, "max": 100, "step": 1, "unit": "%", "default": 30 },
+        { "type": "color", "id": "text_color", "label": "Cor do texto", "default": "#ffffff" },
+        { "type": "text", "id": "title", "label": "Título", "default": "Título do slide" },
+        { "type": "textarea", "id": "content", "label": "Texto do slide", "default": "Conte sua história" },
+        {
+          "type": "select",
+          "id": "content_position",
+          "label": "Posição do conteúdo (desktop)",
+          "options": [
+            { "value": "top_left", "label": "Topo esquerdo" },
+            { "value": "top_center", "label": "Topo central" },
+            { "value": "top_right", "label": "Topo direito" },
+            { "value": "middle_left", "label": "Meio esquerdo" },
+            { "value": "middle_center", "label": "Meio central" },
+            { "value": "middle_right", "label": "Meio direito" },
+            { "value": "bottom_left", "label": "Base esquerda" },
+            { "value": "bottom_center", "label": "Base central" },
+            { "value": "bottom_right", "label": "Base direita" }
+          ],
+          "default": "middle_center"
+        },
+        { "type": "header", "content": "Botão" },
+        { "type": "color", "id": "button_background", "label": "Fundo do botão", "default": "#ffffff" },
+        { "type": "color", "id": "button_text_color", "label": "Texto do botão", "default": "#000000" },
+        { "type": "text", "id": "button_text", "label": "Texto", "default": "Comprar" },
+        { "type": "url", "id": "link", "label": "Link" }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Slideshow v",
+      "category": "Imagem",
+      "blocks": [
+        { "type": "slide" },
+        { "type": "slide" }
+      ]
+    }
+  ]
+}
+{% endschema %}

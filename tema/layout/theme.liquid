@@ -1,0 +1,137 @@
+<!doctype html>
+ {% comment %}
+ * TEMA DESENVOLVIDO POR SABINOv LTDA.
+ * O USO INDEVIDO DO TEMA RESULTARÁ EM DMCA POR DIREITOS DO TEMA
+ * @license Proprietary
+ * @preserve
+{% endcomment %}
+<html
+  class="no-js{% if request.design_mode %} shopify-design-mode{% endif %} sabinov" style="overflow-x: hidden;
+}"
+  lang="{{ request.locale.iso_code }}"
+>
+  <head>
+    {%- render 'stylesheets' -%}
+
+    {%- if settings.favicon != blank -%}
+      <link
+        rel="icon"
+        type="image/png"
+        href="{{ settings.favicon | image_url: width: 32, height: 32 }}"
+      >
+    {%- endif -%}
+
+
+
+    <!-- INICIO INSTALE SEUS PIXELS AQUI -->
+
+
+    <!-- FINAL INSTALE SEUS PIXELS AQUI -->
+
+
+
+    <!-- INICIO INSTALE SUA PRIMEIRA PARTE DO CÓDIGO DO GTM AQUI -->
+
+    <!-- FINAL INSTALE SUA PRIMEIRA PARTE DO CÓDIGO DO GTM AQUI -->
+
+
+
+    {% comment %} This a way to wait for main content to load when navigating to a new page so that the view transitions can work consistently {% endcomment %}
+    <link
+      rel="expect"
+      href="#MainContent"
+      blocking="render"
+      id="view-transition-render-blocker"
+    >
+ 
+      {%- if page_description -%}
+      <meta name="description" content="{{ page_description | escape }}">
+   {%- else -%}
+      <meta name="description" content="{{ shop.name }}">
+    {%- endif -%}
+
+
+    {%- render 'meta-tags' -%}
+    {%- render 'fonts' -%}
+    {%- render 'scripts' -%}
+    
+    {%- render 'theme-styles-variables' -%}
+    {%- render 'color-schemes' -%}
+     {%- render 'css-variables' -%}
+     
+    {% if request.design_mode %}
+      {%- render 'theme-editor' -%}
+    {% endif %}
+
+    {{ content_for_header }}
+
+    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+<script src='https://areviewsapp.com/js_codes/collection_rating.js' defer></script>
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+     
+  </head>
+
+  <body class="page-width-{{ settings.page_width }} card-hover-effect-{{ settings.card_hover_effect }} sabinov">
+
+
+    <!-- INICIO INSTALE SUA SEGUNDA PARTE DO CÓDIGO DO GTM AQUI -->
+
+    <!-- FINAL INSTALE SUA SEGUNDA PARTE DO CÓDIGO DO GTM AQUI -->
+
+
+
+
+    {% render 'skip-to-content-link', href: '#MainContent', text: 'accessibility.skip_to_text' %}
+    <div id="header-group">
+      {% sections 'header-group' %}
+    </div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+ 
+
+ 
+<main
+      id="MainContent"
+      class="content-for-layout"
+      role="main"
+      data-page-transition-enabled="{{ settings.page_transition_enabled }}"
+      data-product-transition="{{ settings.transition_to_main_product }}"
+      data-template="{{ template }}"
+    >
+      {{ content_for_layout }}
+    </main>
+
+    {% sections 'footer-group' %}
+    {% section 'sticky-atc' %}
+    {%- if settings.show_sticky_whats -%}
+  {% render 'stickywhats' %}
+  {%- endif -%}
+
+    {% # theme-check-disable ParserBlockingScript %}
+    <script src="{{ 'critical.js' | asset_url }}"></script>
+    {% # theme-check-enable ParserBlockingScript %}
+
+    {% render 'search-modal' %}
+
+    {% if settings.quick_add or settings.mobile_quick_add %}
+      {% render 'quick-add-modal' %}
+    {% endif %}
+
+
+<div id="quick-add-dialog" hidden>
+  <dialog class="quick-add-modal" aria-modal="true">
+    <button type="button" class="quick-add-close" onclick="this.closest('dialog').close()">×</button>
+    <div id="quick-add-modal-content"></div>
+  </dialog>
+</div>
+
+{% render 'solve-search' %}
+
+
+            </body>
+</html>

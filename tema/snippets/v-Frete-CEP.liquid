@@ -1,0 +1,238 @@
+  <!-- Inicio do codigo de Frete Marcos-->
+
+<style>
+
+
+   :root {
+--margincep1-top:  {{ block.settings.margincep1-top }}px;
+--margincep1-bottom:  {{ block.settings.margincep1-bottom }}px;
+
+    --fretecep_fundo: {{ block.settings.fretecep_fundo }};
+    --bordaboxfrete   : {{ block.settings.bordaboxfrete}}px;
+
+--bordabtnfrete : {{ block.settings.bordabtnfrete}}px;
+--frete-buscar-btn: {{ block.settings.buscar_frete_btn }};
+  --frete-buscar-fonte: {{ block.settings.buscar_frete_fonte }};
+   --frete-buscar-localizacao: {{ block.settings.buscar_frete_local }};
+   --frete-buscar-precos: {{ block.settings.buscar_frete_preco }};
+
+}
+
+
+input#campo-cep:focus-visible {
+    /* Adicione os estilos desejados aqui */
+    outline: 1px solid #999;
+    background-color: var(--fretecep_fundo);
+    border-color: #999;
+}
+  
+     .calculo-frete {
+    padding: 18px 9px 15px 10px;
+    
+    border: 1px solid #bdbdbd70;
+    border-radius: var(--bordaboxfrete );
+    background: var(--fretecep_fundo);
+    width: 100%;
+   
+       
+        }
+     .frete-form {
+        display: flex;
+    flex-direction: row;
+    width: 100%;
+    justify-content: center;
+       
+        }
+
+   input#campo-cep {
+          padding: 8px;
+    width: 55%;
+    margin-right: 10px;
+    color: rgb(128 128 128);
+    background-color: #ffffff;
+    border: 1px solid #bdbdbd70;
+    height: 40px;
+    border-radius: var(--bordabtnfrete);
+    font-size: 16px !important;
+  
+        }
+        
+        
+        .cep-resultado {
+          margin-top: 10px;
+          font-size: 14px;
+          margin-bottom: -10px;
+        }
+        
+        .cep-error {
+          color: rgb(232, 28, 36);
+        }
+        
+        .frete-resultado {
+          margin-top: 15px;
+          display: none;
+        }
+        
+        .frete-resultado .table {
+          margin-left: 0;
+        }
+        
+        .frete-resultado .table th {
+          padding: 10px 0;
+        }
+
+        .buscaCep {
+   width: 30%;
+    font-size: 17px;
+    color: var(--frete-buscar-fonte);
+    border: none;
+    background: var(--frete-buscar-btn);
+    border-radius: var(--bordabtnfrete);         
+    text-align: center;
+
+        }
+        
+        .col-xs-12 {
+    width: 100%;
+    text-align: -webkit-center;
+    font-size: 0.95rem;
+    font-weight: 800;
+    display: block;
+    line-height: 1rem;
+  
+}
+
+.fc_table {
+    display: grid;
+    margin: 0;
+    border-radius: 2px;
+    border: 1px solid rgb(var(--text-color) / .12);
+    overflow: hidden;
+   
+}
+
+.fc_table tr {
+    display: inline-table;
+    width: 100%;
+    border-bottom: 1px solid #e9e9e9;
+}
+
+.fc_table th, .fc_table td {
+    width: 100px;
+    padding: 10px;
+    text-align: center;
+    border-right: 1px solid #e9e9e9;
+}
+
+  .fc_tt th {
+    background: #f6f6f8;
+}
+
+.frete-form input::placeholder {
+  color: rgb(128 128 128);          /* cor desejada */
+  opacity: 1;           /* mantém 100% de opacidade (em alguns browsers o default é 0.54) */
+}
+
+
+</style>  
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.js" defer></script>
+
+      <div class="calculo-frete" style="margin-top: var(--margincep1-top);margin-bottom: var(--margincep1-bottom);">
+        <p class="col-xs-12"> {{ block.settings.fretechamada }}</p>
+        <div class="frete-form">
+          <input type="text" name="cep" data-mask="00000-000" id="campo-cep" placeholder="Digite seu CEP">
+          <button type="button" class="buscaCep" onclick="freteResultado(cepmarcos)" style="font-weight: 600;">{{ block.settings.fretebotaofrase }}</button>
+        </div>
+        <div class="cep-resultado"></div>
+
+        <div class="frete-resultado">
+          <table class="fc_table">
+            <thead style="font-size: 14px; line-height: 1.4;">
+              <tr class="fc_tt">
+                <th>Entrega</th>
+                <th>Prazo</th>
+                <th style="border-right:none !important">Preço</th>
+              </tr> 
+             {%- if block.settings.opcao_frete1 -%}
+              <tr style="border-bottom: 1px solid #ccc;">
+                <th><strong style="color: #494949;">{{ block.settings.frete1_nome }}</strong></th>
+                <th>{{ block.settings.frete1_prazo }}</th>
+                <th style="border-right:none !important"><strong style="color: var(--frete-buscar-precos);">{{ block.settings.frete1_preco }}</strong></th>
+              </tr>  
+               {%- endif -%}
+
+               {%- if block.settings.opcao_frete2 -%}
+               <tr>
+                <th><strong style="color: #494949;">{{ block.settings.frete2_nome }}</strong></th>
+                <th>{{ block.settings.frete2_prazo }}</th>
+                <th style="border-right:none !important"><strong style="color: var(--frete-buscar-precos);">{{ block.settings.frete2_preco }}</strong></th>
+              </tr>
+              {%- endif -%}
+
+
+              {%- if block.settings.opcao_frete3 -%}
+               <tr>
+                <th><strong style="color: #494949;">{{ block.settings.frete3_nome }}</strong></th>
+                <th>{{ block.settings.frete3_prazo }}</th>
+                <th style="border-right:none !important"><strong style="color: var(--frete-buscar-precos);">{{ block.settings.frete3_preco }}</strong></th>
+              </tr>
+              {%- endif -%}
+
+              {%- if block.settings.opcao_frete4 -%}
+               <tr>
+                <th><strong style="color: #494949;">{{ block.settings.frete4_nome }}</strong></th>
+                <th>{{ block.settings.frete4_prazo }}</th>
+                <th style="border-right:none !important"><strong style="color: var(--frete-buscar-precos);">{{ block.settings.frete4_preco }}</strong></th>
+              </tr>
+              {%- endif -%}
+
+              {%- if block.settings.opcao_frete5 -%}
+               <tr>
+                <th><strong style="color: #494949;">{{ block.settings.frete5_nome }}</strong></th>
+                <th>{{ block.settings.frete5_prazo }}</th>
+                <th style="border-right:none !important"><strong style="color: var(--frete-buscar-precos);">{{ block.settings.frete5_preco }}</strong></th>
+              </tr>
+              {%- endif -%}
+            </thead>
+            
+          </table>
+        </div>
+      </div>
+
+
+
+      
+<script>
+  function freteResultado(cepmarcos) {
+    var freteResultadoElement = document.querySelector(".frete-resultado");
+
+    if (cepmarcos.erro) {
+      console.log("CEP inválido");
+      document.querySelector(".cep-resultado").innerHTML = '<span class="cep-error">CEP Inválido.</span>';
+      return;
+    }
+
+    console.log("CEP válido");
+    document.querySelector(".cep-resultado").innerHTML = `<span style="color: var(--frete-buscar-localizacao);"> <i class="fa-solid fa-location-dot"></i> &nbsp</span><span style="font-weight: 600;color:var(--frete-buscar-localizacao);">${cepmarcos.logradouro} - ${cepmarcos.localidade} - ${cepmarcos.uf}</span>`;
+    freteResultadoElement.style.display = "block";
+  }
+
+  document.querySelector("button.buscaCep").addEventListener("click", function () {
+    var cepmarcos = /^[0-9]{5}-[0-9]{3}$/;
+    var cepInputValue = document.getElementById("campo-cep").value;
+
+    if (cepmarcos.test(cepInputValue)) {
+      console.log("Consultando CEP...");
+      fetch(`https://viacep.com.br/ws/${cepInputValue}/json/`)
+        .then(response => response.json())
+        .then(data => freteResultado(data))
+        .catch(error => console.error("Erro ao consultar CEP:", error));
+    } else {
+      console.log("CEP inválido");
+      document.querySelector(".cep-resultado").innerHTML = '<span class="cep-error">CEP Inválido.</span>';
+    }
+  });
+</script>
+<!-- Fim do codigo de Frete -->

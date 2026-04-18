@@ -1,0 +1,58 @@
+<style>
+
+
+
+ :root {
+--margin-topfabricante:  {{ block.settings.margin-topfabricante }}px;
+--margin-bottomfabricante:  {{ block.settings.margin-bottomfabricante }}px;
+--opacidadefabricante: {{ block.settings.opacidadefabricante }};
+--fontefabricante: {{ block.settings.fontefabricante }}px;
+
+}
+
+    .product-vendor.is-empty { display: none; }
+.product-vendor__label { margin-right: 1px; opacity: var(--opacidadefabricante); }
+
+
+
+
+.product-vendor{
+    margin-top: var(--margin-topfabricante);
+    margin-bottom: var(--margin-bottomfabricante);
+    font-size: var(--fontefabricante);
+     opacity: var(--opacidadefabricante);
+}
+
+.product-vendor__value{
+     opacity: var(--opacidadefabricante);
+}
+
+</style>
+
+
+
+
+<div class="product-vendor" id="product-vendor-{{ section.id }}">
+
+    {% if block.settings.textofabricante != blank %}
+  <span class="product-vendor__label">{{ block.settings.textofabricante }}</span>
+{% endif %}
+
+  <span class="product-vendor__value" id="vendor-value-{{ section.id }}">
+    {{ product.vendor }}
+  </span>
+</div>
+
+
+
+
+
+ {% if block.settings.negritofabricante %}
+
+<style>
+
+.product-vendor{
+font-weight:600
+}
+</style>
+ {% endif %}

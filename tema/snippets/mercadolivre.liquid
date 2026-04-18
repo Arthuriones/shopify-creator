@@ -1,0 +1,244 @@
+
+
+<style>
+ :root {
+--margin-topmp:  {{ block.settings.margin-topmp }}px;
+--margin-bottommp:  {{ block.settings.margin-bottommp }}px;
+--arredondamp:  {{ block.settings.arredondamp }}px;
+
+}
+/*================ Show delivered orders ================*/
+.mp_platinum {
+  min-width: 325px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.mp_platinum li {
+  list-style: none;
+  flex-basis: 100%;
+}
+
+.mp_platinum p {
+  margin: 5px;
+}
+
+.ui-box-component-pdp__visible--desktop {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  margin: 24px 0;
+  padding: 32px 16px 24px;
+}
+
+.ui-seller-info__status-info {
+  display: -webkit-flex;
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.ui-seller-info__status-info__icon {
+  margin: 2px 10px 0 0;
+  width: 20px;
+  text-align: center;
+}
+
+.ui-pdp-color--GREEN.ui-pdp-icon {
+  fill: #00a650;
+}
+
+.ui-pdp-seller__status-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #00a650;
+  padding: 0;
+  margin: 2px 0 -12px 0 !important;
+}
+
+.ui-seller-info__status-info__subtitle {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.55);
+  margin: 5px 0 0 0 !important;
+}
+
+.ui-thermometer {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  overflow: hidden;
+  display: block;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  vertical-align: baseline;
+}
+
+.ui-thermometer__level {
+  width: 20%;
+  height: 8px;
+  margin-top: 2px;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  float: left;
+  border-left: 6px solid #fff;
+}
+
+.ui-thermometer__level--1 {
+  background: #fff0f0;
+}
+
+.ui-thermometer__level--2 {
+  background: #fff5e8;
+}
+
+.ui-thermometer__level--3 {
+  background: #fffcda;
+}
+
+.ui-thermometer__level--4 {
+  background: #f1fdd7;
+}
+
+.ui-thermometer[value="5"] .ui-thermometer__level--5 {
+  height: 12px;
+  margin: 0;
+  background: #00d86b;
+}
+
+.ui-seller-info {
+  border: 1px solid #e8e8e8;
+  border-radius: var(--arredondamp);
+      margin-top: var(--margin-topmp);
+    margin-bottom: var(--margin-bottommp);
+}
+
+.ui-pdp-seller__reputation-info {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.ui-pdp-seller__list-description {
+  display: -webkit-flex;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+.ui-pdp-seller__item-description {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  padding: 8px 8px;
+  line-height: normal;
+}
+
+.ui-pdp-seller__sales-description {
+  font-size: 24px;
+  color: #000;
+  font-weight: 400;
+  display: block;
+}
+
+.ui-pdp-seller__text-description {
+  font-size: 13px;
+  line-height: normal;
+}
+
+.ui-pdp-seller__item-description:after {
+  background: #ddd;
+  content: "";
+  height: 91%;
+  position: absolute;
+  right: 0;
+  top: 8%;
+  width: 1px;
+}
+
+.ui-pdp-seller__item-description:last-of-type:after {
+  display: none;
+}
+
+.ui-pdp-seller__icon-description {
+  display: inline-block;
+  width: 28px;
+  padding-top: 3px;
+  vertical-align: top;
+}
+
+.ui-pdp-icon,
+.ui-pdp-icon--shipping {
+  fill: rgba(0, 0, 0, 0.25);
+}
+
+
+@media screen and (max-width: 749px) {
+.ui-pdp-seller__sales-description{font-size:20px !important}
+.ui-pdp-seller__icon-description {
+        width: 25px !important;
+}
+
+
+.ui-pdp-seller__text-description {
+    font-size: 11px;
+    
+}
+}
+</style>
+
+
+
+<div class="mp_platinum" style="margin-top: {{ block.settings.margin_top }}px; margin-bottom: {{ block.settings.margin_bottom }}px;">
+    <div class="ui-seller-info">
+        <div class="ui-pdp-seller__reputation-info">
+            <ul class="ui-pdp-seller__list-description">
+                <li class="ui-pdp-seller__item-description">
+{% assign random = product.id | divided_by: 220022 | modulo: 2155 %}   
+                    <strong class="ui-pdp-seller__sales-description">{{random}}</strong>
+
+                    <div class="ui-pdp-seller__text-description">Pedidos entregues nos últimos 60 dias</div>
+                </li>
+                <li class="ui-pdp-seller__item-description">
+                    <strong aria-hidden="true" class="ui-pdp-seller__icon-description">
+                        <svg class="ui-pdp-icon ui-pdp-icon--message-positive ui-pdp-color--REP_SELLER_ATTENTION_GOOD" viewBox="0 0 29 24" xmlns="http://www.w3.org/2000/svg">
+                            <g fill-rule="evenodd" fill="none">
+                                <path d="M6.747 21.511l4.538-3.518h8.238c1.032 0 1.868-.98 1.868-2.19V3.21c0-1.21-.836-2.19-1.868-2.19H3.173c-1.032 0-1.869.98-1.869 2.19v14.077c0 .39.316.706.706.706H5.61v2.96a.706.706 0 0 0 1.138.558z" stroke-width="1.5" stroke="#333"></path>
+                                <g transform="translate(14 9)">
+                                    <circle cx="7.5" cy="7.5" r="7.5" fill="#39B54A"></circle>
+                                    <g stroke-linecap="round" stroke-width="1.059" stroke="#FFF"><path d="M3.75 7.5l2.445 2.445M6.25 9.89L11.14 5"></path></g>
+                                </g>
+                            </g>
+                        </svg>
+                    </strong>
+                    <div class="ui-pdp-seller__text-description">Presta bom atendimento</div>
+                </li>
+                <li class="ui-pdp-seller__item-description">
+                    <strong aria-hidden="true" class="ui-pdp-seller__icon-description">
+                        <svg class="ui-pdp-icon ui-pdp-icon--time-positive ui-pdp-color--REP_SELLER_DELIVERY_TIME_GOOD" viewBox="0 0 30 26" xmlns="http://www.w3.org/2000/svg">
+                            <g fill-rule="evenodd" fill="none">
+                                <g transform="translate(1 .02)" stroke="#333">
+                                    <ellipse cx="10.5" cy="13.714" rx="10.5" ry="10.286" stroke-width="1.286"></ellipse>
+                                    <path d="M19.107 13.714h-1.59M3.42 13.714H1.83M10.5 5.143v1.59M10.563 20.571v1.59M10.5.857v2.484M8.75.857h3.637M10.313 8.801v4.944H5.24" stroke-linecap="round" stroke-width="1.102"></path>
+                                </g>
+                                <g transform="translate(15 10.02)">
+                                    <circle cx="7.5" cy="7.5" r="7.5" fill="#39B54A"></circle>
+                                    <g stroke-linecap="round" stroke-width="1.059" stroke="#FFF"><path d="M3.75 7.5l2.445 2.445M6.25 9.89L11.14 5"></path></g>
+                                </g>
+                            </g>
+                        </svg>
+                    </strong>
+                    <div class="ui-pdp-seller__text-description">Entrega os produtos dentro do prazo</div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+

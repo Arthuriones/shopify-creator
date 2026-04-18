@@ -1,0 +1,162 @@
+<style>
+  
+
+ :root {
+--margin-topsku:  {{ block.settings.margin-topsku }}px;
+--margin-bottomsku:  {{ block.settings.margin-bottomsku }}px;
+--opacidadesku: {{ block.settings.opacidadesku }};
+
+}
+
+.product-sku.is-empty { display: none; }
+.product-sku__label { margin-right: 1px; opacity: var(--opacidadesku); }
+
+
+.product-sku, .product-sku * { transition: none !important; opacity: var(--opacidadesku); margin-top:var(--margin-topsku); margin-bottom: var(--margin-bottomsku)}
+
+
+</style>
+
+<div class="product-sku" id="product-sku-{{ section.id }}">
+    {% if block.settings.textosku != blank %}
+     <span class="product-sku__label">{{ block.settings.textosku }}</span>
+{% endif %}
+ 
+  <span class="product-sku__value" id="sku-value-{{ section.id }}">
+    {{ product.selected_or_first_available_variant.sku }}
+  </span>
+</div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const sectionId = '{{ section.id }}';
+  const skuEl   = document.getElementById(`sku-value-${sectionId}`) || document.querySelector('.product-sku .product-sku__value');
+  const skuWrap = document.getElementById(`product-sku-${sectionId}`) || document.querySelector('.product-sku');
+  if (!skuEl) return;
+
+  const productData = {{ product | json }};
+  const variantsMap = new Map(productData.variants.map(v => [String(v.id), v]));
+  const productId = {{ product.id }};
+  const form = document.querySelector(`form[action*="/cart/add"][data-product-id="${productId}"]`)
+           || document.querySelector(`form[action*="/cart/add"]`);
+  let idInput = form ? (form.querySelector('[name="id"]') || form.querySelector('input[name="id"]')) : null;
+
+  // Estado para evitar piscadas
+  let lastVariantId = null;
+  let lastSku = null;
+  let pendingVariantId = null;
+  let rafToken = null;
+
+  function setSku(txt) {
+    const val = txt || '';
+    if (skuEl.textContent !== val) {
+      skuEl.textContent = val;               // só escreve se mudou
+    }
+    if (skuWrap) {
+      const isEmpty = val === '';
+      if (skuWrap.classList.contains('is-empty') !== isEmpty) {
+        skuWrap.classList.toggle('is-empty', isEmpty);
+      }
+    }
+  }
+
+  function processPending() {
+    rafToken = null;
+    if (!pendingVariantId || pendingVariantId === lastVariantId) return;
+    const v = variantsMap.get(String(pendingVariantId));
+    if (!v) return;
+
+    // Só atualiza se a SKU realmente mudou
+    if ((v.sku || '') !== (lastSku || '')) {
+      setSku(v.sku);
+      lastSku = v.sku || '';
+    }
+    lastVariantId = String(v.id);
+  }
+
+  function scheduleUpdateById(variantId) {
+    if (!variantId) return;
+    pendingVariantId = String(variantId);
+    if (!rafToken) {
+      rafToken = requestAnimationFrame(processPending); // coalesce por frame
+    }
+  }
+
+  function initFrom(anyId) {
+    if (!anyId) return;
+    const v = variantsMap.get(String(anyId));
+    if (!v) return;
+    lastVariantId = String(v.id);
+    lastSku = v.sku || '';
+    setSku(lastSku);
+  }
+
+  // Inicial
+  const initialId =
+    (productData.selected_or_first_available_variant && productData.selected_or_first_available_variant.id)
+    || (idInput && idInput.value)
+    || new URLSearchParams(location.search).get('variant')
+    || (productData.variants && productData.variants[0] && productData.variants[0].id);
+  initFrom(initialId);
+
+  // Eventos dos temas (Dawn e similares)
+  function onThemeVariantChange(v) {
+    if (v && v.id) scheduleUpdateById(v.id);
+  }
+  document.addEventListener('variant:change',           (e) => onThemeVariantChange(e.detail && e.detail.variant));
+  document.addEventListener('product:variant-change',   (e) => onThemeVariantChange(e.detail && e.detail.variant));
+  document.addEventListener('theme:variant:change',     (e) => onThemeVariantChange(e.detail && e.detail.variant));
+
+  // Fallback: change no input [name="id"]
+  form?.addEventListener('change', (e) => {
+    if (e.target && e.target.name === 'id') scheduleUpdateById(e.target.value);
+  });
+
+  // Observer: se o tema muda o value via JS (sem eventos)
+  if (idInput) {
+    const idObserver = new MutationObserver(() => {
+      if (idInput && String(idInput.value) !== lastVariantId) {
+        scheduleUpdateById(idInput.value);
+      }
+    });
+    idObserver.observe(idInput, { attributes: true, attributeFilter: ['value'] });
+
+    // Se o form recriar o input
+    const formObserver = new MutationObserver(() => {
+      const fresh = form?.querySelector('[name="id"]');
+      if (fresh && fresh !== idInput) {
+        idInput = fresh;
+        scheduleUpdateById(idInput.value);
+      }
+    });
+    formObserver.observe(form || document.body, { subtree: true, childList: true });
+  }
+
+  // Mudanças de URL (?variant=)
+  function checkUrlVariant() {
+    const qv = new URLSearchParams(location.search).get('variant');
+    if (qv && qv !== lastVariantId) scheduleUpdateById(qv);
+  }
+  window.addEventListener('popstate', checkUrlVariant);
+  ['pushState','replaceState'].forEach(fn => {
+    const orig = history[fn];
+    history[fn] = function() {
+      const res = orig.apply(this, arguments);
+      try { checkUrlVariant(); } catch(e){}
+      return res;
+    };
+  });
+
+  // Mudança dos selects/radios de opções → dá 1 tick pro tema recalcular
+  const optionSelector = 'select[name^="options"], input[name^="options"]';
+  form?.querySelectorAll(optionSelector).forEach(el => {
+    el.addEventListener('change', () => {
+      setTimeout(() => {
+        if (idInput && idInput.value) scheduleUpdateById(idInput.value);
+        else checkUrlVariant();
+      }, 0);
+    });
+  });
+});
+</script>

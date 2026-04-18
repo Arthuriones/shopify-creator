@@ -1,0 +1,1430 @@
+{%- doc -%}
+  Renders the cart drawer, a slide-out panel that displays the contents of the cart. It includes the cart icon that acts as a trigger.
+
+  @param {object} [settings] - An object containing theme settings.
+  @param {boolean} [settings.auto_open_cart_drawer] - If `true`, the cart drawer opens automatically after an item is added.
+  @param {string} [settings.drawer_color_scheme] - The color scheme for the drawer.
+{%- enddoc -%}
+
+<script
+  src="{{ 'cart-drawer.js' | asset_url }}"
+  type="module"
+  fetchpriority="low"
+></script>
+
+<cart-drawer-component
+  class="cart-drawer"
+  {{ block.shopify_attributes }}
+  {% if settings.auto_open_cart_drawer %}
+    auto-open
+  {% endif %}
+>
+  <button
+    class="button header-actions__action button-unstyled"
+    on:click="/open"
+    aria-label="{{ 'accessibility.open_cart_drawer' | t }} {{ 'accessibility.cart_count' | t}}: {{ cart.item_count }}"
+  >
+    {% render 'cart-icon-component' %}
+  </button>
+
+  <dialog
+    ref="dialog"
+    class="cart-drawer__dialog dialog-modal dialog-drawer color-{{ settings.drawer_color_scheme }}{% if cart.empty? %} cart-drawer--empty{%endif%}"
+    scroll-lock
+  >
+
+    <div class="reco-quickadd" data-reco-qa hidden aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="reco-quickadd__backdrop" data-reco-qa-close></div>
+  <div class="reco-quickadd__panel" role="document">
+    <button type="button" class="reco-quickadd__close" data-reco-qa-close aria-label="Fechar">×</button>
+    <div class="reco-quickadd__head">
+      <div class="reco-quickadd__thumb" data-qa-thumb></div>
+      <div class="reco-quickadd__title" data-qa-title></div>
+    </div>
+    <form class="reco-quickadd__form" data-qa-form>
+      <div class="reco-quickadd__options" data-qa-options></div>
+      <div class="reco-quickadd__qty">
+        <label>Qtd.</label>
+        <input type="number" min="1" step="1" value="1" data-qa-qty>
+      </div>
+      <div class="reco-quickadd__status" data-qa-status></div>
+      <button type="submit" class="reco-quickadd__submit" data-qa-submit disabled>{{settings.textocarrinhobotao4}}</button>
+    </form>
+  </div>
+</div>
+    
+    <div class="cart-drawer__inner">
+      <cart-items-component
+        class="cart-items-component"
+        data-section-id="{{ section.id }}"
+      >
+        {%- if cart.empty? -%}
+          <div class="cart-drawer__header">
+            <button
+              ref="closeButton"
+              on:click="cart-drawer-component/close"
+              class="button cart-drawer__close-button button-unstyled"
+              aria-label="{{ 'actions.close_dialog' | t }}"
+            >
+              <span class="svg-wrapper">
+                {{- 'icon-close.svg' | inline_asset_content -}}
+              </span>
+            </button>
+          </div>
+
+          <div class="cart-drawer__content motion-reduce" aria-label="{{ 'accessibility.cart' | t }}">
+            <span class="cart-drawer__heading h3 cart-drawer__heading--empty">
+              {{ 'content.your_cart_is_empty' | t }}
+            </span>
+
+
+            
+            <div class="cart-drawer__items">
+              {% render 'cart-products' %}
+            </div>
+          </div>
+        {%- else -%}
+
+          {%- comment -%} Primeira coleção do primeiro item para recomendações {%- endcomment -%}
+          {%- assign related_collection = nil -%}
+          {%- assign first_item = cart.items | first -%}
+          {%- if first_item and first_item.product and first_item.product.collections.size > 0 -%}
+            {%- assign related_collection = first_item.product.collections.first -%}
+          {%- endif -%}
+          {%- assign cart_handles = cart.items | map: 'product' | map: 'handle' -%}
+
+          <div class="cart-drawer__content motion-reduce" aria-label="{{ 'accessibility.cart' | t }}">
+            <div class="cart-drawer__layout">
+              <!-- BLOCO ESQUERDO: RECOMENDADOS (vai até o topo) -->
+
+{%- if settings.mostrarrecomendados -%}
+              <aside class="cart-drawer__recommendations-column" aria-label="Recommended products">
+                <h3 class="cart-drawer__recommendations-title">
+                  {{settings.textocarrinholateral}}
+                </h3>
+
+                <div class="cart-drawer__recommendations-list" data-reco-list>
+  {%- assign max_recos = 10 -%}
+  {%- assign min_recos = 8 -%}
+  {%- assign shown = 0 -%}
+
+  {%- comment -%} Index de handles já usados (inclui os do carrinho) {%- endcomment -%}
+  {%- assign used_handles = '' -%}
+  {%- for h in cart_handles -%}
+    {%- assign used_handles = used_handles | append: '|' | append: h | append: '|' -%}
+  {%- endfor -%}
+
+  {%- comment -%} 1) Coleção relacionada (se tiver > 1 produto) {%- endcomment -%}
+  {%- assign related_count = 0 -%}
+  {%- if related_collection -%}
+    {%- assign related_count = related_collection.products_count | default: 0 | plus: 0 -%}
+  {%- endif -%}
+  {%- if related_collection and related_count > 1 -%}
+    {%- for p in related_collection.products limit: 50 -%}
+      {%- assign needle = '|' | append: p.handle | append: '|' -%}
+      {%- if used_handles contains needle or cart_handles contains p.handle or p.available == false -%}{% continue %}{%- endif -%}
+
+      <div class="cart-drawer__recommendation reco-slide" data-product-handle="{{ p.handle }}">
+        <button type="button" class="cart-drawer__recommendation-main" data-product-url="{{ p.url }}" aria-label="Abrir {{ p.title }}">
+          <div class="cart-drawer__recommendation-image-wrapper">
+            {%- if p.featured_image -%}
+              {{ p.featured_image
+                | image_url: width: 320
+                | image_tag:
+                  class: 'cart-drawer__recommendation-image',
+                  loading: 'lazy',
+                  alt: p.featured_image.alt | escape
+              }}
+            {%- endif -%}
+          </div>
+          <div class="cart-drawer__recommendation-info">
+            <span class="cart-drawer__recommendation-title">{{ p.title }}</span>
+            <span class="cart-drawer__pricewrap" data-price-wrap>
+  <span
+    class="cart-drawer__recommendation-price money"
+    data-cents="{{ p.price }}"
+    data-shop-currency="{{ shop.currency }}"
+  >
+    {{ p.price | money }}
+  </span>
+  {%- if p.compare_at_price and p.compare_at_price > p.price -%}
+    <span
+      class="cart-drawer__recommendation-compare money"
+      data-cents="{{ p.compare_at_price }}"
+      data-shop-currency="{{ shop.currency }}"
+    >
+      {{ p.compare_at_price | money }}
+    </span>
+  {%- else -%}
+    <span class="cart-drawer__recommendation-compare is-placeholder">0</span>
+  {%- endif -%}
+</span>
+          </div>
+        </button>
+       {%- liquid
+  assign single_variant = false
+  if p.has_only_default_variant
+    assign single_variant = true
+  elsif p.variants.size == 1
+    assign single_variant = true
+  endif
+
+  assign first_available = nil
+  for v in p.variants
+    if v.available
+      assign first_available = v
+      break
+    endif
+  endfor
+-%}
+
+{%- if single_variant and first_available -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-direct-variant-id="{{ first_available.id }}"
+    data-product-handle="{{ p.handle }}"
+    aria-label="Adicionar {{ p.title }}"
+  >{{settings.textocarrinhobotao}}</button>
+{%- elsif single_variant and first_available == nil -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    disabled
+    aria-disabled="true"
+  >{{settings.textocarrinhobotao3}}</button>
+{%- else -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-open-qa
+    data-product-handle="{{ p.handle }}"
+    aria-label="Escolher opções de {{ p.title }}"
+  >{{settings.textocarrinhobotao2 }}</button>
+{%- endif -%}
+      </div>
+
+      {%- assign used_handles = used_handles | append: '|' | append: p.handle | append: '|' -%}
+      {%- assign shown = shown | plus: 1 -%}
+      {%- if shown >= max_recos -%}{% break %}{%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- comment -%} 2) Fallbacks: best-sellers -> all {%- endcomment -%}
+  {%- assign pools = '' -%}
+  {%- if collections['best-sellers'] and collections['best-sellers'].products_count > 0 -%}
+    {%- assign pools = pools | append: 'best-sellers,' -%}
+  {%- endif -%}
+  {%- if collections['all'] and collections['all'].products_count > 0 -%}
+    {%- assign pools = pools | append: 'all' -%}
+  {%- endif -%}
+
+  {%- assign pool_handles = pools | split: ',' -%}
+  {%- for handle in pool_handles -%}
+    {%- if handle == blank or shown >= max_recos -%}{% continue %}{%- endif -%}
+    {%- assign col = collections[handle] -%}
+    {%- if col -%}
+      {%- assign pool = col.products | shuffle -%}
+      {%- for p in pool limit: 100 -%}
+        {%- assign needle = '|' | append: p.handle | append: '|' -%}
+        {%- if used_handles contains needle or cart_handles contains p.handle or p.available == false -%}{% continue %}{%- endif -%}
+
+        <div class="cart-drawer__recommendation reco-slide" data-product-handle="{{ p.handle }}">
+          <button type="button" class="cart-drawer__recommendation-main" data-product-url="{{ p.url }}" aria-label="Abrir {{ p.title }}">
+            <div class="cart-drawer__recommendation-image-wrapper">
+              {%- if p.featured_image -%}
+                {{ p.featured_image
+                  | image_url: width: 320
+                  | image_tag:
+                    class: 'cart-drawer__recommendation-image',
+                    loading: 'lazy',
+                    alt: p.featured_image.alt | escape
+                }}
+              {%- endif -%}
+            </div>
+            <div class="cart-drawer__recommendation-info">
+              <span class="cart-drawer__recommendation-title">{{ p.title }}</span>
+             <span class="cart-drawer__pricewrap" data-price-wrap>
+  <span
+    class="cart-drawer__recommendation-price money"
+    data-cents="{{ p.price }}"
+    data-shop-currency="{{ shop.currency }}"
+  >
+    {{ p.price | money }}
+  </span>
+  {%- if p.compare_at_price and p.compare_at_price > p.price -%}
+    <span
+      class="cart-drawer__recommendation-compare money"
+      data-cents="{{ p.compare_at_price }}"
+      data-shop-currency="{{ shop.currency }}"
+    >
+      {{ p.compare_at_price | money }}
+    </span>
+  {%- else -%}
+    <span class="cart-drawer__recommendation-compare is-placeholder">0</span>
+  {%- endif -%}
+</span>
+            </div>
+          </button>
+         {%- liquid
+  assign single_variant = false
+  if p.has_only_default_variant
+    assign single_variant = true
+  elsif p.variants.size == 1
+    assign single_variant = true
+  endif
+
+  assign first_available = nil
+  for v in p.variants
+    if v.available
+      assign first_available = v
+      break
+    endif
+  endfor
+-%}
+
+{%- if single_variant and first_available -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-direct-variant-id="{{ first_available.id }}"
+    data-product-handle="{{ p.handle }}"
+    aria-label="Adicionar {{ p.title }}"
+  >{{settings.textocarrinhobotao }}</button>
+{%- elsif single_variant and first_available == nil -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    disabled
+    aria-disabled="true"
+  >{{settings.textocarrinhobotao3 }}</button>
+{%- else -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-open-qa
+    data-product-handle="{{ p.handle }}"
+    aria-label="Escolher opções de {{ p.title }}"
+  >{{settings.textocarrinhobotao2 }}</button>
+{%- endif -%}
+        </div>
+
+        {%- assign used_handles = used_handles | append: '|' | append: p.handle | append: '|' -%}
+        {%- assign shown = shown | plus: 1 -%}
+        {%- if shown >= max_recos -%}{% break %}{%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {%- comment -%} 3) Garante pelo menos 8 itens: completa com "all" {%- endcomment -%}
+  {%- if shown < min_recos and collections['all'] -%}
+    {%- assign pool2 = collections['all'].products | shuffle -%}
+    {%- for p in pool2 limit: 200 -%}
+      {%- if shown >= min_recos -%}{% break %}{%- endif -%}
+      {%- assign needle = '|' | append: p.handle | append: '|' -%}
+      {%- if used_handles contains needle or cart_handles contains p.handle -%}{% continue %}{%- endif -%}
+
+      <div class="cart-drawer__recommendation reco-slide" data-product-handle="{{ p.handle }}">
+        <button type="button" class="cart-drawer__recommendation-main" data-product-url="{{ p.url }}" aria-label="Abrir {{ p.title }}">
+          <div class="cart-drawer__recommendation-image-wrapper">
+            {%- if p.featured_image -%}
+              {{ p.featured_image
+                | image_url: width: 320
+                | image_tag:
+                  class: 'cart-drawer__recommendation-image',
+                  loading: 'lazy',
+                  alt: p.featured_image.alt | escape
+              }}
+            {%- endif -%}
+          </div>
+          <div class="cart-drawer__recommendation-info">
+            <span class="cart-drawer__recommendation-title">{{ p.title }}</span>
+          <span class="cart-drawer__pricewrap" data-price-wrap>
+  <span
+    class="cart-drawer__recommendation-price money"
+    data-cents="{{ p.price }}"
+    data-shop-currency="{{ shop.currency }}"
+  >
+    {{ p.price | money }}
+  </span>
+  {%- if p.compare_at_price and p.compare_at_price > p.price -%}
+    <span
+      class="cart-drawer__recommendation-compare money"
+      data-cents="{{ p.compare_at_price }}"
+      data-shop-currency="{{ shop.currency }}"
+    >
+      {{ p.compare_at_price | money }}
+    </span>
+  {%- else -%}
+    <span class="cart-drawer__recommendation-compare is-placeholder">0</span>
+  {%- endif -%}
+</span>
+          </div>
+        </button>
+        {%- liquid
+  assign single_variant = false
+  if p.has_only_default_variant
+    assign single_variant = true
+  elsif p.variants.size == 1
+    assign single_variant = true
+  endif
+
+  assign first_available = nil
+  for v in p.variants
+    if v.available
+      assign first_available = v
+      break
+    endif
+  endfor
+-%}
+
+{%- if single_variant and first_available -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-direct-variant-id="{{ first_available.id }}"
+    data-product-handle="{{ p.handle }}"
+    aria-label="Adicionar {{ p.title }}"
+  >{{settings.textocarrinhobotao }}</button>
+{%- elsif single_variant and first_available == nil -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    disabled
+    aria-disabled="true"
+  >{{settings.textocarrinhobotao3 }}</button>
+{%- else -%}
+  <button
+    type="button"
+    class="cart-drawer__recommendation-cta"
+    data-open-qa
+    data-product-handle="{{ p.handle }}"
+    aria-label="Escolher opções de {{ p.title }}"
+  >{{settings.textocarrinhobotao2 }}</button>
+{%- endif -%}
+      </div>
+
+      {%- assign used_handles = used_handles | append: '|' | append: p.handle | append: '|' -%}
+      {%- assign shown = shown | plus: 1 -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- if shown == 0 -%}
+    <p class="cart-drawer__recommendations-empty">{{settings.textocarrinholateralzerado}}</p>
+  {%- endif -%}
+</div>
+
+                {%- comment -%} Navegação mobile (setas + dots) {%- endcomment -%}
+                <div class="reco-slider-nav hidden-desktop" data-reco-nav>
+                  <button class="reco-arrow reco-arrow--prev" type="button" aria-label="Anterior" data-reco-prev>
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <div class="reco-dots" data-reco-dots></div>
+                  <button class="reco-arrow reco-arrow--next" type="button" aria-label="Próximo" data-reco-next>
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                      <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </aside>
+
+            {%- endif -%}
+
+
+
+
+
+
+              <!-- BLOCO DIREITO: PRODUTOS (com header só sobre a coluna) -->
+              <div class="cart-drawer__cart-column">
+                <div class="cart-drawer__header" id="cart-drawer-header">
+                  <span class="cart-drawer__heading h3">
+                    {{ 'content.cart_title' | t }}
+                    {% render 'cart-bubble' %}
+                  </span>
+                  <button
+                    ref="closeButton"
+                    on:click="cart-drawer-component/close"
+                    class="button cart-drawer__close-button button-unstyled"
+                    aria-label="{{ 'actions.close_dialog' | t }}"
+                  >
+                    <span class="svg-wrapper">
+                      {{- 'icon-close.svg' | inline_asset_content -}}
+                    </span>
+                  </button>
+                </div>
+
+                <scroll-hint class="cart-drawer__items">
+                  {% render 'cart-products' %}
+                </scroll-hint>
+
+                <div class="cart-drawer__summary">
+                  {% render 'cart-summary' %}
+                 
+                  {% if settings.mostrarcontinuar %}
+                  <button
+                    ref="closeButton"
+                    on:click="cart-drawer-component/close"
+                    class="continuarcomprando"
+                    aria-label="{{ 'actions.close_dialog' | t }}"
+                  >
+                    <span>
+                       {{settings.textocontinuarcomprando}}
+                    </span>
+                  </button>
+                {% endif %}
+
+
+                </div>
+
+
+
+
+
+
+              </div>
+            </div>
+          </div>
+        {%- endif -%}
+      </cart-items-component>
+    </div>
+  </dialog>
+</cart-drawer-component>
+
+<script>
+(() => {
+  'use strict';
+
+  const mqMobile  = window.matchMedia('(max-width: 749px)');
+  const inited    = new WeakSet();
+
+  // Clique no card (imagem + infos) → navega
+  document.addEventListener('click', function(e){
+    const mainButton = e.target.closest('.cart-drawer__recommendation-main');
+    if (mainButton) {
+      const url = mainButton.getAttribute('data-product-url');
+      if (url) window.location.href = url;
+    }
+  }, { passive: true });
+
+  // ===== Setup global =====
+  function refreshAll(){
+    const lists = document.querySelectorAll('[data-reco-list]');
+    lists.forEach(setupOrRefresh);
+    requestAnimationFrame(() => lists.forEach(normalizeTitles));
+  }
+
+  function setupOrRefresh(list){
+    if (!list) return;
+    if (!inited.has(list)) {
+      bindList(list);
+      inited.add(list);
+    }
+    const nav = findNavForList(list);
+    if (nav) {
+      rebuildDots(nav, list);
+      updateDots(nav, list);
+      toggleNavVisibility(nav);
+    }
+    normalizeTitles(list);
+  }
+
+  function bindList(list){
+    const nav = findNavForList(list);
+
+    // Atualiza dots suavemente durante o scroll (mobile)
+    let scrollRAF = null;
+    list.addEventListener('scroll', () => {
+      if (!mqMobile.matches) return;
+      if (scrollRAF) return;
+      scrollRAF = requestAnimationFrame(() => {
+        scrollRAF = null;
+        if (nav) updateDots(nav, list);
+      });
+    }, { passive: true });
+
+    // Resize
+    window.addEventListener('resize', debounce(() => {
+      if (nav) {
+        rebuildDots(nav, list);
+        updateDots(nav, list);
+        toggleNavVisibility(nav);
+      }
+      normalizeTitles(list);
+    }, 120), { passive: true });
+
+    // Setas
+    if (nav) bindArrows(nav, list);
+
+    // Breakpoint
+    mqMobile.addEventListener('change', () => { if (nav) toggleNavVisibility(nav); });
+  }
+
+  function findNavForList(list){
+    const root = list.closest('.cart-drawer__recommendations-column') || document;
+    return root.querySelector('[data-reco-nav]') || null;
+  }
+
+  function rebuildDots(nav, list){
+    const dotsWrap = nav.querySelector('[data-reco-dots]');
+    if (!dotsWrap) return;
+    const slides = list.querySelectorAll('.reco-slide');
+
+    const frag = document.createDocumentFragment();
+    slides.forEach((_, idx) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'reco-dot';
+      b.setAttribute('aria-label', 'Ir para item ' + (idx + 1));
+      b.addEventListener('click', () => {
+        const slide = slides[idx];
+        list.scrollTo({ left: slide.offsetLeft, behavior: 'smooth' });
+      });
+      frag.appendChild(b);
+    });
+    dotsWrap.replaceChildren(frag);
+  }
+
+  function updateDots(nav, list){
+    const dots   = nav.querySelectorAll('.reco-dot');
+    const slides = list.querySelectorAll('.reco-slide');
+    if (!dots.length || !slides.length) return;
+
+    const center = list.scrollLeft + list.clientWidth / 2;
+    let active = 0, best = Infinity;
+
+    slides.forEach((s, i) => {
+      const mid = s.offsetLeft + s.offsetWidth / 2;
+      const d   = Math.abs(mid - center);
+      if (d < best) { best = d; active = i; }
+    });
+
+    dots.forEach((d, i) => d.classList.toggle('is-active', i === active));
+  }
+
+  function bindArrows(nav, list){
+    const prev = nav.querySelector('[data-reco-prev]');
+    const next = nav.querySelector('[data-reco-next]');
+    prev?.addEventListener('click', () => list.scrollBy({ left: -list.clientWidth * 0.9, behavior: 'smooth' }));
+    next?.addEventListener('click', () => list.scrollBy({ left:  list.clientWidth * 0.9, behavior: 'smooth' }));
+  }
+
+  function toggleNavVisibility(nav){
+    nav.style.display = mqMobile.matches ? '' : 'none';
+  }
+
+  function normalizeTitles(list){
+    const titles = list.querySelectorAll('.cart-drawer__recommendation-title');
+    if (!titles.length) return;
+    titles.forEach(t => t.style.minHeight = '');
+    let maxH = 0;
+    titles.forEach(t => { maxH = Math.max(maxH, t.offsetHeight); });
+    list.style.setProperty('--reco-title-height', (maxH || 0) + 'px');
+    titles.forEach(t => t.style.minHeight = 'var(--reco-title-height)');
+  }
+
+  // ====== Observer: reconstrói recomendações/dots após mudanças do carrinho ======
+  const drawer = document.querySelector('.cart-drawer__dialog');
+  if (drawer){
+    let raf = null;
+    const moDrawer = new MutationObserver((muts) => {
+      const meaningful = muts.some(m =>
+        m.type === 'childList' &&
+        ([...m.addedNodes, ...m.removedNodes].some(n =>
+          n.nodeType === 1 && (
+            n.matches?.('cart-items-component, .cart-drawer__items, .cart-drawer__cart-column, [data-reco-list]')
+          )
+        ))
+      );
+      if (!meaningful) return;
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = null; refreshAll(); });
+    });
+    moDrawer.observe(drawer, { childList: true, subtree: true });
+  }
+
+  // Boot
+  if (document.readyState !== 'loading') refreshAll();
+  else document.addEventListener('DOMContentLoaded', refreshAll, { once: true });
+
+  function debounce(fn, wait){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); }; }
+})();
+</script>
+
+<script>
+(()=> {
+  // Helper: formata dinheiro com a moeda da loja
+  const money = (cents) => {
+  const SHOP_CURRENCY   = "{{ shop.currency }}";
+  const ACTIVE_CURRENCY = window.Currency?.currentCurrency || window.Shopify?.currency?.active || "{{ cart.currency.iso_code }}";
+
+  // Se o tema tiver Currency.js, converte de fato
+  let amount = Number(cents) || 0;
+  if (window.Currency && typeof Currency.convert === 'function') {
+    try {
+      amount = Math.round(Currency.convert(amount / 100, SHOP_CURRENCY, ACTIVE_CURRENCY) * 100);
+    } catch { /* mantém amount */ }
+  }
+
+  try {
+    if (window.Shopify && typeof Shopify.formatMoney === 'function') {
+      const fmt =
+        window.Shopify?.currency?.format ||
+        window.theme?.moneyFormat ||
+        window.Shopify?.money_format ||
+        "{{ shop.money_format | replace: '"', '\"' }}";
+      return Shopify.formatMoney(amount, fmt);
+    }
+  } catch {}
+
+  // Fallback apenas de formatação
+  return (amount/100).toLocaleString(undefined, { style:'currency', currency: ACTIVE_CURRENCY || SHOP_CURRENCY || 'USD' });
+};
+
+  const qa = document.querySelector('[data-reco-qa]');
+  if (!qa) return;
+
+  const el = {
+    wrap: qa,
+    panel: qa.querySelector('.reco-quickadd__panel'),
+    closeBtns: qa.querySelectorAll('[data-reco-qa-close]'),
+    thumb: qa.querySelector('[data-qa-thumb]'),
+    title: qa.querySelector('[data-qa-title]'),
+    form: qa.querySelector('[data-qa-form]'),
+    opts: qa.querySelector('[data-qa-options]'),
+    qtyWrap: qa.querySelector('.reco-quickadd__qty'),
+    status: qa.querySelector('[data-qa-status]'),
+    submit: qa.querySelector('[data-qa-submit]')
+  };
+
+  // Garante nós do cabeçalho (título + faixa de preço)
+  function ensureTitleScaffold(){
+    if (!el.title) return;
+    let t = el.title.querySelector('.qa-title-text');
+    let p = el.title.querySelector('.qa-price-line');
+    if (!t){
+      t = document.createElement('span');
+      t.className = 'qa-title-text';
+      el.title.appendChild(t);
+    }
+    if (!p){
+      p = document.createElement('div');
+      p.className = 'qa-price-line';
+      el.title.appendChild(p);
+    }
+    el.titleText = t;
+    el.priceLine = p;
+  }
+  ensureTitleScaffold();
+
+  // ==== helpers de imagem ====
+  function addWidthParam(url, width){
+    try {
+      const u = new URL(url, window.location.origin);
+      // evita duplicar
+      if (!u.searchParams.has('width')) u.searchParams.set('width', String(width));
+      return u.toString();
+    } catch { return url; }
+  }
+  function normalizeUrl(url){
+    if (!url) return '';
+    if (url.startsWith('//')) return window.location.protocol + url;
+    if (url.startsWith('http')) return url;
+    // caso venha relativo
+    return new URL(url, window.location.origin).toString();
+  }
+  function getVariantImageUrl(variant, product){
+    // Tenta featured_image.src do variant
+    let src = variant?.featured_image?.src || variant?.featured_image?.url || '';
+    if (!src) {
+      // fallback: usa primeira imagem do produto
+      src = product?.images?.[0] || '';
+    }
+    src = normalizeUrl(src);
+    // Ajusta tamanho (Shopify CDN aceita ?width=)
+    src = addWidthParam(src, 320);
+    return src;
+  }
+  function updateThumbForVariant(variant){
+    const url = getVariantImageUrl(variant, productJson);
+    if (!url) return; // mantém o que já está
+    const alt = (productJson?.title || '').replace(/"/g, '&quot;');
+    el.thumb.innerHTML = `<img src="${url}" alt="${alt}" />`;
+  }
+
+  let productJson = null;
+  let selected = {};
+  let activeVariant = null;
+
+  function openQA() {
+    if (el.submit) el.submit.style.fontSize = '1.1rem';
+    if (el.qtyWrap) el.qtyWrap.style.display = 'none'; // sempre 1 un.
+    qa.hidden = false;
+    qa.setAttribute('aria-hidden', 'false');
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  function closeQA() {
+    qa.hidden = true;
+    qa.setAttribute('aria-hidden', 'true');
+    document.documentElement.style.overflow = '';
+    el.opts.innerHTML = '';
+    el.status.textContent = '';
+    ensureTitleScaffold();
+    el.titleText.textContent = '';
+    el.priceLine.innerHTML = '';
+    el.submit.disabled = true;
+    productJson = null; selected = {}; activeVariant = null;
+  }
+
+  el.closeBtns.forEach(b => b.addEventListener('click', closeQA));
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !qa.hidden) closeQA(); });
+
+  // Clique nos CTAs (adicionar direto x abrir Quick Add)
+  document.addEventListener('click', async (e) => {
+    const cta = e.target.closest('.cart-drawer__recommendation-cta');
+    if (!cta) return;
+    e.preventDefault();
+
+    const directId = cta.getAttribute('data-direct-variant-id');
+    const handle   = cta.getAttribute('data-product-handle');
+
+    // Adicionar direto (1 variante)
+    if (directId) {
+      const original = cta.textContent;
+      cta.disabled = true;
+      cta.setAttribute('aria-busy', 'true');
+      cta.textContent = '{{ settings.textocarrinhobotao5 }}';
+
+      try {
+        const res = await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ items: [{ id: Number(directId), quantity: 1 }] }),
+          credentials: 'same-origin'
+        });
+        if (!res.ok) {
+          let txt = await res.text(); let payload;
+          try { payload = JSON.parse(txt); } catch { payload = { message: txt }; }
+          cta.textContent = 'Tente novamente';
+          cta.disabled = false;
+          cta.removeAttribute('aria-busy');
+          console.warn('add.js erro:', payload);
+          return;
+        }
+        cta.textContent = '{{ settings.textocarrinhobotao6 }}';
+        await refreshCartSections();
+      } catch(err) {
+        console.error('Erro ao adicionar direto:', err);
+        cta.textContent = 'Tente novamente';
+        cta.disabled = false;
+        cta.removeAttribute('aria-busy');
+      } finally {
+        setTimeout(() => {
+          cta.textContent = '{{settings.textocarrinhobotao }}';
+          cta.disabled = false;
+          cta.removeAttribute('aria-busy');
+        }, 900);
+      }
+      return;
+    }
+
+    // Quick Add (múltiplas opções)
+    if (!handle) return;
+
+    // Fallback visual imediato (card) enquanto busca JSON
+    ensureTitleScaffold();
+    const card  = cta.closest('.reco-slide, .cart-drawer__recommendation');
+    const img   = card?.querySelector('img')?.currentSrc || card?.querySelector('img')?.src;
+    const titleFallback = card?.querySelector('.cart-drawer__recommendation-title')?.textContent?.trim() || '';
+    el.thumb.innerHTML = img ? `<img src="${img}" alt="">` : '';
+    el.titleText.textContent = titleFallback;
+    el.priceLine.innerHTML = '';
+
+    try {
+      const res = await fetch(`/products/${handle}.js`, { credentials: 'same-origin' });
+      productJson = await res.json();
+
+      // Título oficial do produto
+      el.titleText.textContent = productJson?.title || titleFallback || '';
+
+      buildOptions(productJson);
+      pickFirstAvailable(); // vai atualizar preço e thumb
+      openQA();
+    } catch(err) {
+      console.error('QuickAdd: falha ao carregar produto', err);
+    }
+  });
+
+  async function refreshCartSections(){
+    ['cart:refresh','cart:updated','cart:change','theme:cart:refresh'].forEach(n => {
+      window.dispatchEvent(new CustomEvent(n));
+      document.dispatchEvent(new CustomEvent(n, { bubbles: true }));
+    });
+    const sectionId = document.querySelector('cart-items-component')?.dataset.sectionId;
+    if (!sectionId) return;
+    try {
+      const html = await fetch(`${location.pathname}?section_id=${sectionId}`, { credentials:'same-origin' }).then(r => r.text());
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      const newCartCol = tmp.querySelector('.cart-drawer__cart-column');
+      const curCartCol = document.querySelector('.cart-drawer__cart-column');
+      if (newCartCol && curCartCol) curCartCol.replaceWith(newCartCol);
+      const newRecoCol = tmp.querySelector('.cart-drawer__recommendations-column');
+      const curRecoCol = document.querySelector('.cart-drawer__recommendations-column');
+      if (newRecoCol && curRecoCol) curRecoCol.replaceWith(newRecoCol);
+      if (typeof refreshAll === 'function') refreshAll();
+
+      if (typeof window.__convertDrawerPrices === 'function') {
+  window.__convertDrawerPrices(document);
+}
+
+    } catch(e) {
+      console.warn('Fallback: reload page after add', e);
+      location.reload();
+    }
+  }
+
+  // ====== Opções / variantes ======
+  function buildOptions(p) {
+    el.opts.innerHTML = '';
+    selected = {};
+    const optNames = (p.options || []).map(o => typeof o === 'string' ? o : o?.name).filter(Boolean);
+    optNames.forEach((optName, idx) => {
+      const id = `qa-opt-${idx}`;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <label for="${id}">${escapeHtml(optName)}</label>
+        <select id="${id}" data-opt-index="${idx}" aria-label="${escapeHtml(optName)}" style="font-size:1.1rem; padding:.6rem .7rem;"></select>
+      `;
+      const sel = wrap.querySelector('select');
+      sel.addEventListener('change', () => recomputeFrom(0));
+      el.opts.appendChild(wrap);
+    });
+    recomputeFrom(0);
+  }
+
+  function pickFirstAvailable() {
+    const firstAvail = (productJson?.variants || []).find(v => v.available) || productJson?.variants?.[0];
+    if (!firstAvail) return;
+    const selects = el.opts.querySelectorAll('select[data-opt-index]');
+    selects.forEach((sel, i) => {
+      const val = firstAvail[`option${i+1}`];
+      if (!val) return;
+      if (!Array.from(sel.options).some(o => o.value == val)) {
+        recomputeFrom(0);
+      }
+      const opt = Array.from(sel.options).find(o => o.value == val);
+      if (opt) sel.value = opt.value;
+    });
+    recomputeFrom(0); // garante atualização de preço e thumb
+  }
+
+  function recomputeFrom(startIdx) {
+    const p = productJson || {};
+    const variants = p.variants || [];
+    const optNames = (p.options || []).map(o => typeof o === 'string' ? o : o?.name).filter(Boolean);
+    const selects = Array.from(el.opts.querySelectorAll('select[data-opt-index]')).sort((a,b)=>a.dataset.optIndex-b.dataset.optIndex);
+
+    let currentSel = {};
+    selects.forEach((sel, i) => { currentSel[optNames[i]] = sel.value; });
+
+    for (let i = 0; i < optNames.length; i++) {
+      const name = optNames[i];
+      const allowed = new Set();
+      variants.forEach(v => {
+        let ok = true;
+        for (let j = 0; j < i; j++) {
+          const prevName = optNames[j];
+          if (currentSel[prevName] && String(v[`option${j+1}`]) !== String(currentSel[prevName])) { ok = false; break; }
+        }
+        if (ok) allowed.add(String(v[`option${i+1}`]));
+      });
+      const values = Array.from(allowed);
+      const sel = selects[i];
+      const prevVal = currentSel[name];
+      sel.innerHTML = values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      if (values.includes(prevVal)) sel.value = prevVal; else sel.value = values[0] || '';
+      currentSel[name] = sel.value;
+    }
+
+    selected = { ...currentSel };
+    const match = variants.find(v => optNames.every((n, i) => String(v[`option${i+1}`]) === String(selected[n])));
+    activeVariant = match || null;
+
+    if (!activeVariant) {
+      ensureTitleScaffold();
+      el.priceLine.innerHTML = '';
+      el.status.textContent = 'Esta combinação não existe.';
+      el.submit.disabled = true;
+      return;
+    }
+
+    // Atualiza preço e thumb SEMPRE aqui
+    ensureTitleScaffold();
+    updatePriceLine(activeVariant);
+    updateThumbForVariant(activeVariant);
+
+    if (!activeVariant.available) {
+      el.status.textContent = 'Indisponível no momento.';
+      el.submit.disabled = true;
+    } else {
+      el.status.textContent = '';
+      el.submit.disabled = false;
+    }
+  }
+
+  function updatePriceLine(variant) {
+    if (!variant) return;
+    const currentCents = Number(variant.price) || 0;
+    const compareCents = Number(variant.compare_at_price) || 0;
+    const priceHtml   = `<span class="qa-price__current" style="font-weight:700;">${money(currentCents)}</span>`;
+    const compareHtml = (compareCents > currentCents)
+      ? `<span class="qa-price__compare" style="font-size:.92em; text-decoration:line-through; opacity:.7; margin-left:.4rem;">${money(compareCents)}</span>`
+      : '';
+    el.priceLine.innerHTML = `${priceHtml} ${compareHtml}`;
+  }
+
+  // Submit: adiciona SEMPRE 1 unidade
+  el.form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!activeVariant) return;
+    el.submit.disabled = true;
+    const originalLabel = el.submit.textContent;
+    el.submit.textContent = '{{ settings.textocarrinhobotao5 }}';
+    el.status.textContent = '';
+    try {
+      const body = { items: [{ id: Number(activeVariant.id), quantity: 1 }] };
+      const res = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(body),
+        credentials: 'same-origin'
+      });
+      if (!res.ok) {
+        let t = await res.text(); let payload;
+        try { payload = JSON.parse(t); } catch { payload = { message: t }; }
+        const msg = (payload?.description || payload?.message || '').toLowerCase();
+        el.status.textContent = (res.status === 422 && /selling[_ ]?plan/.test(msg))
+          ? 'Este produto requer um plano de assinatura. Selecione o plano antes de adicionar.'
+          : (payload?.description || payload?.message || 'Não foi possível adicionar. Tente novamente.');
+        el.submit.disabled = false;
+        el.submit.textContent = originalLabel || '{{settings.textocarrinhobotao4}}';
+        return;
+      }
+      el.submit.textContent = '{{settings.textocarrinhobotao4}}';
+      setTimeout(closeQA, 150);
+
+      // Atualiza drawer
+      ['cart:refresh','cart:updated','cart:change','theme:cart:refresh'].forEach(n => {
+        window.dispatchEvent(new CustomEvent(n));
+        document.dispatchEvent(new CustomEvent(n, { bubbles: true }));
+      });
+      const sectionId = document.querySelector('cart-items-component')?.dataset.sectionId;
+      if (sectionId) {
+        try {
+          const html = await fetch(`${location.pathname}?section_id=${sectionId}`, { credentials: 'same-origin' }).then(r => r.text());
+          const tmp = document.createElement('div'); tmp.innerHTML = html;
+          const newCartCol = tmp.querySelector('.cart-drawer__cart-column');
+          const curCartCol = document.querySelector('.cart-drawer__cart-column');
+          if (newCartCol && curCartCol) curCartCol.replaceWith(newCartCol);
+          const newRecoCol = tmp.querySelector('.cart-drawer__recommendations-column');
+          const curRecoCol = document.querySelector('.cart-drawer__recommendations-column');
+          if (newRecoCol && curRecoCol) curRecoCol.replaceWith(newRecoCol);
+          if (typeof refreshAll === 'function') refreshAll();
+        } catch (e) {
+          console.warn('Fallback: reload page after add', e);
+          location.reload();
+        }
+      }
+    } catch (err) {
+      console.error('Erro no add.js:', err);
+      el.status.textContent = 'Erro de rede. Tente novamente.';
+      el.submit.disabled = false;
+      el.submit.textContent = originalLabel || '{{settings.textocarrinhobotao4}}';
+    }
+  });
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+})();
+</script>
+
+<script>
+(() => {
+  // Moedas de referência vindas do Liquid
+  const SHOP_CURRENCY   = "{{ shop.currency }}";
+  const ACTIVE_CURRENCY = window.Shopify?.currency?.active || "{{ cart.currency.iso_code }}";
+
+  // Tenta usar o conversor do tema (Currency.js); fallback formata sem converter
+  function convertCents(cents) {
+    const n = Number(cents) || 0;
+    if (window.Currency && typeof Currency.convert === 'function' && Currency.currentCurrency) {
+      const from = SHOP_CURRENCY;
+      const to   = window.Currency.currentCurrency || ACTIVE_CURRENCY || from;
+      try {
+        // Currency.convert trabalha em "unidades", então divide/ multiplica por 100
+        const units = n / 100;
+        const conv  = Currency.convert(units, from, to);
+        return Math.round(conv * 100);
+      } catch { /* segue fallback */ }
+    }
+    // Se não houver conversor, mantém o valor
+    return n;
+  }
+
+  function moneyFormat() {
+    // Usa formato do tema/loja
+    return (
+      window.Shopify?.currency?.format ||
+      window.theme?.moneyFormat ||
+      window.Shopify?.money_format ||
+      "{{ shop.money_format | replace: '"', '\"' }}"
+    );
+  }
+
+  function formatCents(cents) {
+    try {
+      if (window.Shopify && typeof Shopify.formatMoney === 'function') {
+        return Shopify.formatMoney(cents, moneyFormat());
+      }
+    } catch {}
+    // Fallback simples com Intl (apenas formata; não converte)
+    const curr = window.Currency?.currentCurrency || ACTIVE_CURRENCY || SHOP_CURRENCY || 'USD';
+    return (cents/100).toLocaleString(undefined, { style:'currency', currency: curr });
+  }
+
+  function updateOne(el) {
+    const centsAttr = el.getAttribute('data-cents');
+    if (!centsAttr) return;
+    const converted = convertCents(centsAttr);
+    el.textContent = formatCents(converted);
+  }
+
+  // Converte todos os preços no drawer (recomendados)
+  function convertDrawerPrices(root = document) {
+    const targets = root.querySelectorAll('.cart-drawer__recommendations-column .money[data-cents]');
+    targets.forEach(updateOne);
+  }
+
+  // Exponha global p/ ser chamado após replace de seção
+  window.__convertDrawerPrices = convertDrawerPrices;
+
+  // Rodar agora e ao abrir/atualizar o carrinho
+  if (document.readyState !== 'loading') convertDrawerPrices();
+  else document.addEventListener('DOMContentLoaded', () => convertDrawerPrices(), { once: true });
+
+  // Alguns temas disparam eventos de troca de moeda/país
+  ['currency:change','theme:currency:change','shopify:section:load','cart:refresh','cart:updated']
+    .forEach(evt => document.addEventListener(evt, () => convertDrawerPrices(), { passive: true }));
+
+  // Também observa mudanças no drawer (quando a coluna é re-renderizada)
+  const drawer = document.querySelector('.cart-drawer__dialog');
+  if (drawer) {
+    const mo = new MutationObserver((muts) => {
+      const changed = muts.some(m =>
+        m.type === 'childList' &&
+        [...m.addedNodes].some(n => n.nodeType === 1 && n.closest?.('.cart-drawer__recommendations-column'))
+      );
+      if (changed) convertDrawerPrices(drawer);
+    });
+    mo.observe(drawer, { childList:true, subtree:true });
+  }
+})();
+</script>
+
+{% stylesheet %}
+  /* ===== Estrutura geral ===== */
+  .cart-items-component { width: 100%; height: 100%; display: flex; flex-direction: column; }
+  .cart-drawer__dialog { overflow: hidden; }
+  .cart-drawer__inner { height: 100%; overflow: hidden; }
+  .cart-drawer__content { height: 100%; display: flex; flex-direction: column; } /* (antes: calc(100% - var(--header-height))) */
+
+  /* ===== Layout 2 colunas ===== */
+  .cart-drawer__layout { display: flex; height: 100%; gap: 1.6rem; }
+
+  /* Coluna de Recomendados — ocupa altura inteira e rola independente */
+  .cart-drawer__recommendations-column {
+    flex: 0 0 20rem; max-width: 20rem; height: 100%;
+    padding: var(--cart-drawer-padding);
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
+    background-color: rgb(251 251 251);
+  }
+
+  /* Coluna do Carrinho — grid: Header | Itens (rolam) | Resumo */
+  .cart-drawer__cart-column {
+    flex: 1; min-width: 0;
+    display: grid; grid-template-rows: auto 1fr auto; /* <<< divide em 3 faixas */
+  }
+
+  /* Header agora vale só para a coluna de produtos */
+  .cart-drawer__header {
+    background-color: var(--color-background);
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; padding: var(--cart-drawer-padding);
+    border-bottom: var(--style-border-width) solid none;
+    position: sticky; top: 0; z-index: 1; /* gruda no topo da coluna */
+  }
+  @media (min-width: 750px) {
+    .cart-drawer__header { padding: var(--cart-drawer-padding-desktop); }
+  }
+
+  /* A área de itens passa a ser o container rolável da coluna */
+  .cart-drawer__items { overflow: auto; }
+
+  /* Resumo fixo no rodapé da coluna (não precisa sticky, pois quem rola é .cart-drawer__items) */
+  .cart-drawer__summary { background-color: var(--color-background); }
+
+  /* ===== Responsivo: mobile empilha ===== */
+  @media (max-width: 749px) {
+    .cart-drawer__layout { flex-direction: column; gap: 0; }
+
+    .cart-drawer__recommendations-column {
+      flex: 0 0 auto; width: 100%; max-width: none; border-right: none;
+      border-top: 1px solid rgba(0,0,0,0.06); max-height: none; height: auto; padding-bottom: .5rem;
+    }
+  }
+
+  /* ===== Lista de recomendações ===== */
+  .cart-drawer__recommendations-title {
+    font-size: var(--font-size-small, 0.9rem);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;
+  }
+
+  /* Desktop: coluna com scroll */
+  .cart-drawer__recommendations-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  /* Mobile: slider horizontal */
+  @media (max-width: 749px) {
+    .cart-drawer__recommendations-list {
+      display: grid; grid-auto-flow: column; grid-auto-columns: 85%;
+      gap: .75rem; overflow-x: auto; overflow-y: hidden; padding-bottom: .25rem;
+      scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    }
+    .cart-drawer__recommendations-list::-webkit-scrollbar { height: 0; }
+    .reco-slide { scroll-snap-align: start; }
+  }
+
+  .cart-drawer__recommendation {
+    display: grid; grid-template-rows: auto 1fr auto; gap: 0.4rem; width: 100%;
+  }
+
+  .cart-drawer__recommendation-main {
+    display: flex; width: 100%; text-align: left; border: none; background: transparent;
+    padding: 0.5rem 0; cursor: pointer; gap: 0.75rem; align-items: center;
+  }
+  .cart-drawer__recommendation-main:hover,
+  .cart-drawer__recommendation-main:focus-visible { outline: none; opacity: 0.9; }
+
+  .cart-drawer__recommendation-image-wrapper { flex-shrink: 0; width:74px; height: 74px; border-radius: var(--style-border-radius, 8px); overflow: hidden; }
+  .cart-drawer__recommendation-image { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .cart-drawer__recommendation-info { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+
+  /* Título até 2 linhas (clamp) + equalização via JS */
+  .cart-drawer__recommendation-title {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: var(--reco-title-height, auto);
+    font-size: var(--font-size-base, 0.9rem); line-height: 1.3;color:#000 !important;
+  }
+
+  /* Preço + comparativo com placeholder para alinhar CTA */
+  .cart-drawer__pricewrap {
+    display: flex; align-items: baseline; gap: .5rem; line-height: 1.3;color:#000 !important;
+    min-height: calc(1.3em * 2); /* reserva “duas linhas” para todos os cards */
+  }
+  .cart-drawer__recommendation-price { font-size: var(--font-size-small, 0.95rem); font-weight: 600; }
+  .cart-drawer__recommendation-compare { font-size: var(--font-size-small, 0.85rem); text-decoration: line-through; opacity: .6; }
+  .cart-drawer__recommendation-compare.is-placeholder { visibility: hidden; } /* ocupa espaço, não aparece */
+
+  /* CTA */
+  .cart-drawer__recommendation-cta {
+        display: inline-flex
+;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-small, 0.85rem);
+    padding: 0.4rem 0.95rem;
+    border-radius: var(--recomendaraio);
+    border: var(--style-border-width, 1px) solid currentColor;
+    background: var(--recomendafundo);
+    color: var(--recomendafonte);
+    text-decoration: none;
+    cursor: pointer;
+    line-height: 1;
+    width: 80%;
+    place-self: center;
+  }
+  .cart-drawer__recommendation-cta:hover { opacity: .95; transform: scale(1.1) }
+
+  .cart-drawer__recommendations-empty { font-size: var(--font-size-small, 0.85rem); opacity: 0.7; }
+
+  /* Nav (setas + dots) apenas no mobile */
+  .hidden-desktop { display: none; }
+  @media (max-width: 749px) {
+    .hidden-desktop { display: flex; justify-content: center; align-items: center; gap: .75rem; margin-top: .25rem; }
+    .reco-slider-nav { position: relative; }
+    .reco-arrow {
+      width: 25px; height: 25px; border-radius: 999px; background: #000; color: #fff; border: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .reco-arrow svg { width: 18px; height: 18px; }
+    .reco-dots { display: inline-flex; gap: 6px; }
+    .reco-dot { width: 8px; height: 8px; border-radius: 999px; background: rgba(0,0,0,.25); border: none; }
+    .reco-dot.is-active { background: rgba(0,0,0,.7); }
+  }
+
+  /* (opcional) largura do drawer no desktop */
+  @media (min-width: 990px) {
+    .cart-drawer__dialog.dialog-drawer {
+      max-width: none !important;
+      inline-size: min(780px, calc(60vw - 48px)) !important;
+    }
+  }
+
+  h3.cart-drawer__recommendations-title {
+    text-align: center;
+}
+
+.cart-drawer__recommendation-cta {
+  transform: scale(1);
+  transform-origin: center;
+  transition: transform 200ms cubic-bezier(.2,.8,.2,1),
+              opacity 200ms ease;
+  will-change: transform, opacity; /* opcional */
+  backface-visibility: hidden; 
+  font-weight: 600;    /* ajuda a evitar tremidos */
+}
+
+.cart-drawer__recommendation-cta:hover {
+  opacity: .95;
+  transform: scale(1.06); /* 1.10 é mais brusco */
+}
+
+.cart-drawer__recommendation-cta:active {
+  transform: scale(.99); /* feedback no clique */
+}
+
+/* Acessibilidade */
+@media (prefers-reduced-motion: reduce) {
+  .cart-drawer__recommendation-cta { transition: none; }
+}
+
+
+button.continuarcomprando {
+    width: 100%;
+    height: clamp(25px, var(--height-buy-buttons), 55px);
+    --text-align: center;
+    display: grid
+;
+    align-content: center;
+    text-decoration: none;
+    text-align: var(--text-align);
+    color: var(--recomendafonte1);
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: var(--recomendafundo1);
+    border-radius: var(--recomendaraio1);
+    font-family: var(--font-paragraph--family);
+    font-style: var(--font-paragraph--style);
+    font-size: var(--font-paragraph--size);
+    line-height: var(--font-paragraph--line-height);
+    margin-block: 0;
+    transition: color var(--animation-speed) var(--animation-easing), box-shadow var(--animation-speed) var(--animation-easing), background-color var(--animation-speed) var(--animation-easing);
+    cursor: pointer;
+    margin-top: -20px;
+    box-shadow: inset 0 0 0 var(--button-border-width) var(--button-border-color);
+    padding-block: var(--button-padding-block);
+    padding-inline: var(--button-padding-inline);
+    font-weight: 600;
+    border:none;
+}
+
+@media screen and (max-width: 900px) {
+button.continuarcomprando {
+  margin-top: 0px;
+}
+ }
+
+/* Quick Add (recomendações no drawer) */
+.reco-quickadd[hidden]{ display:none !important; }
+.reco-quickadd{
+  position:fixed; inset:0; z-index:9999;
+  display:grid; place-items:center;
+}
+.reco-quickadd__backdrop{
+  position:absolute; inset:0; background:rgba(0,0,0,.45);
+}
+.reco-quickadd__panel{
+  position:relative; width:min(560px, 92vw); max-height:85vh; overflow:auto;
+  background:var(--color-background, #fff); color:var(--color-foreground, #111);
+  border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  padding:30px;
+}
+.reco-quickadd__close{
+  position:absolute; top:8px; right:8px; border:none; background:transparent;
+  font-size:35px; line-height:1; cursor:pointer;color:#000 !important;
+}
+.reco-quickadd__head{ display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+.reco-quickadd__thumb img{ width:120px; height:auto; object-fit:cover; border-radius:8px; display:block; }
+.reco-quickadd__title{ font-weight:600; font-size:1rem; line-height:1.3; }
+.reco-quickadd__options{ display:grid; gap:10px; margin:12px 0; }
+.reco-quickadd__options label{ display:block; font-size:.85rem; margin-bottom:6px; opacity:.9; }
+.reco-quickadd__options select{
+  width:100%; border:1px solid rgba(0,0,0,.15); border-radius:8px; padding:.6rem .7rem; background:#fff;
+}
+.reco-quickadd__qty{ display:flex; align-items:center; gap:10px; margin:8px 0 14px; }
+.reco-quickadd__qty input{
+  width:90px; border:1px solid rgba(0,0,0,.15); border-radius:8px; padding:.45rem .6rem;
+}
+.reco-quickadd__status{ min-height:1.2em; font-size:.9rem; opacity:.9; margin-bottom:10px; }
+.reco-quickadd__submit{
+  width:100%; padding:.9rem 1rem; border-radius:10px; border:none;
+  background:var(--fundoadd); color:var(--fonteadd);
+  font-weight:600; cursor:pointer; transition:.2s;
+}
+.reco-quickadd__submit[disabled]{ opacity:.5; cursor:not-allowed; }
+.reco-quickadd__submit:hover:not([disabled]){ filter:brightness(1.05); transform:translateY(-1px); }
+
+/* Título do QA vira "coluna" para o preço ficar logo abaixo */
+.reco-quickadd__head { align-items: flex-start; }
+.reco-quickadd__title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 1.05rem;           /* leve aumento no título */
+}
+
+/* Linha de preço sob o título */
+.qa-price-line { font-size: 1.05rem; line-height: 1.2; font-weight: 700; }
+.qa-price-line .qa-price__compare {
+  font-weight: 500;
+  text-decoration: line-through;
+  opacity: .7;
+  font-size: .9em;               /* um pouco menor que o preço atual */
+  margin-left: .4rem;
+}
+
+/* Selects das opções: fonte maior */
+.reco-quickadd__options select {
+  font-size: 1rem;               /* ↑ */
+  padding: .7rem .8rem;          /* um pouco mais alto/largo */
+}
+
+/* Botão Adicionar ao carrinho: fonte maior */
+.reco-quickadd__submit {
+  font-size: 1.05rem;            /* ↑ */
+  padding: 1rem 1.15rem;         /* ↑ */
+}
+
+
+{% endstylesheet %}

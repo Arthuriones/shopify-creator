@@ -1,0 +1,70 @@
+{%- comment -%}
+  snippets/breadcrumbs.liquid
+{%- endcomment -%}
+
+<nav class="breadcrumbs" role="navigation" aria-label="Breadcrumb">
+  <a href="{{ routes.root_url }}">Home</a>
+  {%- assign sep = '<span class="breadcrumbs__sep" aria-hidden="true">›</span>' -%}
+
+  {%- case template.name -%}
+    {%- when 'collection' -%}
+      {{ sep }}<span aria-current="page">{{ collection.title }}</span>
+
+    {%- when 'product' -%}
+      {%- if collection -%}
+        {{ sep }}<a href="{{ collection.url }}">{{ collection.title }}</a>
+      {%- else -%}
+        <!-- placeholder para JS inserir a coleção se o usuário veio de /collections/... -->
+        <span class="js-bc-collection"></span>
+      {%- endif -%}
+      {{ sep }}<span aria-current="page">{{ product.title }}</span>
+
+    {%- else -%}
+      <!-- outros templates, opcional -->
+  {%- endcase -%}
+</nav>
+
+
+
+<script>
+(function(){
+  // Só roda no produto E quando não há "collection" via Liquid
+  var placeholder = document.querySelector('.js-bc-collection');
+  if(!placeholder) return;
+
+  var ref = document.referrer || '';
+  // Garante que o referrer seja do mesmo domínio
+  if(ref.indexOf(location.origin) !== 0){ placeholder.remove(); return; }
+
+  // Procura padrão /collections/<handle>
+  var m = ref.match(/\/collections\/([^\/\?#]+)/i);
+  if(!m){ placeholder.remove(); return; }
+  var handle = m[1];
+
+  function titleFromHandle(h){
+    return decodeURIComponent(h).replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+  }
+
+  function inject(title){
+    var span = document.createElement('span');
+    span.innerHTML =
+      '<span class="breadcrumbs__sep" aria-hidden="true">›</span>' +
+      '<a href="{{ routes.root_url }}/collections/'+ handle +'">'+ title +'</a>';
+    placeholder.replaceWith(span);
+  }
+
+  // tenta pegar o título real da coleção
+  fetch('/collections/' + handle + '.json')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data){
+      if(data && data.collection && data.collection.title){
+        inject(data.collection.title);
+      }else{
+        inject(titleFromHandle(handle));
+      }
+    })
+    .catch(function(){
+      inject(titleFromHandle(handle));
+    });
+})();
+</script>

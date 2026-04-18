@@ -1,0 +1,614 @@
+{% liquid
+  assign menu_content_type = block.settings.menu_style | default: 'text'
+  assign image_border_radius = block.settings.image_border_radius
+  assign color_scheme_classes = ''
+  assign color_scheme_setting_id = 'color_scheme_' | append: section.settings.menu_row
+  assign current_color_scheme = block.settings.color_scheme
+  assign parent_color_scheme = section.settings[color_scheme_setting_id]
+
+  if parent_color_scheme.id != current_color_scheme.id
+    assign color_scheme_classes = ' color-' | append: current_color_scheme
+  endif
+
+  # Check if header and menu colors match. This is used to apply different padding styles in css
+  if parent_color_scheme.settings.background.rgb == current_color_scheme.settings.background.rgb
+    assign color_scheme_classes = color_scheme_classes | append: ' color-scheme-matches-parent'
+  endif
+
+  if block.settings.menu_style == 'featured_collections'
+    assign ratio = block.settings.featured_collections_aspect_ratio
+  elsif block.settings.menu_style == 'featured_products'
+    assign ratio = block.settings.featured_products_aspect_ratio
+  endif
+%}
+
+{% capture children_desktop %}
+  {% for link in block.settings.menu.links %}
+    <li
+      role="presentation"
+      class="menu-list__list-item"
+      on:focus="/activate"
+      on:blur="/deactivate"
+      on:pointerenter="/activate"
+      on:pointerleave="/deactivate"
+    >
+      <a
+        href="{{ link.url }}"
+        class="menu-list__link{% if link.active %} menu-list__link--active{% endif %}"
+        {%- if link.links != blank -%}
+          aria-controls="submenu-{{ forloop.index }}"
+          aria-haspopup="true"
+          aria-expanded="false"
+        {%- endif -%}
+        ref="menuitem"
+      >
+        <span class="menu-list__link-title">{{- link.title -}}</span>
+
+        {%- if link.links != blank -%}
+          <svg focusable="false" width="12" height="12" class="menu-caret icon icon--arrow-bottom" style="margin-left:5px; margin-bottom:-3px" viewBox="0 0 12 8" role="presentation" aria-hidden="true">
+            <path stroke="currentColor" stroke-width="2" d="M10 2L6 6 2 2" fill="none" stroke-linecap="square"></path>
+          </svg>
+        {%- endif -%}
+      </a>
+
+      {%- if link.links != blank -%}
+        <div class="menu-list__submenu{{ color_scheme_classes }}" ref="submenu[]">
+          <div
+            id="submenu-{{ forloop.index }}"
+            class="menu-list__submenu-inner"
+            style="{% render 'submenu-font-styles', settings: block.settings %}"
+          >
+            {%- comment -%} Seu nested submenu xmega (mantido igual) {%- endcomment -%}
+            <nav class="xmega" aria-label="{{ link.title | escape }}">
+              <ul class="xmega__list" role="menu">
+                {%- for child in link.links -%}
+  {%- assign has_grandchildren = false -%}
+  {%- if child.links != blank -%}
+    {%- assign has_grandchildren = true -%}
+  {%- endif -%}
+                  <li class="xmega__item{% if has_grandchildren %} has-children{% endif %}" role="none">
+                    <a
+                      href="{{ child.url }}"
+                      class="xmega__link"
+                      role="menuitem"
+                      {% if has_grandchildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
+                    >
+                      <span class="xmega__title">{{ child.title }}</span>
+                      {% if has_grandchildren %}
+                        <svg class="xmega__caret" viewBox="0 0 12 8" width="12" height="12" aria-hidden="true" focusable="false">
+                          <path d="M10 2L6 6 2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/>
+                        </svg>
+                      {% endif %}
+                    </a>
+
+                    {% if has_grandchildren %}
+                      <div class="xmega__flyout" role="group" aria-label="{{ child.title | escape }}">
+                        <ul class="xmega__sublist" role="menu">
+                          {% for grand in child.links %}
+                            <li class="xmega__subitem" role="none">
+                              <a href="{{ grand.url }}" class="xmega__sublink" role="menuitem">
+                                {{ grand.title }}
+                              </a>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                    {% endif %}
+                  </li>
+                {%- endfor -%}
+              </ul>
+            </nav>
+
+          </div>
+        </div>
+      {%- endif -%}
+    </li>
+  {% endfor %}
+{% endcapture %}
+
+
+{% capture children %}
+  {% for link in block.settings.menu.links %}
+    <li
+      role="presentation"
+      class="menu-list__list-item"
+      on:focus="/activate"
+      on:blur="/deactivate"
+      on:pointerenter="/activate"
+      on:pointerleave="/deactivate"
+    >
+     <a
+  href="{{ link.url }}"
+  class="menu-list__link{% if link.active %} menu-list__link--active{% endif %}"
+  {%- if link.links != blank -%}
+    aria-controls="submenu-{{ forloop.index }}"
+    aria-haspopup="true"
+    aria-expanded="false"
+  {%- endif -%}
+  ref="menuitem"
+>
+  <span class="menu-list__link-title">{{- link.title -}}</span>
+
+  {%- if link.links != blank -%}
+    <svg focusable="false" width="12" height="12" class="menu-caret icon icon--arrow-bottom" style="margin-left:5px; margin-bottom:-3px" viewBox="0 0 12 8" role="presentation" aria-hidden="true">
+      <path stroke="currentColor" stroke-width="2" d="M10 2L6 6 2 2" fill="none" stroke-linecap="square"></path>
+    </svg>
+  {%- endif -%}
+</a>
+      {%- if link.links != blank -%}
+        <div class="menu-list__submenu{{ color_scheme_classes }}" ref="submenu[]">
+          <div
+            id="submenu-{{ forloop.index }}"
+            class="menu-list__submenu-inner"
+            style="{% render 'submenu-font-styles', settings: block.settings %}"
+          >
+            {% assign list_id = 'MegaMenuList-' | append: forloop.index %}
+            {%- comment -%} Nested submenu com caret e flyout à direita {%- endcomment -%}
+<nav class="xmega" aria-label="{{ link.title | escape }}">
+  <ul class="xmega__list" role="menu">
+    {%- for child in link.links -%}
+      {%- assign has_grandchildren = false -%}
+{%- if child.links != blank -%}
+  {%- assign has_grandchildren = true -%}
+{%- endif -%}
+      <li class="xmega__item{% if has_grandchildren %} has-children{% endif %}" role="none">
+        <a
+          href="{{ child.url }}"
+          class="xmega__link"
+          role="menuitem"
+          {% if has_grandchildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
+        >
+          <span class="xmega__title">{{ child.title }}</span>
+          {% if has_grandchildren %}
+            <svg class="xmega__caret" viewBox="0 0 12 8" width="12" height="12" aria-hidden="true" focusable="false">
+              <path d="M10 2L6 6 2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/>
+            </svg>
+          {% endif %}
+        </a>
+
+        {% if has_grandchildren %}
+          <div class="xmega__flyout" role="group" aria-label="{{ child.title | escape }}">
+            <ul class="xmega__sublist" role="menu">
+              {% for grand in child.links %}
+                <li class="xmega__subitem" role="none">
+                  <a href="{{ grand.url }}" class="xmega__sublink" role="menuitem">
+                    {{ grand.title }}
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </li>
+    {%- endfor -%}
+  </ul>
+</nav>
+          </div>
+        </div>
+      {%- endif -%}
+    </li>
+  {% endfor %}
+  <li
+    class="menu-list__list-item"
+    role="presentation"
+    slot="more"
+    on:focus="/activate"
+    on:blur="/deactivate"
+    on:pointerenter="/activate"
+    on:pointerleave="/deactivate"
+  >
+       <button
+      class="button menu-list__link button-unstyled"
+      type="button"
+      aria-haspopup="true"
+      aria-expanded="false"
+      aria-label="{{ 'actions.more' | t }}"
+    >
+      <span class="menu-list__link-title">{{ 'actions.more' | t }}</span>
+    </button>
+  </li>
+{% endcapture %}
+
+<nav header-menu data-submenu="narrow">
+  <!-- DESKTOP: sem overflow-list, quebra de linha normal -->
+  <div class="menu-list menu-list--desktop" style="{% render 'menu-font-styles', settings: block.settings %}">
+    <ul class="menu-list__desktop-wrap{{ color_scheme_classes }}">
+      {{ children_desktop }}
+    </ul>
+  </div>
+
+  <!-- MOBILE: mantém overflow-list exatamente como era -->
+  <div class="menu-list menu-list--mobile" style="{% render 'menu-font-styles', settings: block.settings %}">
+    {% assign class = 'overflow-menu' | append: color_scheme_classes %}
+    {% render 'overflow-list', class: class, ref: 'overflowMenu', children: children, minimum-items: 2 %}
+  </div>
+</nav>
+
+{% stylesheet %}
+@media (min-width: 990px) {
+  /* 1) Cada item do menu vira referência para posicionar o submenu */
+  .menu-list__list-item { position: relative; }
+
+  /* 2) Submenu fica logo abaixo do item, largura até 200px */
+  .menu-list__list-item > .menu-list__submenu {
+        left: -30px;
+        right: auto;
+        top: calc(100% + 2px);
+        width: max-content;
+        padding-inline: 30px;
+        clip-path: none;
+        border: 1px solid rgb(0 0 0 / 12%);
+  }
+
+  /* 3) Remove a camada de “fundo” full-width do Vessel */
+  .overflow-menu::after { display: none !important; }
+
+  /* 4) Desliga o grid que empurra o conteúdo para a coluna 2/centro */
+  .menu-list__submenu-inner {
+    grid-column: auto !important;
+    display: block !important;
+    width: 100%;
+    padding: var(--padding-sm);
+    justify-content: flex-start !important;
+    text-align: left !important;
+    opacity: var(--submenu-content-opacity);
+  }
+
+  /* 5) Lista simples em uma coluna, links ocupam toda a largura */
+  .menu-list__submenu-inner .mega-menu__list,
+  .menu-list__submenu-inner ul {
+    display: block !important;
+    columns: auto !important;
+    column-gap: 0 !important;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-width: 100%;
+  }
+
+  .menu-list__submenu-inner .mega-menu__link {
+    display: block !important;
+    padding: .5rem 1rem;
+    text-align: left !important;
+    white-space: normal !important; /* deixa quebrar linha quando precisar */
+    word-break: normal !important;
+    hyphens: auto;
+  }
+
+  /* 6) Garante que o contêiner do overflow não imponha grid de layout */
+  .menu-list--mobile .overflow-menu::part(overflow),
+  .menu-list--mobile .overflow-menu::part(overflow-list) {
+     display: flex !important;
+				        grid-template-columns: none!important;
+				        padding-inline: 0!important;
+				        flex-direction: row;
+				        gap: 20px;
+				        justify-content: space-around
+  }
+  .mega-menu.section.section--full-width-margin.section--page-width {
+    display: block !important;
+}
+}
+
+
+.menu-list__link {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem; /* espaço suave entre texto e caret */
+}
+
+.menu-caret {
+  transition: transform 0.3s var(--animation-easing, ease);
+}
+
+/* gira a setinha quando o submenu está aberto */
+.menu-list__link[aria-expanded='true'] .menu-caret {
+  transform: rotate(180deg);
+}
+
+.menu-list:not(:has(.menu-list__list-item:hover)) .menu-list__link--active,.menu-list .menu-list__list-item .menu-list__link,.menu-list .menu-list__list-item[slot=overflow] .menu-list__link[aria-expanded=true]{
+		
+				    font-size: 15px!important;
+}
+
+/* ========= Nested submenu (xmega) ========= */
+
+/* Base e reset para evitar herdar estilos “título maior” do mega-menu nativo */
+.xmega { font: inherit; color: inherit; }
+.xmega__list,
+.xmega__sublist { list-style:none; margin:0; padding:0; }
+
+.xmega__item { position: relative; }
+.xmega__link {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:.5rem; padding:.5rem .75rem; text-decoration:none;
+  line-height:1.25; white-space:nowrap;
+}
+.xmega__title { font-weight:500; font-size: var(--font-size-100, 15px); }
+.xmega__caret { transition: transform .25s var(--animation-easing, ease); }
+
+.xmega__sublink {
+  display:block; padding:.5rem .75rem; text-decoration:none; line-height:1.25;
+  font-size: var(--font-size-90, 14px);
+}
+
+/* Estados de foco/hover (herdam as cores do esquema atual) */
+.xmega__link:hover,
+.xmega__sublink:hover { opacity:.9; }
+
+/* ---- Desktop: flyout à direita no hover ---- */
+@media (min-width: 990px){
+  .xmega__flyout{
+    position:absolute; top:0; left:100%;
+    min-width: 220px;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    display:none; z-index: 20; /* acima do submenu principal */
+  }
+  .xmega__item.has-children:hover > .xmega__flyout { display:block; }
+
+  /* Gira caret quando pai está “ativo” por hover */
+  .xmega__item.has-children:hover > .xmega__link .xmega__caret { transform: rotate(180deg); }
+
+  /* Se perto da borda direita, viramos para a esquerda (classe aplicada via JS) */
+  .xmega__flyout.xmega__flyout--left {
+    left: auto; right: 100%;
+  }
+}
+
+/* ---- Mobile: acordeão por clique ---- */
+@media (max-width: 989px){
+  .xmega__flyout{ display:none; }
+  .xmega__item.is-open > .xmega__flyout{ display:block; }
+  .xmega__item.is-open > .xmega__link .xmega__caret{ transform: rotate(180deg); }
+}
+
+/* Harmoniza o tamanho de fonte do submenu com o menu superior */
+.menu-list__submenu-inner .xmega__link { font-size: 15px; }
+.menu-list__submenu-inner .xmega__sublink { font-size: 14px; }
+
+
+
+/* Desktop: caret do submenu apontando para a direita (e sem girar ao abrir) */
+@media (min-width: 990px){
+  /* seta padrão apontando para a direita */
+  .menu-list__submenu-inner .xmega__link .xmega__caret{
+    transform: rotate(-90deg);
+  }
+  /* mantém para a direita ao hover/aberto no desktop */
+  .xmega__item.has-children:hover > .xmega__link .xmega__caret,
+  .xmega__item.is-open > .xmega__link .xmega__caret{
+    transform: rotate(-270deg);
+  }
+}
+
+/* ====== Mantém submenus abertos enquanto o usuário rola dentro deles (desktop) ====== */
+@media (min-width: 990px) {
+  /* Painel principal que abre abaixo do item */
+  .menu-list__list-item > .menu-list__submenu {
+    /* já tem left/top/width nas suas regras; mantemos */
+    /* Limita o painel à viewport e deixa rolar dentro */
+    max-height: calc(100vh - var(--header-height, 72px) - 24px);
+    /* Não rolamos aqui, e sim no conteúdo interno para preservar padding/estilos */
+    overflow: visible;
+    z-index: 60; /* garante sobreposição sobre o conteúdo da página */
+  }
+
+  /* Conteúdo do submenu que realmente vai rolar */
+  .menu-list__submenu-inner {
+    max-height: inherit;              /* herda a altura máxima do contêiner */
+    overflow: auto;                   /* rolagem interna */
+    overscroll-behavior: contain;     /* não deixa rolagem vazar para a página */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable both-edges; /* evita layout “pular” com barra de rolagem */
+  }
+
+  /* Flyout à direita (nível neto) também com rolagem própria */
+  .xmega__flyout {
+    max-height: calc(100vh - var(--header-height, 72px) - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    z-index: 70; /* acima do submenu pai */
+  }
+}
+
+/* Dica opcional: cursor indicando que há rolagem */
+@media (min-width: 990px) {
+  .menu-list__submenu-inner,
+  .xmega__flyout {
+    cursor: default;
+  }
+}
+
+/* Esconde a barra de rolagem, mantendo o scroll */
+@media (min-width: 990px) {
+  .menu-list__submenu-inner,
+  .xmega__flyout {
+    /* Firefox */
+    scrollbar-width: none;
+    /* IE/Edge Legacy */
+    -ms-overflow-style: none;
+  }
+  .menu-list__submenu-inner::-webkit-scrollbar,
+  .xmega__flyout::-webkit-scrollbar {
+    /* Chrome/Safari/Edge Chromium */
+    width: 0;
+    height: 0;
+    background: transparent;
+  }
+}
+@media (min-width: 990px) {
+  /* NÃO deixe nenhum desses com overflow que recorte o flyout */
+  .menu-list__list-item,
+  .menu-list__submenu,
+  .menu-list__submenu-inner,
+  .xmega__list {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Alguns temas usam clip-path para animar o dropdown e isso também recorta */
+  .menu-list__submenu {
+    clip-path: none !important;
+  }
+
+  /* Garante que o flyout fique por cima */
+  .xmega__flyout {
+    z-index: 999 !important;
+  }
+}
+
+/* Switch desktop/mobile sem mexer na lógica do tema */
+@media (min-width: 990px) {
+  .menu-list--mobile { display: none !important; }
+  .menu-list--desktop { display: block !important; }
+}
+
+@media (max-width: 989px) {
+  .menu-list--desktop { display: none !important; }
+  .menu-list--mobile { display: block !important; }
+}
+
+/* Layout do menu desktop com quebra de linha */
+@media (min-width: 990px) {
+  .menu-list__desktop-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0px 20px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    justify-content: center;
+  }
+
+  .menu-list__desktop-wrap .menu-list__list-item {
+    position: relative; /* mantém submenu “ancorado” no item */
+  }
+}
+@media (max-width: 990px) {
+.header__row.header__row--mobile.desktop\:hidden.color-scheme-1 {
+    display: none;
+}
+}
+
+{% endstylesheet %}
+
+<script>
+(function(){
+  const mqDesktop = window.matchMedia('(min-width: 990px)');
+
+  // Toggle no mobile (acordeão). No desktop usamos hover + teclado.
+  document.addEventListener('click', function(e){
+    const link = e.target.closest('.xmega__link');
+    if (!link) return;
+
+    const item = link.closest('.xmega__item');
+    const hasChildren = item && item.classList.contains('has-children');
+
+    if (hasChildren && !mqDesktop.matches) {
+      e.preventDefault();
+      const isOpen = item.classList.toggle('is-open');
+      link.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+  }, {passive:false});
+
+  // Teclado no desktop: Enter/Espaço abre o flyout (acessibilidade)
+  document.addEventListener('keydown', function(e){
+    if (!mqDesktop.matches) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const link = e.target.closest('.xmega__link');
+    if (!link) return;
+
+    const item = link.closest('.xmega__item.has-children');
+    if (!item) return;
+
+    e.preventDefault();
+    // Simulamos “hover”: toggla uma classe para manter aberto enquanto focado
+    const open = item.classList.toggle('is-open');
+    link.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  // Fechar quando sai do foco (desktop via teclado)
+  document.addEventListener('focusin', function(e){
+    // fecha quaisquer abertos se o foco saiu do container
+    const openItems = document.querySelectorAll('.xmega__item.is-open');
+    openItems.forEach(it => {
+      if (!it.contains(e.target)) {
+        it.classList.remove('is-open');
+        const a = it.querySelector('.xmega__link[aria-expanded="true"]');
+        if (a) a.setAttribute('aria-expanded','false');
+      }
+    });
+  });
+
+  // Flip automático do flyout quando encostar na borda direita
+  function maybeFlip(el){
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const needsFlip = rect.right > (window.innerWidth - 16);
+    el.classList.toggle('xmega__flyout--left', needsFlip);
+  }
+
+  document.addEventListener('mouseenter', function(e){
+    if (!mqDesktop.matches) return;
+    const item = e.target.closest('.xmega__item.has-children');
+    if (!item) return;
+    const fly = item.querySelector('.xmega__flyout');
+    maybeFlip(fly);
+  }, true);
+
+  window.addEventListener('resize', function(){
+    if (!mqDesktop.matches) return;
+    document.querySelectorAll('.xmega__flyout').forEach(maybeFlip);
+  }, {passive:true});
+})();
+</script>
+
+<script>
+(function(){
+  // Evita que a rolagem do mouse/trackpad feche o menu ao “vazar” para a página
+  function trapPanelWheel(panel){
+    if (!panel) return;
+    panel.addEventListener('wheel', function(e){
+      // Só no desktop
+      if (window.matchMedia('(min-width: 990px)').matches === false) return;
+
+      const el = panel;
+      const delta = e.deltaY;
+      const canScrollUp   = el.scrollTop > 0;
+      const canScrollDown = el.scrollTop + el.clientHeight < el.scrollHeight;
+
+      // Quando há espaço para rolar dentro do painel, não deixa o evento “subir” para o window
+      if ((delta < 0 && canScrollUp) || (delta > 0 && canScrollDown)) {
+        e.stopPropagation();
+        // permite o scroll normal do elemento
+      } else {
+        // Bateu no topo ou no fundo: previne scroll da página
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, { passive: false });
+
+    // Em alguns touchpads, conter também o toque ajuda
+    panel.addEventListener('touchmove', function(e){
+      e.stopPropagation();
+    }, { passive: true });
+  }
+
+  function initScrollTraps(root){
+    root = root || document;
+    root.querySelectorAll('.menu-list__submenu-inner, .xmega__flyout').forEach(trapPanelWheel);
+  }
+
+  // Inicial
+  initScrollTraps(document);
+
+  // Se o tema recriar o menu (ex.: resize, trocar seção), reaplique
+  document.addEventListener('shopify:section:load', function(e){
+    initScrollTraps(e.target);
+  });
+})();
+</script>

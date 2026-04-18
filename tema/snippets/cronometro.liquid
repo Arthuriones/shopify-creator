@@ -1,0 +1,254 @@
+{%- comment -%}
+  Snippet: dm-countdown.liquid
+  Uso: renderizado por um bloco no main-product (ou outra seção de produto)
+{%- endcomment -%}
+
+{%- assign frase          = block.settings.frase           -%}
+{%- assign subfrase       = block.settings.subfrase        | default: 'Acaba em:' -%}
+{%- assign data_fim       = block.settings.data_fim        | escape -%}
+{%- assign hora_fim       = block.settings.hora_fim        | default: '23:59' | escape -%}
+
+{%- assign r_dias         = block.settings.rotulo_dias     | default: 'dias' -%}
+{%- assign r_horas        = block.settings.rotulo_horas    | default: 'horas' -%}
+{%- assign r_min          = block.settings.rotulo_min      | default: 'min' -%}
+{%- assign r_seg          = block.settings.rotulo_seg      | default: 'seg' -%}
+
+{%- assign mt             = block.settings.margem_superior | default: 0 -%}
+{%- assign mb             = block.settings.margem_inferior | default: 0 -%}
+
+{%- assign frase_px       = block.settings.frase_font_size     | default: 22 -%}
+{%- assign frase_bold     = block.settings.frase_bold -%}
+{%- assign sub_px         = block.settings.sub_font_size       | default: 16 -%}
+{%- assign sub_bold       = block.settings.sub_bold -%}
+{%- assign icon_size   = block.settings.icone_tamanho   | default: 20 -%}
+{%- assign icon_stroke = block.settings.icone_espessura | default: 2  -%}
+{%- assign icon_style  = block.settings.icone_estilo    | default: 'fill' -%}
+
+{%- assign root_id        = 'dm-countdown-' | append: block.id -%}
+
+<div
+  id="{{ root_id }}"
+  class="dm-countdown"
+  data-date="{{ data_fim }}"
+  data-time="{{ hora_fim }}"
+  aria-label="Cronômetro de oferta"
+  style="
+    --dm-bg: {{ block.settings.bg_bloco }};
+    --dm-box-bg: {{ block.settings.bg_numeros }};
+    --dm-box-fg: {{ block.settings.cor_numeros }};
+    --dm-text: {{ block.settings.cor_frase }};
+    --dm-icon: {{ block.settings.cor_relogio }};
+    --dm-radius: {{ block.settings.arredondamento }}px;
+    --dm-mt: {{ mt }}px;
+    --dm-mb: {{ mb }}px;
+    --dm-head-size: {{ frase_px }}px;
+    --dm-head-fw: {% if frase_bold %}700{% else %}400{% endif %};
+    --dm-sub-size: {{ sub_px }}px;
+    --dm-sub-fw: {% if sub_bold %}700{% else %}400{% endif %};
+    --dm-icon-size: {{ icon_size }}px;
+--dm-icon-stroke: {{ icon_stroke }}px;
+  "
+>
+  <div class="dm-countdown__wrap">
+    <div class="dm-countdown__bar">
+      <!-- Título no topo, centralizado -->
+     
+     {%- if frase != blank -%}
+      <div class="dm-countdown__headline">{{ frase }}</div>
+{%- endif -%}
+      <!-- Linha com ícone + subfrase (ex.: Acaba em:) -->
+      <div class="dm-countdown__subline">
+        <span class="dm-countdown__icon {% if icon_style == 'stroke' %}icon--stroke{% else %}icon--fill{% endif %}" aria-hidden="true">
+  {% if icon_style == 'stroke' %}
+    <!-- Ícone com traço (espessura controlável) -->
+    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 7v5l4 2"></path>
+    </svg>
+  {% else %}
+    <!-- Ícone cheio (preenchido) -->
+    <svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">
+      <path d="M18.7014 11.3962C18.7014 16.075 14.9085 19.8679 10.2297 19.8679C5.55095 19.8679 1.75806 16.075 1.75806 11.3962C1.75806 6.71746 5.55095 2.92457 10.2297 2.92457C14.9085 2.92457 18.7014 6.71746 18.7014 11.3962ZM10.2297 18.8679C14.3562 18.8679 17.7014 15.5227 17.7014 11.3962C17.7014 7.26974 14.3562 3.92457 10.2297 3.92457C6.10323 3.92457 2.75806 7.26974 2.75806 11.3962C2.75806 15.5227 6.10323 18.8679 10.2297 18.8679Z"></path>
+      <path d="M10.7203 1.7782H9.7392C9.18691 1.7782 8.7392 2.22591 8.7392 2.7782V2.92456H11.7203V2.7782C11.7203 2.22591 11.2726 1.7782 10.7203 1.7782ZM9.7392 0.778198C8.63463 0.778198 7.7392 1.67363 7.7392 2.7782V3.92456H12.7203V2.7782C12.7203 1.67363 11.8249 0.778198 10.7203 0.778198H9.7392Z" fill-rule="evenodd"></path>
+      <path d="M8.98448 11.3963C8.98448 10.7086 9.54201 10.1511 10.2298 10.1511C10.9175 10.1511 11.475 10.7086 11.475 11.3963C11.475 12.0841 10.9175 12.6416 10.2298 12.6416C9.54201 12.6416 8.98448 12.0841 8.98448 11.3963Z"></path>
+      <path d="M9.72974 11.3962C9.72974 11.1201 9.95359 10.8962 10.2297 10.8962H15.2108C15.487 10.8962 15.7108 11.1201 15.7108 11.3962C15.7108 11.6724 15.487 11.8962 15.2108 11.8962H10.2297C9.95359 11.8962 9.72974 11.6724 9.72974 11.3962Z"></path>
+      <path d="M10.2297 5.91517C10.5059 5.91517 10.7297 6.13902 10.7297 6.41517V8.90572C10.7297 9.18186 10.5059 9.40572 10.2297 9.40572C9.95359 9.40572 9.72974 9.18186 9.72974 8.90572V6.41517C9.72974 6.13902 9.95359 5.91517 10.2297 5.91517Z"></path>
+      <path d="M13.9544 7.30685C14.1497 7.50211 14.1497 7.8187 13.9544 8.01396L12.1934 9.77505C11.9981 9.97031 11.6815 9.97031 11.4862 9.77505C11.291 9.57978 11.291 9.2632 11.4862 9.06794L13.2473 7.30685C13.4426 7.11159 13.7592 7.11159 13.9544 7.30685Z"></path>
+    </svg>
+  {% endif %}
+</span>
+        <span class="dm-countdown__label">{{ subfrase }}</span>
+      </div>
+
+      <!-- Caixas do cronômetro -->
+      <div class="dm-countdown__boxes" role="timer" aria-live="polite" aria-atomic="true">
+        <span class="dm-countdown__box">
+          <span class="dm-countdown__num" data-part="days">00</span>
+          <span class="dm-countdown__unit">{{ r_dias }}</span>
+        </span>
+        <span class="dm-countdown__box">
+          <span class="dm-countdown__num" data-part="hours">00</span>
+          <span class="dm-countdown__unit">{{ r_horas }}</span>
+        </span>
+        <span class="dm-countdown__box">
+          <span class="dm-countdown__num" data-part="minutes">00</span>
+          <span class="dm-countdown__unit">{{ r_min }}</span>
+        </span>
+        <span class="dm-countdown__box">
+          <span class="dm-countdown__num" data-part="seconds">00</span>
+          <span class="dm-countdown__unit">{{ r_seg }}</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Escopo por ID para evitar vazamento entre blocos */
+  #{{ root_id }} { border-radius: var(--dm-radius); margin-top: var(--dm-mt); margin-bottom: var(--dm-mb);width: 100%;border: 1px solid #bdbdbd70; }
+  #{{ root_id }} .dm-countdown__wrap{ width:100%; margin-inline:auto; }
+  #{{ root_id }} .dm-countdown__bar{
+    display:flex; flex-direction:column; align-items:center; gap:.25rem;
+    padding:10px; background: var(--dm-bg); color: var(--dm-text);
+    text-align:center;
+  }
+
+  /* Headline (topo) */
+  #{{ root_id }} .dm-countdown__headline{
+    margin:0; color: var(--dm-text);
+    font-size: var(--dm-head-size); font-weight: var(--dm-head-fw); line-height:1.2;
+  }
+
+  /* Sub-linha: ícone + texto (ex.: Acaba em:) */
+  #{{ root_id }} .dm-countdown__subline{
+    display:flex; align-items:center; gap:.45rem; justify-content:center;
+    font-size: var(--dm-sub-size); font-weight: var(--dm-sub-fw); color: var(--dm-text);
+  }
+  #{{ root_id }} .dm-countdown__icon{ line-height:1; display:inline-flex; }
+
+  /* Caixas */
+  #{{ root_id }} .dm-countdown__boxes{ display:flex; gap:.5rem; }
+  #{{ root_id }} .dm-countdown__box{
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    min-width:56px; padding:10px 8px; background: var(--dm-box-bg);
+    border-radius: calc(var(--dm-radius) - 6px);
+  }
+  #{{ root_id }} .dm-countdown__num{
+    font-weight:800; letter-spacing:.02em; line-height:1; color: var(--dm-box-fg); font-size: 1.05rem;
+  }
+  #{{ root_id }} .dm-countdown__unit{
+    margin-top:4px; font-size:.7rem; line-height:1; color: var(--dm-box-fg); opacity:.85; font-weight:600;
+  }
+
+  @media (max-width: 480px){
+    #{{ root_id }} .dm-countdown__bar{ padding:.7rem .9rem; gap:.5rem; }
+    #{{ root_id }} .dm-countdown__box{ min-width:2.15rem; padding:.35rem .4rem; }
+    #{{ root_id }} .dm-countdown__num{ font-size: .95rem; }
+    #{{ root_id }} .dm-countdown__unit{ font-size: .65rem; }
+  }
+
+
+  /* 1) Garante raio no box geral (e clipe para evitar bleed) */
+  #{{ root_id }}{
+    border-radius: var(--dm-radius);
+    margin-top: var(--dm-mt);
+    margin-bottom: var(--dm-mb);
+    overflow: hidden; /* novo */
+  }
+
+  /* 2) Aplica o mesmo raio no container com background */
+  #{{ root_id }} .dm-countdown__bar{
+    display:flex; flex-direction:column; align-items:center; gap:.55rem;
+    padding:14px; background: var(--dm-bg); color: var(--dm-text);
+    text-align:center;
+    border-radius: var(--dm-radius); /* novo */
+  }
+
+  /* 3) Mantém o raio das caixinhas relativo ao geral, evitando valores negativos */
+  #{{ root_id }} .dm-countdown__box{
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    min-width:56px; padding:10px 8px; background: var(--dm-box-bg);
+    border-radius: var(--dm-radius) ; /* ajustado */
+  }
+
+  /* Tamanho do ícone por variável */
+#{{ root_id }} .dm-countdown__icon svg{
+  width: var(--dm-icon-size);
+  height: var(--dm-icon-size);
+}
+
+/* Estilo traço: usa stroke com espessura variável */
+#{{ root_id }} .icon--stroke svg{
+  fill: none;
+  stroke: var(--dm-icon);
+  stroke-width: var(--dm-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Estilo cheio: mantém preenchido na cor do ícone */
+#{{ root_id }} .icon--fill svg path{
+  fill: var(--dm-icon);
+}
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('{{ root_id }}');
+  if (!root) return;
+
+  var dateStr = root.getAttribute('data-date') || '';
+  var timeStr = root.getAttribute('data-time') || '23:59';
+
+  function parseDeadline(ds, ts){
+    var y, m, d;
+    var m1 = ds.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);      // DD/MM/AAAA
+    var m2 = ds.match(/^(\d{4})-(\d{2})-(\d{2})$/);             // AAAA-MM-DD
+    if (m1){ d = parseInt(m1[1],10); m = parseInt(m1[2],10)-1; y = parseInt(m1[3],10); }
+    else if (m2){ y = parseInt(m2[1],10); m = parseInt(m2[2],10)-1; d = parseInt(m2[3],10); }
+    else { root.style.display = 'none'; return null; }
+
+    var hh = 23, mm = 59;
+    var hm = (ts || '').match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+    if (hm){
+      hh = Math.min(23, parseInt(hm[1],10) || 0);
+      mm = Math.min(59, hm[2] ? parseInt(hm[2],10) || 0 : 0);
+    }
+    return new Date(y, m, d, hh, mm, 0, 0);
+  }
+
+  var deadline = parseDeadline(dateStr, timeStr);
+  if (!deadline) return;
+
+  var el = {
+    days: root.querySelector('[data-part="days"]'),
+    hours: root.querySelector('[data-part="hours"]'),
+    minutes: root.querySelector('[data-part="minutes"]'),
+    seconds: root.querySelector('[data-part="seconds"]')
+  };
+
+  function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+
+  function tick(){
+    var diff = deadline.getTime() - Date.now();
+    if (diff <= 0){
+      root.style.display = 'none'; // oculta quando expira
+      clearInterval(timer);
+      return;
+    }
+    var s = Math.floor(diff / 1000);
+    var days = Math.floor(s / 86400);
+    var hours = Math.floor((s % 86400) / 3600);
+    var minutes = Math.floor((s % 3600) / 60);
+    var seconds = s % 60;
+
+    if (el.days)    el.days.textContent    = days < 10 ? '0' + days : '' + days;
+    if (el.hours)   el.hours.textContent   = pad2(hours);
+    if (el.minutes) el.minutes.textContent = pad2(minutes);
+    if (el.seconds) el.seconds.textContent = pad2(seconds);
+  }
+
+  tick();
+  var timer = setInterval(tick, 1000);
+})();
+</script>

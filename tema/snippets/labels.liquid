@@ -1,0 +1,81 @@
+<style>
+
+:root {
+ --back-vendidos: {{ block.settings.background_vendidos }};
+    --fonte-vendidos: {{ block.settings.fonte_vendidos }};
+    --back-exclusivo: {{ block.settings.background_exclusividade }};
+    --fonte-exclusivo: {{ block.settings.fonte_exclusividade }};
+
+    --back-exclusivo2: {{ block.settings.background_exclusividade2 }};
+    --fonte-exclusivo2: {{ block.settings.fonte_exclusividade2 }};
+
+
+    --margin-toplabels:  {{ block.settings.margin-toplabels }}px;
+--margin-bottomlabels:  {{ block.settings.margin-bottomlabels }}px;
+
+    --fundonacional: {{ block.settings.fundonacional }};
+    --bordanacional: {{ block.settings.bordanacional }};
+    --fontenacional: {{ block.settings.fontenacional }};
+
+
+}
+
+
+.labels-titulo {
+    display: flex;
+    flex-direction: row;
+    margin-top:var(--margin-toplabels);
+    margin-bottom: var(--margin-bottomlabels);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+
+@media (max-width: 1000px) {
+.labels-titulo {
+  padding: 0px !important;
+  font-size: 10px !important;
+  
+}
+}
+
+
+
+</style>
+
+
+<div class="labels-titulo">
+
+
+
+  {%- if product.tags contains 'nacional' or block.settings.show_nacional -%}  
+    <span style="padding: 2px 5px;
+    
+    border-radius: var(--arredonda-label-desconto);
+    background-color: var(--fundonacional);
+    color: var(--fontenacional);
+    border: solid 1px var(--bordanacional);
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-right: 5px;
+    font-weight: 600;LINE-HEIGHT: 1.7;"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--twemoji" preserveAspectRatio="xMidYMid meet" fill="none" width="18px" height="18px"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><path fill="#009B3A" d="M36 27a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v18z"></path><path fill="#FEDF01" d="M32.728 18L18 29.124L3.272 18L18 6.875z"></path><circle fill="#002776" cx="17.976" cy="17.924" r="6.458"></circle><path fill="#CBE9D4" d="M12.277 14.887a6.406 6.406 0 0 0-.672 2.023c3.995-.29 9.417 1.891 11.744 4.595c.402-.604.7-1.28.883-2.004c-2.872-2.808-7.917-4.63-11.955-4.614z"></path><path fill="#88C9F9" d="M12 18.233h1v1h-1zm1 2h1v1h-1z"></path><path fill="#55ACEE" d="M15 18.233h1v1h-1zm2 1h1v1h-1zm4 2h1v1h-1zm-3 1h1v1h-1zm3-6h1v1h-1z"></path><path fill="#3B88C3" d="M19 20.233h1v1h-1z"></path></g></svg> {{ block.settings.envionacional }}</span>
+     {%- endif -%}
+
+
+       {%- if block.settings.show_vendidos -%} 
+   {% assign random = product.id | divided_by: 20022 | modulo: 9550 %}   
+      <span class="quantitysell" style="color: var(--fonte-vendidos); font-weight: 600;background: var(--back-vendidos);padding: 3px 5px;border-radius: var(--arredonda-label-desconto);margin-right: 5px;">{{ random }} VENDIDOS</span>
+   {%- endif -%}
+      
+    {%- if block.settings.show_exclusividade -%}  
+    <span class="quantitysell" style="padding: 3px 5px; font-weight: 600;border-radius: var(--arredonda-label-desconto);background-color: var(--back-exclusivo);color: var(--fonte-exclusivo);margin-right: 5px;">{{ block.settings.exlusividade_label }}</span>
+     {%- endif -%}
+
+    {%- if block.settings.show_label3 -%}  
+    <span class="quantitysell" style="padding: 3px 5px; font-weight: 600;border-radius: var(--arredonda-label-desconto);background-color: var(--back-exclusivo2);color: var(--fonte-exclusivo2);">{{ block.settings.exlusividade_label2 }}</span>
+     {%- endif -%}
+
+     
+
+    </div>

@@ -1,0 +1,10 @@
+{
+  "server_url": "wss://nodejs-botserver-production.up.railway.app/",
+  "channel": "1",
+  "player_name": "Amigos Amigos",
+  "elfbot_path": "",
+  "leaders": [
+    "Janja Michelle"
+  ],
+  "enemies": []
+}

@@ -1,0 +1,423 @@
+<style>
+     :root {
+--margin-topmedida:  {{ block.settings.margin-topmedida }}px;
+--margin-bottommedida:  {{ block.settings.margin-bottommedida }}px;
+--popup_button_right         : {{ block.settings.popup_button_right }}px; 
+--popup_size-color           : {{ block.settings.popup_size-color }}; 
+--popup_text_medidas-color   : {{ block.settings.popup_text_medidas-color }}; 
+--popup_border               : {{ block.settings.popup_border }}px;  
+--popup_show-color           : {{ block.settings.popup_show-color }};  
+--popup_text-color           : {{ block.settings.popup_text-color }};             
+
+--popup_text_titulo          : {{ block.settings.icon_popup_titulo }}; 
+
+}
+</style>
+
+<a class="trigger-pop-up" style="display:none">                                                                                        
+<span class="imgregua" style="margin-right: 7px !important;">
+  <svg xmlns="http://www.w3.org/2000/svg" height="2em" viewBox="0 0 576 512" fill="var(--popup_text_medidas-color)"><!--! Font Awesome Free 6.4.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2023 Fonticons, Inc. --><path d="M544 128h-48v88c0 4.42-3.58 8-8 8h-16c-4.42 0-8-3.58-8-8v-88h-64v88c0 4.42-3.58 8-8 8h-16c-4.42 0-8-3.58-8-8v-88h-64v88c0 4.42-3.58 8-8 8h-16c-4.42 0-8-3.58-8-8v-88h-64v88c0 4.42-3.58 8-8 8h-16c-4.42 0-8-3.58-8-8v-88h-64v88c0 4.42-3.58 8-8 8H88c-4.42 0-8-3.58-8-8v-88H32c-17.67 0-32 14.33-32 32v192c0 17.67 14.33 32 32 32h512c17.67 0 32-14.33 32-32V160c0-17.67-14.33-32-32-32z"/></svg>
+  </span>                  
+  <p style="margin: 0; color: var(--popup_text_medidas-color);">{{ block.settings.popup_button-text }}</p>                       
+</a>
+
+{% if product.tags contains 'medidas1'%}
+
+<div class="pop-up-modal">
+  <div class="pop-up-content" role="dialog" aria-modal="true">
+    <button type="button" class="close-button1" aria-label="Fechar">&times;</button>
+    <span class="medidas">{{block.settings.size-product}}</span>
+    <div class="size-chart-scroll">
+      <span class="size-chart-content">
+        <img class="imgsize-pc" src="{{ block.settings.sizeproduct_pc | img_url: '1400x800' }}">
+        <img class="imgsize-celular" src="{{ block.settings.sizeproduct_celular | img_url: '900x1200' }}">
+      </span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .trigger-pop-up {display: flex !important;}  
+</style>
+
+{% endif %}
+
+<!-- Divisão das categoria -->
+
+{% if product.tags contains 'medidas2'%}
+
+<div class="pop-up-modal">
+  <div class="pop-up-content" role="dialog" aria-modal="true">
+    <button type="button" class="close-button1" aria-label="Fechar">&times;</button>
+    <span class="medidas">{{block.settings.size-product2}}</span>
+    <div class="size-chart-scroll">
+      <span class="size-chart-content">
+        <img class="imgsize-pc" src="{{ block.settings.sizeproduct_pc2 | img_url: '1400x800' }}">
+        <img class="imgsize-celular" src="{{ block.settings.sizeproduct_celular2 | img_url: '900x1200' }}">
+      </span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .trigger-pop-up {display: flex !important;}  
+</style>
+
+{% endif %}
+
+<!-- Divisão das categoria -->
+
+{% if product.tags contains 'medidas3'%}
+
+<div class="pop-up-modal">
+  <div class="pop-up-content" role="dialog" aria-modal="true">
+    <button type="button" class="close-button1" aria-label="Fechar">&times;</button>
+    <span class="medidas">{{block.settings.size-product3}}</span>
+    <div class="size-chart-scroll">
+      <span class="size-chart-content">
+        <img class="imgsize-pc" src="{{ block.settings.sizeproduct_pc3 | img_url: '1400x800' }}">
+        <img class="imgsize-celular" src="{{ block.settings.sizeproduct_celular3 | img_url: '900x1200' }}">
+      </span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .trigger-pop-up {display: flex !important;}  
+</style>
+
+{% endif %}
+
+<!-- Divisão das categoria -->
+
+{% if product.tags contains 'medidas4'%}
+<div class="pop-up-modal">
+  <div class="pop-up-content" role="dialog" aria-modal="true">
+    <button type="button" class="close-button1" aria-label="Fechar">&times;</button>
+    <span class="medidas">{{block.settings.size-product4}}</span>
+    <div class="size-chart-scroll">
+      <span class="size-chart-content">
+        <img class="imgsize-pc" src="{{ block.settings.sizeproduct_pc4 | img_url: '1400x800' }}">
+        <img class="imgsize-celular" src="{{ block.settings.sizeproduct_celular4 | img_url: '900x1200' }}">
+      </span>
+    </div>
+  </div>
+</div>  
+
+<style>
+  .trigger-pop-up {display: flex !important;}  
+</style>
+
+{% endif %}
+
+<!-- Divisão das categoria -->
+
+{% if product.tags contains 'medidas5'%}
+<div class="pop-up-modal">
+  <div class="pop-up-content" role="dialog" aria-modal="true">
+    <button type="button" class="close-button1" aria-label="Fechar">&times;</button>
+    <span class="medidas">{{block.settings.size-product5}}</span>
+    <div class="size-chart-scroll">
+      <span class="size-chart-content">
+        <img class="imgsize-pc" src="{{ block.settings.sizeproduct_pc5 | img_url: '1400x800' }}">
+        <img class="imgsize-celular" src="{{ block.settings.sizeproduct_celular5 | img_url: '900x1200' }}">
+      </span>
+    </div>
+  </div>
+</div>  
+
+<style>
+  .trigger-pop-up {display: flex !important;}  
+</style>
+
+{% endif %}
+<!-- Script e Estilo -->
+
+<script>
+(function(){
+  // Retorna o "escopo" da seção do produto (Vessel/Dawn)
+  function scopeOf(el){
+    return el.closest('.product-information, .product-details, section[data-section-type="main-product"], .product, .shopify-section') || document;
+  }
+
+  function init(ctx){
+    (ctx || document).querySelectorAll('.pop-up-modal').forEach(function(modal){
+      if (modal.__inited) return; // evita bind duplicado ao recarregar seção
+      modal.__inited = true;
+
+      const scope   = scopeOf(modal);
+      const trigger = scope.querySelector('.trigger-pop-up');
+      const closeBtn= modal.querySelector('.close-button1');
+
+      function open(){
+        modal.classList.add('show-pop-up');
+        modal.setAttribute('aria-hidden','false');
+        document.documentElement.style.overflow = 'hidden';
+        // Acessibilidade: foca no X
+        closeBtn && closeBtn.focus && closeBtn.focus();
+      }
+      function close(){
+        modal.classList.remove('show-pop-up');
+        modal.setAttribute('aria-hidden','true');
+        document.documentElement.style.overflow = '';
+      }
+      function toggle(){
+        if (modal.classList.contains('show-pop-up')) close(); else open();
+      }
+
+      // Botão/Link que abre
+      if (trigger && !trigger.__bound){
+        trigger.__bound = true;
+        trigger.addEventListener('click', function(e){
+          e.preventDefault();
+          toggle();
+        }, {passive:false});
+      }
+
+      // X fecha
+      if (closeBtn && !closeBtn.__bound){
+        closeBtn.__bound = true;
+        closeBtn.addEventListener('click', function(e){
+          e.preventDefault();
+          close();
+        }, {passive:false});
+      }
+
+      // Clique fora do conteúdo fecha
+      modal.addEventListener('click', function(e){
+        if (e.target === modal) close();
+      });
+
+      // ESC fecha
+      modal.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') close();
+      });
+    });
+  }
+
+  // Inicialização
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ init(document); }, {once:true});
+  } else {
+    init(document);
+  }
+
+  // Re-bind quando o Shopify recarrega/seleciona a seção
+  document.addEventListener('shopify:section:load',  e => init(e.target));
+  document.addEventListener('shopify:section:select',e => init(e.target));
+})();
+</script>
+
+<style>
+  
+  
+.pop-up-modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #33333399;
+  opacity: 0;
+  display: none;
+  transform: scale(1.1);
+  transition: visibility 0s linear 0.25s, opacity 0.25s 0s, transform 0.25s;
+}
+.pop-up-content {
+    position: absolute;
+    max-width: 1000px !important;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--popup_show-color);
+    border: 1px solid var(--popup_text-color);
+    width: auto;
+    max-height: 97vh;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 25px -7px black;
+    overflow: auto;
+}
+  
+.pop-up-content table {table-layout: auto;}
+  
+.close-button {
+    position: absolute;
+    right: 5px;
+    top: 0px;
+    font-weight: 900;
+    cursor: pointer;
+    width: 40px;
+    height:40px;
+    text-align: center;
+    color: var(--popup_text-color);
+    font-size: 40px;
+    cursor: pointer;
+
+    z-index:99;
+    visibility: visible;
+}
+  
+  
+.medidas {  
+ place-content: center;
+    font-size: 25px;
+    color: var(--popup_text_titulo);
+    margin: 13px 0px 0 15px;
+    border-radius: 0.25rem;
+    font-weight: 900 !important;
+    display: flex
+;
+}
+.show-pop-up {
+  z-index: 1000;
+  opacity: 1;
+  display: block;
+  transform: scale(1.0);
+  transition: visibility 0s linear 0s, opacity 0.25s 0s, transform 0.25s;
+}  
+.trigger-pop-up { 
+    line-height: 1;
+    font-size: 11px;
+    display: flex;
+    letter-spacing: 0.04em;
+    color: var(--popup_text-color);
+    cursor: pointer;
+        margin-top: var(--margin-topmedida) !important;
+    margin-bottom: var(--margin-bottommedida) !important;
+    padding: 0px 5px 0px 5px;
+    max-width: max-content;
+    padding-bottom: 0px !important;
+    background: var(--popup_size-color);
+    align-items: center;
+    border-radius: var(--popup_border);     
+} 
+.trigger-pop-up:hover {
+    color: var(--popup_text_medidas-color);
+    opacity: 0.8;
+}  
+.size-chart-content img { 
+    width: 100%;
+    padding: 5px;
+    border-radius: 10px;  
+}  
+.imgregua img {  
+   width: 35px;
+   margin: -2px 4px 0 0px;                                                                                          
+}
+
+
+          
+{% if block.settings.hide_popup_size == true %} 
+          
+.swatch__list_pr {  
+  display: flex;
+  align-items: center;  
+  flex-wrap: wrap;
+}          
+
+{% endif %}                                                                                                    
+
+  
+@media only screen and (max-width: 768px) {
+  
+[data-opname="{{block.settings.popup_name_button | downcase }}"] .swatch__list_pr {display: block;}
+  
+.trigger-pop-up {    
+    margin: 10px 0 0 0;
+    max-width: max-content;    
+}  
+.pop-up-content, .size-chart-content table {    
+    min-width: 90%;
+    max-width: 95% !important;
+    height: fit-content;
+    max-height: 97% !important;
+    margin: 0;
+    padding: 0;
+    
+  
+}
+  
+
+.size-chart-content th, .size-chart-content td {padding: 10px;}
+  
+}
+
+
+
+
+
+
+
+/* evita que o botão seja clipado e melhora o paint no iOS */
+.pop-up-content {
+  position: fixed;                  /* mais estável no mobile */
+  overflow: visible;                /* o scroll vai para o wrapper interno */
+  max-width: 1000px !important;
+  top: 50%;
+  left: 50%;
+  -webkit-transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%);
+  backface-visibility: hidden;
+}
+
+/* wrapper rolável interno */
+.size-chart-scroll {
+  max-height: 85vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 1;
+}
+
+/* botão SEMPRE por cima e sem clipping, com “fade-in” */
+.close-button1 {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  line-height: 34px;
+  text-align: center;
+  font-size: 40px !important;
+  font-weight: 900;
+  color: var(--popup_text-color, #000);
+  background: var(--popup_show-color, #fff);
+      border: none;
+    outline: none !important;
+    cursor: pointer;
+  pointer-events: auto;
+  opacity: 1;                    
+  -webkit-transform: translateZ(0); /* força camada */
+  transform: translateZ(0);
+}
+
+.show-pop-up .close-button1 {
+  opacity: 1;                       /* visível quando modal aberta */
+}
+
+/* garante empilhamento correto contra imagens */
+.size-chart-content { position: relative; z-index: 1; }
+
+@media (max-width: 768px) {
+  .pop-up-content {
+    max-width: 95% !important;
+    max-height: 97vh !important;
+  }
+  .close-button1 { top: 6px; right: 6px; }
+}
+</style>
+
+<style>
+  
+.imgsize-celular {display: none;}
+  
+@media only screen and (max-width: 768px) {
+    
+  .imgsize-pc {display: none;}
+  .imgsize-celular {display: flex;}
+    
+}
+  
+</style>
+

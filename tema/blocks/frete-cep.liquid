@@ -1,0 +1,246 @@
+
+  {% render 'v-Frete-CEP' %}
+
+
+{% schema %}
+{
+  "name": "Frete CEP",
+  "tag": null,
+  "settings": [
+     {
+      "type": "range",
+      "id": "margincep1-top",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margincep1-bottom",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+    
+    {
+        "type": "color",
+        "id": "fretecep_fundo",
+        "label": "Background do box",
+        "default": "#fff"
+      },
+      {
+        "type": "range",
+        "id": "bordaboxfrete",
+        "min": 0,
+        "max": 50,
+        "step": 1,
+        "unit": "px",
+        "label": "Arredondamento Borda Externa",
+        "default": 5
+      },
+      
+      {
+        "type": "range",
+        "id": "bordabtnfrete",
+        "min": 0,
+        "max": 50,
+        "step": 1,
+        "unit": "px",
+        "label": "Arredondamento botão e input",
+        "default": 5
+      },
+
+      {
+        "type": "text",
+        "id": "fretechamada",
+        "label": "Título",
+        "info": "Título do card de frete",
+        "default": "Calcule o Envio e Prazo de Entrega"
+      },
+      {
+        "type": "text",
+        "id": "fretebotaofrase",
+        "label": "Frase botão",
+        "info": "Nome que aparecerá no botão",
+        "default": "Calcular"
+      },
+      {
+        "type": "color",
+        "id": "buscar_frete_btn",
+        "label": "Cor background do botão buscar",
+        "default": "#36b376"
+      },
+      {
+        "type": "color",
+        "id": "buscar_frete_fonte",
+        "label": "Cor da fonte do botão buscar",
+        "default": "#fff"
+      },
+      {
+        "type": "color",
+        "id": "buscar_frete_local",
+        "label": "Cor da localização",
+        "default": "#36b376"
+      },
+      {
+        "type": "color",
+        "id": "buscar_frete_preco",
+        "label": "Cor dos preços no resultado do frete",
+        "default": "#36b376"
+      },
+      {
+        "type": "checkbox",
+        "id": "opcao_frete1",
+        "label": "1º Linha Frete",
+        "info": "Ativar 1º linha do frete",
+        "default": true
+      },
+      {
+        "type": "text",
+        "id": "frete1_nome",
+        "label": "Nome para o frete 1",
+        "info": "Nome para o primeiro frete, utilize termos como Grátis, padrão, PAC etc.",
+        "default": "Padrão"
+      },
+      {
+        "type": "text",
+        "id": "frete1_preco",
+        "label": "Preco Frete 1",
+        "info": "Adicione o preço para primeira opção de frete",
+        "default": "Grátis"
+      },
+      {
+        "type": "text",
+        "id": "frete1_prazo",
+        "label": "Prazo Frete 1",
+        "info": "Adicione o prazo para primeira opção de frete",
+        "default": "8 a 11 dias"
+      },
+      {
+        "type": "checkbox",
+        "id": "opcao_frete2",
+        "label": "2º Linha Frete",
+        "info": "Ativar a 2º linha do frete",
+        "default": true
+      },
+      {
+        "type": "text",
+        "id": "frete2_nome",
+        "label": "Nome para o frete 2",
+        "info": "Nome para o segundo frete, utilize termos como expresso, sedex etc.",
+        "default": "Expresso"
+      },
+      {
+        "type": "text",
+        "id": "frete2_preco",
+        "label": "Preco Frete 2",
+        "info": "Adicione o preço para segunda opção de frete",
+        "default": "R$ 9,79"
+      },
+      {
+        "type": "text",
+        "id": "frete2_prazo",
+        "label": "Prazo Frete 2",
+        "info": "Adicione o prazo para segunda opção de frete",
+        "default": "5 a 7 dias"
+      },
+      {
+        "type": "checkbox",
+        "id": "opcao_frete3",
+        "label": "3º Linha Frete",
+        "info": "Ativar a 3º linha do frete",
+        "default": false
+      },
+      {
+        "type": "text",
+        "id": "frete3_nome",
+        "label": "Nome para o frete 3",
+        "info": "Nome para o terceiro frete, utilize termos como expresso, sedex etc.",
+        "default": "Jadlog"
+      },
+      {
+        "type": "text",
+        "id": "frete3_preco",
+        "label": "Preco Frete 3",
+        "info": "Adicione o preço para terceira opção de frete",
+        "default": "R$ 9,79"
+      },
+      {
+        "type": "text",
+        "id": "frete3_prazo",
+        "label": "Prazo Frete 3",
+        "info": "Adicione o prazo para terceira opção de frete",
+        "default": "5 a 7 dias"
+      },
+      {
+        "type": "checkbox",
+        "id": "opcao_frete4",
+        "label": "4º Linha Frete",
+        "info": "Ativar a 4º linha do frete",
+        "default": false
+      },
+      {
+        "type": "text",
+        "id": "frete4_nome",
+        "label": "Nome para o frete 4",
+        "info": "Nome para o quarto frete, utilize termos como expresso, sedex etc.",
+        "default": "Transportadora"
+      },
+      {
+        "type": "text",
+        "id": "frete4_preco",
+        "label": "Preco Frete 4",
+        "info": "Adicione o preço para quarta opção de frete",
+        "default": "R$ 9,79"
+      },
+      {
+        "type": "text",
+        "id": "frete4_prazo",
+        "label": "Prazo Frete 4",
+        "info": "Adicione o prazo para quarta opção de frete",
+        "default": "5 a 7 dias"
+      },
+      {
+        "type": "checkbox",
+        "id": "opcao_frete5",
+        "label": "5º Linha Frete",
+        "info": "Ativar a 5º linha do frete",
+        "default": false
+      },
+      {
+        "type": "text",
+        "id": "frete5_nome",
+        "label": "Nome para o frete 5",
+        "info": "Nome para o quinto frete, utilize termos como expresso, sedex etc.",
+        "default": "PAC"
+      },
+      {
+        "type": "text",
+        "id": "frete5_preco",
+        "label": "Preco Frete 5",
+        "info": "Adicione o preço para quinta opção de frete",
+        "default": "R$ 9,79"
+      },
+      {
+        "type": "text",
+        "id": "frete5_prazo",
+        "label": "Prazo Frete 5",
+        "info": "Adicione o prazo para quinta opção de frete",
+        "default": "5 a 7 dias"
+      }
+    
+  ],
+  "presets": [
+    {
+      "name": "Frete CEP",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

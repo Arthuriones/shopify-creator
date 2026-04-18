@@ -1,0 +1,459 @@
+<style>
+   :root {
+  
+--whatscompra_cor1: {{ block.settings.whatscompra_cor1 }};
+--whatscompra_cor2: {{ block.settings.whatscompra_cor2 }};
+--whatscompra_cor3: {{ block.settings.whatscompra_cor3 }};
+--whatscompra_cor4: {{ block.settings.whatscompra_cor4 }};
+--whatsarredonda: {{ block.settings.whatsarredonda }}px;
+
+  }
+</style>
+
+{% liquid
+  assign menu = block.settings.menu
+  assign heading = block.settings.heading
+  assign color_scheme = block.settings.color_scheme
+  assign show_as_accordion = block.settings.show_as_accordion
+  if show_as_accordion == true and block.settings.accordion_dividers == true
+    assign dividers_enabled = true
+  endif
+%}
+
+{% if menu != blank or heading != blank %}
+  <accordion-custom
+    class="
+      menu
+      {% if show_as_accordion == true %} menu--accordion menu--{{ block.settings.accordion_icon }}{% endif %}
+      {% if dividers_enabled == true %} menu--dividers{% endif %}
+    "
+    data-disable-on-desktop="true"
+    open-by-default-on-desktop
+    {% if show_as_accordion == false %}
+      data-disable-on-mobile="true"
+      open-by-default-on-mobile
+    {% endif %}
+  >
+    <details
+      class="
+        menu__details
+        spacing-style
+        {% if block.settings.inherit_color_scheme == false %} color-{{ color_scheme }}{% endif %}
+      "
+      data-testid="menu-details"
+      style="
+        --spacing--size: {{ block.settings.menu_spacing }}px;
+        {% render 'spacing-style', settings: block.settings %}
+      "
+      {{ block.shopify_attributes }}
+    >
+      <summary class="menu__heading{% if heading == blank %} menu__heading--empty{% endif %} {{ block.settings.heading_preset }}">
+        <span class="menu__heading__default">{{ heading }}</span>
+        <span class="menu__heading__accordion">
+          {{ heading | default: menu.title }}
+          <span class="menu__heading__toggle svg-wrapper icon-caret icon-animated">
+            {{- 'icon-caret.svg' | inline_asset_content -}}
+          </span>
+          <span class="menu__heading__toggle svg-wrapper icon-plus">
+            {{- 'icon-plus.svg' | inline_asset_content -}}
+          </span>
+        </span>
+      </summary>
+
+      <div class="details-content">
+        
+
+
+            <ul class="list-unstyled">
+            
+              {% if block.settings.campo1 != blank %}
+              <li class="menu__item paragraph">
+                <i class="far fa-clock" style="    margin-left: 1px;margin-right: 7px;"></i><span>{{ block.settings.campo1 }}</span>
+              </li>
+            {% endif %}
+
+              {% if block.settings.campo2 != blank %}
+              <li class="menu__item paragraph">
+                <i class="fab fa-whatsapp" style="    margin-left: 1px;margin-right: 7px;"></i><span>{{ block.settings.campo2 }}</span>
+              </li>
+            {% endif %}
+            
+            {% if block.settings.campo3 != blank %}
+              <li class="menu__item paragraph">
+                <i class="far fa-envelope" style="    margin-left: 1px;margin-right: 7px;"></i><span>{{ block.settings.campo3 }}</span>
+              </li>
+            {% endif %}
+
+{% if block.settings.botaowhats_rodape %}
+<li class="menu__item paragraph" style="height: 80px;">
+<a href="https://api.whatsapp.com/send?phone={{ block.settings.num_whats }}" class="btn-whatsapp"><i class="fab fa-whatsapp icon-whats"></i>  <span class="title-btn"> Atendimento </span> <span class="d--block">via Whatsapp</span> </a>
+   </li>             
+  {% endif %}
+          </ul>
+
+            
+
+
+
+                  <style>
+                .btn-whatsapp {
+                background: var(--whatscompra_cor2);
+                border-radius: var(--whatsarredonda);
+                padding: 0.3rem 3.2rem 0.6rem;
+                float: left;
+                color: var(--whatscompra_cor1);
+                text-decoration: none;
+                font-weight: 400;
+                position: relative;
+                text-shadow: 0 1px 0 rgba(0, 0, 0, .3);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3);
+                line-height: 14px;
+                transition: background-color .25s ease, color .25s ease, box-shadow .25s ease;
+
+                }
+                .btn-whatsapp:hover {
+                background: var(--whatscompra_cor4);
+                color: var(--whatscompra_cor3);
+                }
+                .d--block {
+                display: block;
+                font-size: 15px
+                }
+                .icon-whats {
+                position: absolute;
+                left: 6.5%;
+                font-size: 35px
+                }
+                .title-btn {
+                font-size: 13px;
+                line-height: 1.6
+                }
+                .footer__item.footer__item--Atendimento-v {
+                grid-column: span 2;
+                }
+                .footer__item.footer__item--links.is-first {
+                grid-column: span 2;
+                }
+                ul.footer--links {
+                line-height: 1.3;
+                }
+             </style>
+
+
+
+
+
+
+
+                
+
+
+
+
+      </div>
+    </details>
+  </accordion-custom>
+{% endif %}
+
+{% stylesheet %}
+  .menu {
+    width: 100%;
+  }
+
+  .menu:not(:has(.menu__heading--empty)) .details-content {
+    margin-block-start: var(--spacing--size);
+  }
+
+  .menu__item + .menu__item {
+    margin-block-start: var(--spacing--size);
+  }
+
+  .menu .menu__heading--empty {
+    display: none;
+  }
+
+  .menu__heading__default {
+    display: contents;
+  }
+
+  .menu__heading__accordion {
+    display: none;
+  }
+
+  @media screen and (max-width: 749px) {
+    /* Always show the fallback heading on mobile when accordion is enabled */
+    .menu--accordion .menu__heading--empty {
+      display: flex;
+    }
+
+    .menu--accordion .menu__heading__accordion {
+      display: contents;
+    }
+
+    .menu--accordion .menu__heading__default {
+      display: none;
+    }
+
+    .menu--accordion .details-content {
+      margin-block-start: var(--spacing--size);
+    }
+
+    .menu--accordion .menu__details {
+      padding-inline: 0;
+    }
+
+    .menu--dividers .menu__details {
+      border-block-end: var(--style-border-width) solid var(--color-border);
+    }
+
+    .menu--dividers .details-content {
+      padding-block-end: var(--padding-sm);
+    }
+  }
+
+  .menu--caret .icon-plus,
+  .menu--plus .icon-caret {
+    display: none;
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Atendimentov",
+  "tag": null,
+  "settings": [
+
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "t:settings.heading",
+      "default": "Central de Atendimento"
+
+    },
+
+       {
+ "type": "text",
+ "id": "campo1",
+ "label": "Horário Atendimento",
+ "default": "seg. à sáb. 10 às 19h "
+ },
+  {
+ "type": "text",
+ "id": "campo2",
+ "label": "Contato da Loja",
+ "default": "(11) 99999-9999"
+ },
+ {
+ "type": "text",
+ "id": "campo3",
+ "label": "E-mail de suporte",
+ "default": "suporte@sualoja.com"
+ },
+
+
+{
+ "type": "checkbox",
+ "id": "botaowhats_rodape",
+ "label": "Habilitar Botão de Whatsapp no rodapé",
+ "info": "Botão fixo no rodapé. Não é botão sticker",
+ "default": true
+ },
+ {
+ "type": "text",
+ "id": "num_whats",
+ "label": "Número do Whatsapp",
+ "default": "5511999999999",
+ "info": "Adicionar numero com ddi e ddd, sem espaços nem hífen"
+ },
+{
+      "type": "range",
+      "id": "whatsarredonda",
+      "label": "Arredondamento botão whatsapp",
+      "min": 0,
+      "max": 50,
+      "step": 1,
+      "unit": "px",
+      "default": 6
+    },
+
+       {
+        "type": "color",
+        "id": "whatscompra_cor1",
+        "label": "Cor primária",
+        "info": "Cor da fonte e icon do whatsapp",
+        "default": "#fff"
+      },
+      {
+        "type": "color",
+        "id": "whatscompra_cor2",
+        "label": "Background botão Wpp",
+        "default": "#0fb930"
+      },
+      {
+        "type": "color",
+        "id": "whatscompra_cor3",
+        "label": "Cor primária hover",
+        "info": "Cor da fonte e icon do whatsapp quando se passa o mouse sobre",
+        "default": "#fff"
+      },
+      {
+        "type": "color",
+        "id": "whatscompra_cor4",
+        "label": "Background hover",
+        "default": "#000"
+      },
+
+    {
+      "type": "header",
+      "content": "t:content.appearance"
+    },
+    {
+      "type": "range",
+      "id": "menu_spacing",
+      "label": "t:settings.vertical_gap",
+      "min": 0,
+      "max": 50,
+      "step": 1,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "show_as_accordion",
+      "label": "t:settings.show_as_accordion",
+      "default": false
+    },
+    {
+      "type": "select",
+      "id": "accordion_icon",
+      "label": "t:settings.icon",
+      "options": [
+        {
+          "value": "caret",
+          "label": "t:options.caret"
+        },
+        {
+          "value": "plus",
+          "label": "t:options.plus"
+        }
+      ],
+      "default": "caret",
+      "visible_if": "{{ block.settings.show_as_accordion == true }}"
+    },
+    {
+      "type": "checkbox",
+      "id": "accordion_dividers",
+      "label": "t:settings.dividers",
+      "default": false,
+      "visible_if": "{{ block.settings.show_as_accordion == true }}"
+    },
+    {
+      "type": "checkbox",
+      "id": "inherit_color_scheme",
+      "label": "t:settings.inherit_color_scheme",
+      "default": true
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1",
+      "visible_if": "{{ block.settings.inherit_color_scheme == false }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.typography"
+    },
+    {
+      "type": "select",
+      "id": "heading_preset",
+      "label": "t:settings.heading_preset",
+      "options": [
+        {
+          "value": "",
+          "label": "t:options.default"
+        },
+        {
+          "value": "paragraph",
+          "label": "t:options.paragraph"
+        },
+        {
+          "value": "h1",
+          "label": "t:options.h1"
+        },
+        {
+          "value": "h2",
+          "label": "t:options.h2"
+        },
+        {
+          "value": "h3",
+          "label": "t:options.h3"
+        },
+        {
+          "value": "h4",
+          "label": "t:options.h4"
+        },
+        {
+          "value": "h5",
+          "label": "t:options.h5"
+        },
+        {
+          "value": "h6",
+          "label": "t:options.h6"
+        }
+      ],
+      "default": "paragraph"
+    },
+       {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-inline-start",
+      "label": "t:settings.left",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-inline-end",
+      "label": "t:settings.right",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "Atendimentov",
+      "category": "rodapev"
+    }
+  ]
+}
+{% endschema %}

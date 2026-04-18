@@ -1,0 +1,168 @@
+
+  {% render 'bandeiras' %}
+
+
+{% schema %}
+{
+  "name": "Bandeiras de Pagamento",
+  "tag": null,
+  "settings": [
+    {
+      "id": "titutobandeiras",
+      "type": "text",
+      "label": "Título Forma de pagamento",
+      "default": "Formas de Pagamento"
+    },
+    {
+      "type": "range",
+      "id": "margin-top",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margin-bottom",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+      {
+        "type": "range",
+        "id": "bandeiras_w_mobile",
+        "label": "Tamanho bandeiras mobile",
+        "info": "Use esse recurso se diminuir o número de bandeiras, para que consiga preencher totalmente a largura disponível",
+        "min": 5,
+        "max": 20,
+        "unit": "%",
+        "default": 10
+      },
+      {
+        "type": "range",
+        "id": "bandeiras_w_desktop",
+        "label": "Tamanho bandeiras desktop",
+        "info": "Use esse recurso se diminuir o número de bandeiras, para que consiga preencher totalmente a largura disponível",
+        "min": 5,
+        "max": 20,
+        "unit": "%",
+        "default": 10
+      },
+       {
+  "type": "range",
+  "id": "box_radius",
+  "label": "Arredondamento externo do box",
+  "min": 0,
+  "max": 40,
+  "step": 1,
+  "unit": "px",
+  "default": 6
+},
+      {
+        "type": "checkbox",
+        "id": "show_visa_p",
+        "label": "Mostrar Visa",
+ 
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_master_p",
+        "label": "Mostrar Mastercard",
+
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_hiper_p",
+        "label": "Mostrar Hipercard",
+
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_elo_p",
+        "label": "Mostrar Elo",
+      
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_amex_p",
+        "label": "Mostrar Amex",
+    
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_discover_p",
+        "label": "Mostrar Discover",
+ 
+        "default": true
+      },
+       {
+        "type": "checkbox",
+        "id": "show_dinners_p",
+        "label": "Mostrar Dinners",
+        
+        "default": true
+      },
+        {
+        "type": "checkbox",
+        "id": "show_paypal_p",
+        "label": "Mostrar Paypal",
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_pix_p",
+        "label": "Mostrar Pix",
+      
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_boleto_p",
+        "label": "Mostrar boleto",
+  
+        "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "show_shop_p",
+        "label": "Mostrar Shop Pay",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "show_applepay_p",
+        "label": "Mostrar ApplePay",
+        "default": false
+      },
+      {
+        "type": "checkbox",
+        "id": "show_googlepay_p",
+        "label": "Mostrar GooglePay",
+        "default": false
+      },
+       {
+        "type": "checkbox",
+        "id": "show_metapay_p",
+        "label": "Mostrar MetaPay",
+        "default": false
+      },
+    
+  ],
+  "presets": [
+    {
+      "name": "Bandeiras",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

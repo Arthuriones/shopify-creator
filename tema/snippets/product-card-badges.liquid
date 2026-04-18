@@ -1,0 +1,116 @@
+{%- doc -%}
+  Renders product badges for the product card.
+
+  @param {object} product - The product object.
+  @param {object} settings - The theme settings object.
+
+  @example
+  {% render 'product-card-badges', product: product, settings: settings %}
+{%- enddoc -%}
+
+<div
+  class="product-badges product-badges--{{ settings.badge_position }}"
+  style="
+    --badge-border-radius: {{ settings.badge_corner_radius }}px;
+    --badge-font-family: var(--font-{{ settings.badge_font_family }}--family); --badge-font-weight: var(--font-{{ settings.badge_font_family }}--weight); --badge-text-transform: {{ settings.badge_text_transform }};
+  "
+>
+
+{% assign p = card_product | default: product %}
+{% assign available_variants = p.variants | where: 'available', true %}
+
+{% if available_variants.size == 0 %}
+
+<style>
+  .esgotado{
+
+  padding: 4px 6px;
+    border-radius: var(--arredonda-label-desconto);
+    position: relative;
+    top: -6px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    color: var(--cortextoesgotado);
+    background: var(--corfundoesgotado);
+    line-height: 1.2;
+        align-items: center;
+
+}
+</style>
+
+  <div class="esgotado" style="top: 4px;">
+    {{settings.textoesgotado}}
+  </div>
+{% else %}
+
+
+  {% if product.compare_at_price_max and product.compare_at_price_max > product.price_min %}
+   <div class="discount__percentage" style="top: 4px;">
+  <svg fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" 
+       style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:2px;">
+    <path clip-rule="evenodd" fill-rule="evenodd" 
+          d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z"></path>
+  </svg>
+
+ {% assign pct = product.compare_at_price
+    | minus: product.price_min
+    | times: 100.0
+    | divided_by: product.compare_at_price
+    | round %}
+
+  {{ pct }}% OFF
+</div>
+  {%- endif -%}
+{% endif %}
+
+
+
+
+
+</div>
+
+{% stylesheet %}
+  .product-badges {
+    --badge-inset: max(var(--padding-xs), calc((var(--border-radius) + var(--padding-xs)) * (1 - cos(45deg))));
+
+    position: absolute;
+    z-index: var(--layer-flat);
+  }
+
+  .product-badges--bottom-left {
+    bottom: calc(var(--badge-inset) + var(--padding-block-start));
+    left: calc(var(--badge-inset) + var(--padding-inline-start));
+  }
+
+  .product-badges--top-left {
+    top: calc(var(--badge-inset) + var(--padding-block-start));
+    left: calc(var(--badge-inset) + var(--padding-inline-start));
+  }
+
+  .product-badges--top-right {
+    top: calc(var(--badge-inset) + var(--padding-block-start));
+    right: calc(var(--badge-inset) + var(--padding-inline-start));
+  }
+
+  .product-badges__badge {
+    --badge-font-size: var(--font-size--xs);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--color-foreground);
+    background: var(--color-background);
+    font-size: var(--badge-font-size);
+    font-family: var(--badge-font-family);
+    font-weight: var(--badge-font-weight);
+    text-transform: var(--badge-text-transform);
+    border-radius: var(--badge-border-radius);
+  }
+
+  .product-badges__badge--rectangle {
+    padding-block: var(--badge-rectangle-padding-block);
+    padding-inline: var(--badge-rectangle-padding-inline);
+  }
+{% endstylesheet %}

@@ -1,0 +1,58 @@
+{%- assign offer_id = 'offer-' | append: block.id -%}
+
+<style>
+  /* ---------- Variáveis exclusivas do bloco ---------- */
+  #{{ offer_id }}{
+    --fundooferta : {{ block.settings.box_bg }};
+    --textooferta : {{ block.settings.text_color }};
+    --fundoicone : {{ block.settings.box_bgi }};
+    --textoicone : {{ block.settings.text_colori }};
+    --raiooferta  : {{ block.settings.box_radius }}px;
+    --raioicone  : {{ block.settings.box_radiusi }}px;
+    color: var(--textooferta);
+  }
+
+  #{{ offer_id }} .offer-box__media,
+  #{{ offer_id }} .offer-box__media *{
+    fill:   var(--textoicone) !important;
+    stroke: var(--textoicone) !important;
+  }
+
+  /* ---------- Layout ---------- */
+  .offer-box{
+    display: flex ; padding: 10px 10px 10px 3px; width: 100%; border: 1px solid #bdbdbd70; border-radius: var(--raiooferta); align-items: center;background:var(--fundooferta);
+  }
+  .offer-box--center{ text-align:center; flex-direction:column; align-items:center; }
+  .offer-box__icon   { flex-shrink:0; line-height:0; }
+  .offer-box__media  { background: var(--fundoicone); margin: 0 8px; border-radius: var(--raioicone); padding: 7px; }
+  .offer-box__title  { margin:0 0 .25em; font-size:13px; }
+  .offer-box__text p { margin:0; font-size:13px; }
+  .offer-box__body   { line-height:1.25;color: var(--textooferta);}
+</style>
+
+{% if block.settings.image_upload %}
+<style>
+  #{{ offer_id }} .offer-box__media {padding:0px !important;background: none !important; border-radius: 0 !important;}
+</style>
+{% endif %}
+
+<div id="{{ offer_id }}"
+     class="offer-box {% if block.settings.align_text == 'center' %}offer-box--center{% endif %}">
+  <div class="offer-box__icon">
+    {%- render 'icon-or-image',
+      icon:         block.settings.icon,
+      image_upload: block.settings.image_upload,
+      width:        block.settings.icon_width,
+      class_name:   'offer-box__media'
+    -%}
+  </div>
+
+  <div class="offer-box__body">
+    {% if block.settings.title %}
+      <h3 class="offer-box__title">{{ block.settings.title }}</h3>
+    {% endif %}
+    {% if block.settings.content %}
+      <div class="offer-box__text">{{ block.settings.content }}</div>
+    {% endif %}
+  </div>
+</div>

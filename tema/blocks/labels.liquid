@@ -1,0 +1,151 @@
+
+  {% render 'labels' %}
+
+
+{% schema %}
+{
+  "name": "Labels Pagina produto",
+  "tag": null,
+  "settings": [
+    {
+      "type": "range",
+      "id": "margin-toplabels",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margin-bottomlabels",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+     {
+      "type": "checkbox",
+      "id": "show_exclusividade",
+      "label": "Label Exclusividade",
+      "info": "Mostrar etiqueta de exclusividade acima do título do produto. Altere cor e texto nas configurações",
+      "default": true
+    },
+     {
+      "type": "checkbox",
+      "id": "show_label3",
+      "label": "Label Mais Vendido",
+      "info": "Mostrar etiqueta de Mais Vendido acima do título do produto. Altere cor e texto nas configurações",
+      "default": true
+    },
+
+     {
+      "type": "checkbox",
+      "id": "show_nacional",
+      "label": "Label Envio Nacional",
+      "info": "Mostrar etiqueta de Envio Nacional para todos os produtos. Para mostrar apenas em produtos específicos, adicione a tag nacional em minusculo em cada produto que deseja apresentar a tag",
+      "default": true
+    },
+     {
+        "type": "text",
+        "id": "envionacional",
+        "label": "Texto Envio Nacional",
+        "default": "ENVIO NACIONAL"
+      },
+ {
+        "type": "color",
+        "id": "fundonacional",
+        "label": "Fundo Envio Nacional",
+        "default": "#fff"
+      },
+     {
+        "type": "color",
+        "id": "bordanacional",
+        "label": "Borda Envio Nacional",
+        "default": "#009b3a"
+      },
+    
+{
+        "type": "color",
+        "id": "fontenacional",
+        "label": "Fonte Envio Nacional",
+        "default": "#009b3a"
+      },
+
+     {
+      "type": "checkbox",
+      "id": "show_vendidos",
+      "label": "Label vendidos",
+      "info": "Mostrar etiqueta de vendidos acima do título do produto",
+      "default": true
+    },
+      
+      {
+        "type": "color",
+        "id": "background_vendidos",
+        "label": "Background Vendidos",
+        "info": "Cor de fundo da label de vendidos",
+        "default": "#f5f5f5"
+      },
+      {
+        "type": "color",
+        "id": "fonte_vendidos",
+        "label": "Fonte Vendidos",
+        "info": "Cor da fonte da label de vendidos",
+        "default": "#a7a5a5"
+      },
+      {
+        "type": "text",
+        "id": "exlusividade_label",
+        "label": "Label Exclusividade",
+        "info": "Utilize o campo acima para mudar o texto da label de exclusividade. Útil para datas específicas por exemplo: PROMOÇÃO DO DIA DAS MÃES. Obs: cuidado com o tamanho do texto utilizado",
+        "default": "EXCLUSIVIDADE"
+      },
+      {
+        "type": "color",
+        "id": "background_exclusividade",
+        "label": "Background Exclusividade",
+        "info": "Cor de fundo da label de exclusividade",
+        "default": "#fff4eb"
+      },
+      {
+        "type": "color",
+        "id": "fonte_exclusividade",
+        "label": "Fonte Exclusividade",
+        "info": "Cor da fonte da label de exclusividade",
+        "default": "#e2a696"
+      },
+      {
+        "type": "text",
+        "id": "exlusividade_label2",
+        "label": "Label Mais Vendido",
+        "info": "Utilize o campo acima para mudar o texto da label Mais Vendido",
+        "default": "MAIS VENDIDO"
+      },
+      {
+        "type": "color",
+        "id": "background_exclusividade2",
+        "label": "Background Mais Vendido",
+        "info": "Cor de fundo da label Mais Vendido",
+        "default": "#000"
+      },
+      {
+        "type": "color",
+        "id": "fonte_exclusividade2",
+        "label": "Fonte label 3",
+        "info": "Cor da fonte da label Mais Vendido",
+        "default": "#FFF"
+      }
+    
+  ],
+  "presets": [
+    {
+      "name": "Labels Pagina produto",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

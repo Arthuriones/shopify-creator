@@ -1,0 +1,173 @@
+
+
+{%- doc -%}
+  This snippet is used to render a product card.
+  It is used in the product block,featured product block, and the product card block.
+
+  @param {product} product_resource - The product to render
+  @param {boolean} [show_unit_price] - Whether to show the unit price
+  @param {boolean} [show_sale_price_first] - Whether to show the sale price first
+{%- enddoc -%}
+
+
+{%- liquid
+  assign show_unit_price = show_unit_price | default: false
+  assign show_sale_price_first = show_sale_price_first | default: false
+  assign selected_variant = product_resource.selected_or_first_available_variant
+  assign price = selected_variant.price
+  assign compare_at_price = selected_variant.compare_at_price
+
+  assign show_compare_price = false
+  if compare_at_price > price
+    assign show_compare_price = true
+  endif
+
+  if product_resource == blank and request.design_mode
+    assign price = 1999
+  endif
+
+  # Checks if product handle matches the closest product's handle (i.e. product page)
+  # and if the currency code is enabled for product pages
+  if product.handle == closest.product.handle and settings.currency_code_enabled_product_pages
+    assign price = price | money_with_currency
+    assign compare_at_price = compare_at_price | money_with_currency
+
+    # Checks if product handle does not match the closest product's handle (i.e. product card)
+    # and if the currency code is enabled for product cards
+  elsif product.handle != closest.product.handle and settings.currency_code_enabled_product_cards
+    assign price = price | money_with_currency
+    assign compare_at_price = compare_at_price | money_with_currency
+
+  else
+    assign price = price | money
+    assign compare_at_price = compare_at_price | money
+  endif
+-%}
+
+
+
+<div ref="priceContainer">
+  {% if show_sale_price_first == false and show_compare_price %}
+    <span role="group">
+      <span class="visually-hidden">{{ 'content.price_regular' | t }}&nbsp;</span>
+      <span class="compare-at-price" style="color: var(--precocortado-cor);">{{- compare_at_price -}}</span>
+    </span>
+  {% endif %}
+
+  {% if show_compare_price %}
+    <span role="group" >
+      <span class="visually-hidden">{{ 'content.price_sale' | t }}&nbsp;</span>
+      <span class="price" style="color: var(--preco-cor);"
+      data-price="{{ selected_variant.price }}"
+>
+  {{ price | default: '&nbsp;' }}
+</span>
+    </span>
+  {% else %}
+    <span class="price" style="color: var(--preco-cor);"
+      data-price="{{ selected_variant.price }}"
+>
+  {{ price | default: '&nbsp;' }}
+</span>
+  {% endif %}
+
+  {% if show_sale_price_first == true and show_compare_price %}
+    <span role="group">
+      <span class="visually-hidden">{{ 'content.price_regular' | t }}&nbsp;</span>
+      <span class="compare-at-price" style="color: var(--precocortado-cor);">{{- compare_at_price -}}</span>
+    </span>
+  {% endif %}
+  {%- if selected_variant.unit_price and show_unit_price %}
+    {%- liquid
+      if product.handle == closest.product.handle and settings.currency_code_enabled_product_pages
+        assign unit_price = selected_variant.unit_price | money_with_currency
+      elsif product.handle != closest.product.handle and settings.currency_code_enabled_product_cards
+        assign unit_price = selected_variant.unit_price | money_with_currency
+      else
+        assign unit_price = selected_variant.unit_price | money
+      endif
+    -%}
+    {% render 'unit-price', price: unit_price, measurement: selected_variant.unit_price_measurement %}
+  {%- endif -%}
+{% if template.name == 'product' %}
+  {% if selected_variant.price < selected_variant.compare_at_price %}
+<div class="discount__percentage" style="margin-left:0px !important">
+  <svg fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" 
+       style="width:12px; height:12px; display:inline-block; vertical-align:middle; margin-right:2px;">
+    <path clip-rule="evenodd" fill-rule="evenodd" 
+          d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z"></path>
+  </svg>
+  {{- selected_variant.compare_at_price | minus: selected_variant.price | times: 100.0 | divided_by: selected_variant.compare_at_price | round -}}%
+</div>
+{% endif %}
+{% endif %}
+{% if settings.parcelamento12x_enable %}
+
+{%- comment -%} ----- Parcelamento 12x ----- {%- endcomment -%}
+{%- liquid
+  # juros_parcelamento vem em %, então convertemos pra fator (ex: 10 -> 1.10)
+  assign fator_12x = settings.juros_parcelamento | times: 0.01 | plus: 1
+
+  # Garante um objeto de produto válido em qualquer contexto
+  assign obj = product_resource | default: product
+
+  # Pega o variant selecionado ou o primeiro disponível
+  assign v = obj.selected_or_first_available_variant
+
+  # Valor base em centavos (inteiro)
+  assign base_price = v.price | default: 0
+
+  # Calcula a parcela em centavos (inteiro)
+  assign parcela_cents = base_price | times: fator_12x | divided_by: 12 | round: 0
+-%}
+
+{% if base_price > 0 %}
+  <div class="atualizacao-marcos" style="margin-top: -6px;">
+    <p class="parcelamento" style="font-size:15px;     font-weight: 400;position:relative; margin-bottom:10px;display: inline-flex;align-items: center;">
+     em até 12x de &nbsp <span style="color: var(--precoparcela-cor);">
+        <b id="parcela-{{ obj.id }}">{{ parcela_cents | money }}</b>
+      </span>
+    </p>
+  </div>
+{% endif %}
+
+{% endif %}
+
+  
+</div>
+
+
+  
+{% if template.name == 'product' %}
+  
+{% if settings.parcelamento_enable %}
+{% render 'v-parcelamento', selected_variant: selected_variant %}
+{% endif %}
+
+{% if settings.show_pix_envio %}
+{% render 'pix-v' %}
+{% endif %}
+
+  
+{% endif %}
+
+{% if template.name == 'index' or template.name == 'collection' %}
+
+<style>
+  p.parcelamento {
+    font-size: 14px !important;
+}
+
+
+@media (max-width: 993px){
+   p.parcelamento {
+    font-size: 10px !important;
+}
+}
+
+  .svgcartao{
+    display:none;
+  }
+</style>
+  
+{% endif %}

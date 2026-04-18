@@ -1,0 +1,866 @@
+
+{%- assign section_id = section.id | replace: '+', '' -%}
+{% assign videos = section.blocks | where: 'type', 'video' %}
+{%- assign background_placeholder_video_id = '15bb622f402f43929d26fab60c13fd21' -%}
+{%- assign widths = '180, 360, 540, 720, 900, 1080, 1296, 1512, 1728, 1950, 2100, 2260, 2450, 2700, 3000, 3350, 3750, 4100' -%}
+
+{%- capture minify -%}
+
+<style>
+.flickity-enabled{position:relative}.flickity-enabled:focus{outline:0;box-shadow: none;}.flickity-viewport{overflow:hidden;position:relative;height:100%}.flickity-slider{position:absolute;width:100%;height:100%}.flickity-enabled.is-draggable{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}.flickity-enabled.is-draggable .flickity-viewport{cursor:move;cursor:-webkit-grab;cursor:grab}.flickity-enabled.is-draggable .flickity-viewport.is-pointer-down{cursor:-webkit-grabbing;cursor:grabbing}.flickity-button{position:absolute;background:hsla(0,0%,100%,.75);border:none;color:#333}.flickity-button:hover{background:#fff;cursor:pointer}.flickity-button:focus{outline:0;box-shadow:0 0 0 5px #19f}.flickity-button:active{opacity:.6}.flickity-button:disabled{opacity:.3;cursor:auto;pointer-events:none}.flickity-button-icon{fill:currentColor}.flickity-prev-next-button{top:50%;width:44px;height:44px;border-radius:50%;transform:translateY(-50%)}.flickity-prev-next-button.previous{left:10px}.flickity-prev-next-button.next{right:10px}.flickity-rtl .flickity-prev-next-button.previous{left:auto;right:10px}.flickity-rtl .flickity-prev-next-button.next{right:auto;left:10px}.flickity-prev-next-button .flickity-button-icon{position:absolute;left:20%;top:20%;width:60%;height:60%}.flickity-page-dots{position:absolute;width:100%;bottom:-25px;padding:0;margin:0;list-style:none;text-align:center;line-height:1}.flickity-rtl .flickity-page-dots{direction:rtl}.flickity-page-dots .dot{display:inline-block;width:10px;height:10px;margin:0 8px;background:#333;border-radius:50%;opacity:.25;cursor:pointer}.flickity-page-dots .dot.is-selected{opacity:1}
+
+{%- if section.settings.custom_font_url != blank -%}
+@font-face {
+  font-family: 'CustomHeadingFont';
+  src: url('{{ section.settings.custom_font_url }}');
+  font-display: swap;
+}
+{%- endif -%}
+
+{%- if section.settings.override_theme_font != blank -%}
+  #DP--{{ section_id }} {
+    --main-font: {{ section.settings.main_font.family }}, {{ section.settings.main_font.fallback_families }};
+    --main-font-weight: {{ section.settings.main_font.weight }};
+    --main-font-style: {{ section.settings.main_font.style }};
+    --heading-font: {{ section.settings.heading_font.family }}, {{ section.settings.heading_font.fallback_families }};
+    --heading-font-weight: {{ section.settings.heading_font.weight }};
+    --heading-font-style: {{ section.settings.heading_font.style }};
+  }
+{%- endif -%}
+
+#DP--{{ section_id }} {
+  --cell-align: "center";
+  {% if section.blocks.size > 4 %}
+  --wrap-around: true;
+  --draggable: ">1";
+  {% else %}
+    --wrap-around: false;
+    --draggable: false;
+  {% endif %}
+  --arrow-color: {{ section.settings.text_color }};
+  background: {{ section.settings.background_color }};
+  padding-top: {{ section.settings.top_padding }}px;
+  padding-bottom: {{ section.settings.bottom_padding }}px;
+  overflow: visible;
+}
+
+#DP--{{ section_id }} .onhow__sizer {
+  width: 100%;
+}
+
+#DP--{{ section_id }} .onhow__section-title {
+  text-align: center;
+  margin-bottom: {% if section.settings.description != blank %}{{ section.settings.heading_description_spacing }}px{% else %}40px{% endif %};
+  color: {{ section.settings.text_color }};
+  font-size: calc(var(--dp-g-heading-size, var(--dp-heading-size, 28px)) * {{ section.settings.heading_size | times: 0.01 }});
+  letter-spacing: {{ section.settings.heading_letter_spacing }}px;
+  {%- if section.settings.custom_font_url != blank -%}
+  font-family: 'CustomHeadingFont', var(--font-heading-family);
+  {%- endif -%}
+}
+
+#DP--{{ section_id }} .onhow__section-description {
+  text-align: center;
+  margin-bottom: 40px;
+  color: {{ section.settings.text_color }};
+  font-size: calc(var(--dp-g-body-size, var(--dp-body-size, 16px)) * {{ section.settings.description_size | times: 0.01 }});
+  line-height: var(--dp-g-body-line-height, var(--dp-body-line-height, calc(3px + 2.5ex + 3px)));
+}
+
+#DP--{{ section_id }} .onhow__section-description p {
+  margin: 0 0 1em 0;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+#DP--{{ section_id }} .onhow__section-description p:last-child {
+  margin-bottom: 0;
+}
+
+#DP--{{ section_id }} .onhow__section-description strong {
+  font-weight: bold;
+  color: inherit;
+}
+
+#DP--{{ section_id }} .onhow__section-description em {
+  font-style: italic;
+  color: inherit;
+}
+
+#DP--{{ section_id }} .onhow__section-description a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+#DP--{{ section_id }} .onhow__section-description ul,
+#DP--{{ section_id }} .onhow__section-description ol {
+  margin: 0 0 1em 0;
+  padding-left: 1.5em;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+#DP--{{ section_id }} .onhow__section-description li {
+  margin-bottom: 0.5em;
+  color: inherit;
+}
+
+#DP--{{ section_id }} .onhow__flex--main {
+  position: relative;
+  align-items: center;
+  grid-template-columns: repeat(auto-fill, minmax(50%, 1fr));
+  grid-auto-rows: 50%;
+  grid-auto-columns: minmax(0, auto);
+}
+
+#DP--{{ section_id }} .onhow__content {
+  flex: 1 0 40%;
+  padding: 20px;
+}
+
+#DP--{{ section_id }} .onhow__inner-content {
+  width: min(400px, 80%);
+  margin: auto;
+}
+
+#DP--{{ section_id }} .onhow__small-heading {
+  margin: 0;
+  text-align: center;
+  color: {{ section.settings.text_color }};
+  {%- if section.settings.override_theme_font != blank -%}
+  font-family: var(--heading-font);
+  font-weight: var(--heading-font-weight);
+  font-style: var(--heading-font-style);
+  {%- endif -%}
+  font-size: calc(var(--dp-g-heading-size, var(--dp-heading-size, 18px)) * 0.9);
+  line-height: var(--dp-g-small-heading-line-height, var(--dp-small-heading-line-height, calc(3px + 2ex + 3px)));
+}
+
+#DP--{{ section_id }} .onhow__block .onhow__small-heading {
+  font-size: calc(var(--dp-g-small-heading-size, var(--dp-small-heading-size, 24px)) * {{ section.settings.text_size | times: 0.01 }});
+  {%- if section.settings.override_theme_font != blank -%}
+    font-family: var(--heading-font);
+    font-weight: var(--heading-font-weight);
+    font-style: var(--heading-font-style);
+  {%- endif -%}
+}
+
+#DP--{{ section_id }} .onhow__rte p,
+#DP--{{ section_id }} .onhow__rte ul {
+  line-height: var(--dp-g-body-line-height, var(--dp-body-line-height, calc(3px + 2.5ex + 3px)));
+  color: {{ section.settings.text_color }};
+  font-size: calc(var(--dp-g-body-size, var(--dp-body-size, 18px)) * {{ section.settings.text_size | times: 0.01 }});
+  {%- if section.settings.override_theme_font != blank -%}
+  font-family: var(--main-font);
+  font-weight: var(--main-font-weight);
+  font-style: var(--main-font-style);
+  {%- endif -%}
+}
+
+#DP--{{ section_id }} .onhow__block {
+  color: {{ section.settings.text_color }};
+}
+
+#DP--{{ section_id }} .onhow__block + .onhow__block {
+  margin-top: 15px;
+}
+
+#DP--{{ section_id }} .onhow__videos {
+  flex: 1 0 60%;
+  overflow: visible;
+  padding-bottom: 20px;
+}
+
+#DP--{{ section_id }} .onhow__video-slider {
+  margin: auto;
+  overflow: visible !important;
+  padding-bottom: 60px; 
+}
+
+#DP--{{ section_id }} .onhow__videos-wrapper,
+#DP--{{ section_id }} .onhow__videos,
+#DP--{{ section_id }} .onhow__flex--main,
+#DP--{{ section_id }} .onhow__sizer,
+#DP--{{ section_id }} .flickity-slider {
+  overflow: visible !important;
+}
+
+#DP--{{ section_id }} .onhow__item {
+  --final-slide-width: min(350px, 90vw);
+  --slide-height: calc(var(--final-slide-width) * 1.32);
+  --selected-slide-height: calc(var(--final-slide-width) * 1.32);
+  height: auto;
+  width: var(--final-slide-width);
+  margin: 0 {{ section.settings.gap | divided_by: 2.0 }}px;
+  margin-bottom: 25px;
+  display: inline-block;
+  overflow: visible;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+#DP--{{ section_id }} .is-selected {
+  transform: translateY(-4px);
+  z-index: 50;
+}
+
+#DP--{{ section_id }} .onhow__item > a {
+  text-decoration: none;
+}
+
+#DP--{{ section_id }} .onhow__stretch-height .onhow__item {
+  height: 100%;
+}
+
+#DP--{{ section_id }} .is-selected .onhow__video-wrapper {
+  padding-top: 0;
+}
+
+#DP--{{ section_id }} .onhow__video-inner {
+    width: 100%;
+}
+
+#DP--{{ section_id }} .is-selected .onhow__hosted-video {
+  width: 100%;
+  min-height: var(--selected-slide-height);
+  display: block;
+  object-fit: cover;
+}
+
+#DP--{{ section_id }} .onhow__video {
+  height: 100%;
+  display: flex;
+  text-align: center;
+  align-items: flex-start;
+  position: relative;
+  overflow: visible;
+}
+
+#DP--{{ section_id }} .onhow__video-wrapper {
+  width: 100%;
+  padding-top: 0;
+  transition: all 0.5s ease;
+  position: relative;
+  height: var(--slide-height);
+}
+
+#DP--{{ section_id }} .onhow__hosted-video {
+  width: 100%;
+  min-height: var(--slide-height);
+  display: block;
+  object-fit: cover;
+  border-radius: 15px;
+  transition: all 0.5s ease;
+}
+
+#DP--{{ section_id }} .onhow__video-content {
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  border-radius: 15px;
+  height: 100%;
+  padding: 15px 10px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transition: all 0.2s linear;
+  z-index: 2;
+  background: linear-gradient(transparent 0%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0.6) 100%);
+}
+
+#DP--{{ section_id }} .onhow__absolute-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+#DP--{{ section_id }} .onhow__item:hover {
+  transform: translateY(-2px);
+  z-index: 100;
+}
+
+#DP--{{ section_id }} .onhow__video-content:hover {
+  box-shadow: none;
+}
+
+#DP--{{ section_id }} .onhow__sound-button {
+  cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 35px;
+  height: 35px;
+  margin: 10px;
+  padding: 5px;
+  background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' xmlns='http://www.w3.org/2000/svg' fill-rule='evenodd' clip-rule='evenodd'%3E%3Cpath d='M18 23l-9.305-5.998.835-.651 7.47 4.815v-10.65l1-.781v13.265zm0-15.794l5.384-4.206.616.788-23.384 18.264-.616-.788 5.46-4.264h-2.46v-10h5.691l9.309-6v6.206zm-11.26 8.794l1.26-.984v-7.016h-4v8h2.74zm10.26-8.013v-5.153l-8 5.157v6.244l8-6.248z'/%3E%3C/svg%3E");
+  background-size: 65%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+#DP--{{ section_id }} .onhow__sound-button--on {
+  background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' xmlns='http://www.w3.org/2000/svg' fill-rule='evenodd' clip-rule='evenodd'%3E%3Cpath d='M15 23l-9.309-6h-5.691v-10h5.691l9.309-6v22zm-9-15.009v8.018l8 5.157v-18.332l-8 5.157zm14.228-4.219c2.327 1.989 3.772 4.942 3.772 8.229 0 3.288-1.445 6.241-3.77 8.229l-.708-.708c2.136-1.791 3.478-4.501 3.478-7.522s-1.342-5.731-3.478-7.522l.706-.706zm-2.929 2.929c1.521 1.257 2.476 3.167 2.476 5.299 0 2.132-.955 4.042-2.476 5.299l-.706-.706c1.331-1.063 2.182-2.729 2.182-4.591 0-1.863-.851-3.529-2.184-4.593l.708-.708zm-12.299 1.299h-4v8h4v-8z'/%3E%3C/svg%3E");
+}
+
+#DP--{{ section_id }} .onhow__text-area {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  color: white;
+}
+
+#DP--{{ section_id }} .onhow__text-area .onhow__text {
+  color: white;
+}
+
+#DP--{{ section_id }} .onhow__text-area .onhow__text p {
+  color: white;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+#DP--{{ section_id }} .onhow__view-product {
+  display: inline-block;
+  padding: 8px 16px;
+  background: {{ section.settings.button_bg_color }};
+  color: {{ section.settings.button_text_color }};
+  border-radius: 4px;
+  margin-top: 5px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+#DP--{{ section_id }} .onhow__videos-nav {
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  gap: 20px;
+  margin-top: {{ section.settings.navigation_spacing }}px;
+  position: relative;
+  z-index: 5;
+}
+
+#DP--{{ section_id }} .onhow__nav-button {
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  transform: scale(1.6);
+  transition: all 0.3s ease;
+}
+
+#DP--{{ section_id }} .onhow__rte p,
+#DP--{{ section_id }} .onhow__rte ul {
+  color: {{ section.settings.text_color }};
+}
+
+#DP--{{ section_id }} .onhow__small-heading {
+  color: {{ section.settings.text_color }};
+}
+
+#DP--{{ section_id }} .onhow__videos-wrapper:after {
+  content: 'flickity';
+  display: none;
+}
+
+#DP--{{ section_id }} .onhow__videos-wrapper:not(.flickity-enabled) {
+  display: flex;
+  gap: 10px;
+  overflow: visible;
+}
+
+#DP--{{ section_id }} .onhow__videos-wrapper {
+  overflow: visible;
+}
+
+#DP--{{ section_id }} .onhow__videos-wrapper:not(.flickity-enabled) .onhow__item:nth-child(n+{{ section.settings.per_row | plus: 1 }}){
+  display: none;
+}
+
+#DP--{{ section_id }} .flickity-slider {
+  top: 0;
+}
+
+@media (max-width: 768px) {
+  #DP--{{ section_id }} {
+    padding-top: {{ section.settings.top_padding | divided_by: 2 }}px;
+    padding-bottom: {{ section.settings.bottom_padding | divided_by: 2 }}px;
+    --draggable: ">1";
+    --wrap-around: true;
+  }
+
+  #DP--{{ section_id }} .onhow__sizer {
+    margin: 0 auto;
+  }
+
+  #DP--{{ section_id }} .onhow__video-slider {
+    padding-bottom: 45px;
+  }
+
+  #DP--{{ section_id }} .onhow__item {
+    --final-slide-width: min(280px, 85vw);
+    --slide-height: calc(var(--final-slide-width) * 1.2);
+    --selected-slide-height: calc(var(--final-slide-width) * 1.2);
+    max-height: 50vh;
+    margin-bottom: 20px;
+  }
+
+  #DP--{{ section_id }} .onhow__hosted-video {
+    max-height: 45vh;
+    object-fit: cover;
+  }
+
+  #DP--{{ section_id }} .onhow__section-title {
+    font-size: calc(var(--dp-g-heading-size, var(--dp-heading-size, 24px)) * {{ section.settings.heading_size | times: 0.01 }});
+    margin-bottom: {% if section.settings.description != blank %}{{ section.settings.heading_description_spacing | divided_by: 2 }}px{% else %}25px{% endif %};
+    letter-spacing: {{ section.settings.heading_letter_spacing }}px;
+  }
+
+  #DP--{{ section_id }} .onhow__section-description {
+    font-size: calc(var(--dp-g-body-size, var(--dp-body-size, 14px)) * {{ section.settings.description_size | times: 0.01 }});
+    margin-bottom: 25px;
+  }
+
+  #DP--{{ section_id }} .onhow__nav-button {
+    transform: scale(1.2);
+  }
+
+  #DP--{{ section_id }} .onhow__videos-nav {
+    margin-top: {{ section.settings.navigation_spacing | divided_by: 1.5 }}px;
+  }
+}
+</style>
+
+{%- liquid
+  if videos.size == 0
+    break
+  endif
+-%}
+
+<section id="DP--{{ section_id }}" class="DP--{{ section_id }} onhow__videos-slider onhow__section">
+  {%- if section.settings.anchor_id != blank -%}
+    <div id="{{ section.settings.anchor_id | remove: '#' | handleize }}" class="onhow__anchor-id" style="height: 0; overflow: hidden;"></div>
+  {%- endif -%}
+  <div class="onhow__sizer">
+    {% if section.settings.heading != blank %}
+      <h2 class="onhow__section-title">{{ section.settings.heading }}</h2>
+    {% endif %}
+    
+    {% if section.settings.description != blank %}
+      <div class="onhow__section-description">{{ section.settings.description }}</div>
+    {% endif %}
+
+    <div class="onhow__flex onhow__flex--main">
+      <div class="onhow__videos">
+        <div id="slider-{{ section_id }}" class="onhow__videos-wrapper onhow__video-slider">
+          {%- for block in videos -%}
+            <div class="onhow__item onhow__item onhow__video-{{ forloop.index }} onhow__block-{{ block.id }}" {{ block.shopify_attributes }}>
+              <div class="onhow__video">
+                <div class="onhow__video-inner">
+                  {%- if block.settings.html5_video != blank -%}
+                    <div class="onhow__video-wrapper">
+                      {%- assign video = block.settings.html5_video -%}
+                      <video class="onhow__hosted-video" width="{{ video.aspect_ratio | times: 100 }}" height="100" playsinline loop muted loading="lazy" poster="{{ video.preview_image | image_url: width: 2800 }}">
+                        {%- for source in video.sources -%}
+                          {%- if source.format == 'mp4' or source.format == 'mov' -%}<source src="{{ source.url }}">{%- endif -%}
+                        {%- endfor -%}
+                      </video>
+                      <div class="onhow__sound-button"></div>
+                    </div>
+                  {%- else -%}
+         
+                  <div class="onhow__video-wrapper">
+                    <video
+                      class="onhow__hosted-video"
+                      width="2000" height="100"
+                      playsinline loop muted loading="lazy">
+                        <source src="https://cdn.shopify.com/videos/c/o/v/{{ background_placeholder_video_id }}.mp4" data-onhow-default-src>
+                    </video>
+                    <div class="onhow__sound-button"></div>
+                  </div>
+                  {%- endif -%}
+                  {%- unless block.settings.product == blank -%}
+                    <div class="onhow__video-content">
+                      <a href="{{ block.settings.product.url }}" class="onhow__absolute-link"></a>
+                      <div class="onhow__text-area">
+                        <div class="onhow__text onhow__rte">
+                          <p>{{ block.settings.product.title }}</p>
+                        </div>
+                        <a href="{{ block.settings.product.url }}" class="onhow__view-product">Ver Produto</a>
+                      </div>
+                    </div>
+                  {%- endunless -%}
+                </div>
+              </div>
+            </div>
+          {%- endfor -%}
+        </div>
+        {%- if section.settings.show_arrows != blank -%}
+          <div class="onhow__videos-nav">
+            <div class="onhow__nav-button onhow__nav-button--prev">
+              <svg width="25" height="25" xmlns="http://www.w3.org/2000/svg" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 0c6.623 0 12 5.377 12 12s-5.377 12-12 12-12-5.377-12-12 5.377-12 12-12zm0 1c6.071 0 11 4.929 11 11s-4.929 11-11 11-11-4.929-11-11 4.929-11 11-11zm3 5.753l-6.44 5.247 6.44 5.263-.678.737-7.322-6 7.335-6 .665.753z" fill="none" stroke="#121212"/></svg>
+            </div>
+            <div class="onhow__nav-button onhow__nav-button--next">
+              <svg width="25" height="25" xmlns="http://www.w3.org/2000/svg" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 0c6.623 0 12 5.377 12 12s-5.377 12-12 12-12-5.377-12-12 5.377-12 12-12zm0 1c6.071 0 11 4.929 11 11s-4.929 11-11 11-11-4.929-11-11 4.929-11 11-11zm-3 5.753l6.44 5.247-6.44 5.263.678.737 7.322-6-7.335-6-.665.753z" fill="none" stroke="#121212"/></svg>
+            </div>
+          </div>
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+</section>
+{%- endcapture -%}
+{{ minify | strip_newlines }}
+
+{% schema %}
+{
+  "name": "Video carousel",
+  "class": "DP__video-carousel",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Section heading",
+      "default": "Featured Videos"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 60,
+      "max": 150,
+      "step": 5,
+      "default": 100,
+      "unit": "%"
+    },
+    {
+      "type": "range",
+      "id": "heading_letter_spacing",
+      "label": "Heading letter spacing",
+      "min": 0,
+      "max": 10,
+      "step": 0.5,
+      "default": 0,
+      "unit": "px"
+    },
+    {
+      "type": "url",
+      "id": "custom_font_url",
+      "label": "Custom font URL for heading",
+      "info": "Upload font file to Files section and paste the link here"
+    },
+    {
+      "type": "richtext",
+      "id": "description",
+      "label": "Section description"
+    },
+    {
+      "type": "range",
+      "id": "description_size",
+      "label": "Description size",
+      "min": 60,
+      "max": 150,
+      "step": 5,
+      "default": 100,
+      "unit": "%"
+    },
+    {
+      "type": "range",
+      "id": "heading_description_spacing",
+      "label": "Space between heading and description",
+      "min": 0,
+      "max": 80,
+      "step": 5,
+      "default": 20,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "autoplay",
+      "label": "Change slide every",
+      "min": 0,
+      "max": 12,
+      "step": 1,
+      "default": 8,
+      "unit": "sec",
+      "info": "Set to '0' to disable autoplay"
+    },
+    {
+      "type": "range",
+      "id": "gap",
+      "min": 0,
+      "max": 40,
+      "label": "Spacing gap",
+      "unit": "px",
+      "default": 10
+    },
+    {
+      "type": "checkbox",
+      "id": "show_arrows",
+      "label": "Show arrows",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Text appearance"
+    },
+    {
+      "type": "range",
+      "id": "text_size",
+      "label": "Text size",
+      "min": 60,
+      "max": 120,
+      "step": 5,
+      "default": 100,
+      "unit": "%"
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button text",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Button background",
+      "default": "#121212"
+    },
+    {
+      "type": "color_background",
+      "id": "background_color",
+      "label": "Background"
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "top_padding",
+      "label": "Top padding",
+      "min": 0,
+      "max": 100,
+      "default": 40,
+      "step": 5,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "bottom_padding",
+      "label": "Bottom padding",
+      "min": 0,
+      "max": 100,
+      "default": 40,
+      "step": 5,
+      "unit": "px"
+    },
+    {
+      "type": "range",
+      "id": "navigation_spacing",
+      "label": "Navigation spacing",
+      "min": 0,
+      "max": 80,
+      "default": 20,
+      "step": 5,
+      "unit": "px",
+      "info": "Space between carousel and navigation arrows"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "video",
+      "name": "Video",
+      "settings": [
+        {
+          "type": "video",
+          "id": "html5_video",
+          "label": "Hosted video"
+        },
+        {
+          "type": "product",
+          "id": "product",
+          "label": "Product"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Video carousel",
+      "blocks": [
+        {
+          "type": "video"
+        },
+        {
+          "type": "video"
+        },
+        {
+          "type": "video"
+        },
+        {
+          "type": "video"
+        },
+        {
+          "type": "video"
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}
+
+<script type="application/json" data-onhow="{{ section_id }}">
+  {
+    "id": {{ section_id | json }},
+    "autoplay": {{ section.settings.autoplay | times: 1000 | json }}
+  }
+</script>
+
+<script data-onhow-external-js="{{ section_id }}" src="https://cdn.shopify.com/s/files/1/0577/7673/4361/files/flickity-2.3.0.pkgd.min.js?v=1671485005" defer></script>
+
+<script data-onhow-js="{{ section_id }}" type="module" defer>
+(function(){
+
+  const onhow = {
+    settings: {},
+    load: function(section){
+      const elem = section.querySelector(`#slider-${onhow.settings.id}`);
+
+      onhow.flkty = new Flickity( elem, {
+        cellAlign: JSON.parse(getComputedStyle(section).getPropertyValue('--cell-align')),
+        autoPlay: this.settings.autoplay,
+        draggable: JSON.parse(getComputedStyle(section).getPropertyValue('--draggable')),
+        contain: false, 
+        wrapAround: JSON.parse(getComputedStyle(section).getPropertyValue('--wrap-around')),
+        adaptiveHeight: false,
+        watchCSS: false,
+        imagesLoaded: true,
+        prevNextButtons: false,
+        pageDots: false,
+        on: {
+          staticClick: function( event, pointer, cellElement, cellIndex ) {
+            if ( typeof cellIndex == 'number' ) {
+              this.selectCell( cellIndex );
+              const videos = section.querySelectorAll('video');
+              if (videos.length) {
+                videos.forEach(video => video.pause());
+                videos[cellIndex].play();
+                const activeCheck = videos[cellIndex].parentNode.querySelector('.onhow__sound-button').classList.contains('onhow__sound-button--on');
+                if (activeCheck) {
+                  videos[cellIndex].muted = false;
+                }
+              }
+            }
+
+          },
+          change: function() {
+            const cellIndex = this.selectedIndex;
+
+            const videos = section.querySelectorAll('video');
+            if (videos.length) {
+              videos.forEach(video => video.pause());
+              videos[cellIndex].play();
+              const activeCheck = videos[cellIndex].parentNode.querySelector('.onhow__sound-button').classList.contains('onhow__sound-button--on');
+              if (activeCheck) {
+                videos[cellIndex].muted = false;
+              }
+            }
+          },
+          ready: () => {
+            setTimeout(() => {
+              elem.classList.add('onhow__stretch-height');
+              const videos = section.querySelectorAll('video');
+              if (videos.length) {
+                videos[0].play();
+              }
+            }, 500);
+          }
+        }
+      });
+
+      var previousButton = section.querySelector('.onhow__nav-button--prev');
+      if (typeof previousButton != 'undefined' && previousButton != null) {
+        previousButton.addEventListener( 'click', function() {
+          onhow.flkty.previous();
+        });
+      }
+
+      var nextButton = section.querySelector('.onhow__nav-button--next');
+      if (typeof nextButton != 'undefined' && nextButton != null) {
+        nextButton.addEventListener( 'click', function() {
+          onhow.flkty.next();
+        });
+      }
+
+      var soundButtons = section.querySelectorAll('.onhow__sound-button');
+      if (typeof soundButtons != 'undefined' && soundButtons != null) {
+        soundButtons.forEach((button, index) => {
+          button.addEventListener('click', function() {
+            const videos = section.querySelectorAll('video');
+            if (videos.length) {
+              videos.forEach(video => video.muted = true);
+              const selectedVideo = videos[onhow.flkty.selectedIndex];
+
+              if (button.classList.contains('onhow__sound-button--on')) {
+                selectedVideo.muted = true;
+              } else {
+                selectedVideo.muted = false;
+              }
+
+              soundButtons.forEach(button => button.classList.toggle('onhow__sound-button--on'));
+            }
+            return false;
+          });
+        });
+      }
+
+    },
+    unload: function(section){
+    }
+  }
+
+  window.addEventListener('shopify:section:unload', function (e) {
+    const settings = document.querySelector(`[data-onhow="${e.detail.sectionId}"]`);
+    const sectionId = e.detail.sectionId;
+    const section = document.querySelector(`#DP--${e.detail.sectionId}`);
+    if (sectionId == onhow.settings.id){
+      onhow.unload(section);
+    }
+  });
+
+  onhow.settings = JSON.parse(document.querySelector('[data-onhow="{{ section_id }}"]').innerHTML);
+  const sectionId = {{ section_id | json }};
+  const section = document.querySelector(`#DP--${sectionId}`);
+
+  if (sectionId == onhow.settings.id){
+    onhow.load(section);
+  }
+})()
+</script>

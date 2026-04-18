@@ -1,0 +1,327 @@
+
+
+<style>
+/* multiplicador fixo = 1 */
+.onhow-testimonials-section{
+  padding:{{ section.settings.section_padding_top }}px 0 {{ section.settings.section_padding_bottom }}px 0;
+  background:#fff;
+}
+.onhow-testimonials-header{text-align:center;margin-bottom:10px}
+.onhow-section-subtitle{font-size:var(--fontreviewd);font-weight:700;margin-bottom:25px;color:#333}
+.onhow-section-description{font-size:var(--fontreviewdd);color:#666;max-width:800px;margin:0 auto;line-height:1.6;text-align:center}
+.onhow-testimonials-content{display:flex;justify-content:center;position:relative;overflow:hidden}
+.onhow-testimonials-carousel{flex:1;overflow:hidden;width:100%;padding-top:20px;padding-bottom:20px}
+.onhow-testimonials-wrapper{display:flex;gap:15px;transition:transform .8s cubic-bezier(.25,.46,.45,.94)}
+.onhow-testimonial-slide{flex:0 0 33%;max-width:33%;min-width:250px;transition:.5s}
+.onhow-testimonial-card{background:#fff;border-radius:12px;padding:15px;height:100%;box-shadow:0 4px 12px rgba(0,0,0,.08);border:1px solid rgba(0,0,0,.03)}
+.onhow-testimonial-author-section{display:flex;align-items:center;margin-bottom:.75rem}
+.onhow-testimonial-author-image{width:60px;height:60px;border-radius:50%;object-fit:cover;background:#f5f5f5;border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.15);margin-right:1rem}
+.onhow-testimonial-author-image-placeholder{width:60px;height:60px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;margin-right:1rem}
+.onhow-testimonial-author-name{font-size:1.3rem;margin:0;color:#333;word-wrap:break-word;display:inline}
+.onhow-testimonial-date{font-size:1.1rem;color:#ccc;margin-left:0}
+.onhow-testimonial-stars{margin:.5rem 0}
+.onhow-testimonial-star,.onhow-testimonial-star-empty{color:#ffc107;font-size:13px;letter-spacing:6px;display:inline-block;transform:scale(1.5)}
+.onhow-testimonial-star-empty{color:#e0e0e0}
+.onhow-testimonial-content p{font-size:16px;line-height:1.6;color:#333;margin:0}
+.onhow-carousel-navigation-container{display:flex;justify-content:center;margin-top:10px;gap:20px}
+.onhow-carousel-prev-arrow,.onhow-carousel-next-arrow{width:45px;height:45px;border-radius:50%;background:#fff;border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.1);cursor:pointer;transition:.3s}
+.onhow-carousel-prev-arrow:hover,.onhow-carousel-next-arrow:hover{transform:scale(1.3);box-shadow:0 8px 16px rgba(0,0,0,.15)}
+.onhow-carousel-prev-arrow:active,.onhow-carousel-next-arrow:active{transform:scale(.95)}
+
+
+.onhow-testimonial-author-info {
+    display: flex;
+    flex-direction: column;
+    align-content: flex-start;
+}
+
+/* responsivo */
+@media(max-width:767px){
+  .onhow-section-subtitle{font-size:var(--fontreviewm);margin-bottom:15px}
+  .onhow-section-description{font-size:var(--fontreviewdm)}
+  .onhow-testimonials-wrapper{gap:0}
+  .onhow-testimonial-card{margin:0 15px;border-radius:6px}
+  .onhow-testimonial-slide{flex:0 0 100%;max-width:100%}
+}
+@media(min-width:768px) and (max-width:991px){
+  .onhow-testimonial-slide{flex:0 0 50%;max-width:50%}
+  .onhow-section-subtitle{font-size:var(--fontreviewm)}
+  .onhow-section-description{font-size:var(--fontreviewdm)}
+}
+
+ :root {
+--fontreviewd:  {{ section.settings.fontreviewd }}px;
+--fontreviewm:  {{ section.settings.fontreviewm }}px;
+--fontreviewdd:  {{ section.settings.fontreviewdd }}px;
+--fontreviewdm:  {{ section.settings.fontreviewdm }}px;
+}
+
+</style>
+
+<div class="page-width">
+  <div class="onhow-testimonials-container">
+    <div class="onhow-testimonials-header">
+      {% if section.settings.subtitle != blank %}
+        <h2 class="onhow-section-subtitle">{{ section.settings.subtitle }}</h2>
+      {% endif %}
+      {% if section.settings.description != blank %}
+        <div class="onhow-section-description">{{ section.settings.description }}</div>
+      {% endif %}
+    </div>
+
+    <div class="onhow-testimonials-content">
+      <div class="onhow-testimonials-carousel">
+        <div class="onhow-testimonials-wrapper">
+          {% for block in section.blocks %}
+            {% if block.type == 'testimonial' %}
+              <div class="onhow-testimonial-slide" {{ block.shopify_attributes }}>
+                <div class="onhow-testimonial-card">
+                  <div class="onhow-testimonial-author-section">
+                    {% if block.settings.author_image %}
+                      <img class="onhow-testimonial-author-image" src="{{ block.settings.author_image | img_url: '160x160', crop:'center' }}" alt="{{ block.settings.author_name }}" loading="lazy" width="80" height="80">
+                    {% else %}
+                      <div class="onhow-testimonial-author-image-placeholder">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 11c2.2091 0 4-1.79086 4-4s-1.7909-4-4-4-4 1.79086-4 4 1.7909 4 4 4Z" stroke="#000" stroke-width="2"/><path d="M4 21v-1c0-3.3137 2.6863-6 6-6h4c3.3137 0 6 2.6863 6 6v1" stroke="#000" stroke-width="2"/></svg>
+                      </div>
+                    {% endif %}
+                    <div class="onhow-testimonial-author-info">
+                      <h3 class="onhow-testimonial-author-name">{{ block.settings.author_name }}</h3>
+                      {% if block.settings.review_date != blank %}
+                        <span class="onhow-testimonial-date">{{ block.settings.review_date }}</span>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <div class="onhow-testimonial-content">
+                    <div class="onhow-testimonial-stars">
+                      {% assign full = block.settings.star_rating %}
+                      {% assign empty = 5 | minus: full %}
+                      {% for i in (1..full) %}<span class="onhow-testimonial-star">★</span>{% endfor %}
+                      {% for i in (1..empty) %}<span class="onhow-testimonial-star-empty">★</span>{% endfor %}
+                    </div>
+                    {% if block.settings.testimonial != blank %}
+                      <p>{{ block.settings.testimonial }}</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="onhow-carousel-navigation-container">
+      <button class="onhow-carousel-prev-arrow" aria-label="Previous slide">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 18 9 12l6-6" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="onhow-carousel-next-arrow" aria-label="Next slide">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m9 6 6 6-6 6" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const wrapper   = document.querySelector('.onhow-testimonials-wrapper');
+  const slides    = [...wrapper.children];
+  const prevBtn   = document.querySelector('.onhow-carousel-prev-arrow');
+  const nextBtn   = document.querySelector('.onhow-carousel-next-arrow');
+  const speed     = {{ section.settings.autoplay_speed | default: 4000 }};
+  const original  = slides.length;
+  let   idx       = 0;
+  let   timer;
+
+  const slidesPerView = () => window.innerWidth < 768 ? 1 : (window.innerWidth < 991 ? 2 : 3);
+
+  const cloneSlides = () =>{
+    const spv = slidesPerView();
+    wrapper.innerHTML = '';
+    // antes
+    for(let i=original-spv;i<original;i++) wrapper.appendChild(slides[i].cloneNode(true));
+    // originais
+    slides.forEach(s=>wrapper.appendChild(s));
+    // depois
+    for(let i=0;i<spv;i++) wrapper.appendChild(slides[i].cloneNode(true));
+    idx = spv;
+    move(false);
+  };
+
+  const move = (animate=true) =>{
+    const spv = slidesPerView();
+    const percent = window.innerWidth<768 ? -idx*100 :
+                    (spv===2 ? -idx*50 : -idx*33.33);
+    wrapper.style.transition = animate? 'transform .8s cubic-bezier(.25,.46,.45,.94)' : 'none';
+    wrapper.style.transform  = `translateX(${percent}%)`;
+  };
+
+  const resetIfNeeded = ()=>{
+    const spv = slidesPerView();
+    const start = spv;
+    const end   = start + original;
+    if(idx>=end){ idx=start; move(false); }
+    if(idx<start){ idx=end-1; move(false); }
+  };
+
+  const autoplay = ()=>{
+    clearInterval(timer);
+    timer = setInterval(()=>{ idx++; move(); resetIfNeeded(); }, speed);
+  };
+
+  cloneSlides(); autoplay();
+
+  prevBtn.addEventListener('click',()=>{ idx--; move(); resetIfNeeded(); autoplay(); });
+  nextBtn.addEventListener('click',()=>{ idx++; move(); resetIfNeeded(); autoplay(); });
+
+  window.addEventListener('resize',()=>{ cloneSlides(); autoplay(); });
+
+  /* swipe mobile */
+  if(window.innerWidth<768){
+    let startX=0;
+    wrapper.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;},{passive:true});
+    wrapper.addEventListener('touchend',e=>{
+      const dist=startX-e.changedTouches[0].clientX;
+      if(Math.abs(dist)>50){ dist>0?idx++:idx--; move(); resetIfNeeded(); autoplay(); }
+    },{passive:true});
+  }
+});
+</script>
+
+{% schema %}
+{
+  "name": "Reviews v",
+  "tag": "section",
+  "class": "section onhow-testimonials-section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "subtitle",
+      "label": "Título da Seção",
+      "default": "O que nossos clientes dizem"
+    },
+    {
+      "type": "range",
+      "id": "fontreviewd",
+      "label": "Fonte Desktop Titulo",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "default": 28
+    },
+     {
+      "type": "range",
+      "id": "fontreviewm",
+      "label": "Fonte mobile Titulo",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "default": 21
+    },
+    {
+      "type": "textarea",
+      "id": "description",
+      "label": "Section Description",
+      "default": "Read positive experiences of people who consulted your service before, and you will be more confident & courageous to approach our service without hesitation."
+    },
+     {
+      "type": "range",
+      "id": "fontreviewdd",
+      "label": "Fonte Desktop descrição",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "default": 19
+    },
+     {
+      "type": "range",
+      "id": "fontreviewdm",
+      "label": "Fonte mobile descrição",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "default": 15
+    },
+    {
+      "type": "range",
+      "id": "autoplay_speed",
+      "label": "Autoplay speed (ms)",
+      "min": 1000,
+      "max": 8000,
+      "step": 500,
+      "default": 4000
+    },
+    {
+      "type": "range",
+      "id": "section_padding_top",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "px",
+      "label": "Section Top Padding",
+      "default": 80
+    },
+    {
+      "type": "range",
+      "id": "section_padding_bottom",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "px",
+      "label": "Section Bottom Padding",
+      "default": 80
+    }
+  ],
+  "max_blocks": 20,
+  "blocks": [
+    {
+      "type": "testimonial",
+      "name": "Testimonial",
+      "settings": [
+        {
+          "type": "image_picker",
+          "id": "author_image",
+          "label": "Author Image"
+        },
+        {
+          "type": "text",
+          "id": "author_name",
+          "label": "Author Name",
+          "default": "John Doe"
+        },
+        {
+          "type": "text",
+          "id": "review_date",
+          "label": "Review Date",
+          "default": "Jan 2 · 2024"
+        },
+        {
+          "type": "range",
+          "id": "star_rating",
+          "min": 1,
+          "max": 5,
+          "step": 1,
+          "label": "Star Rating",
+          "default": 5
+        },
+        {
+          "type": "textarea",
+          "id": "testimonial",
+          "label": "Testimonial Text",
+          "default": "I've had a wonderful experience with this service. The team is professional and the results exceeded my expectations."
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Reviews v",
+      "blocks": [
+        { "type": "testimonial" },
+        { "type": "testimonial" },
+        { "type": "testimonial" }
+      ]
+    }
+  ]
+}
+{% endschema %}

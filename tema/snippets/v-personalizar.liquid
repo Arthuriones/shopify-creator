@@ -1,0 +1,280 @@
+{% if request.page_type == 'product' and product.tags contains 'personalizar1' %}
+  <style>
+    .personalizer-box{
+      border:1px solid var(--p1-borda);
+      border-radius:var(--p1-radius);
+      padding: var(--padding-md);
+      margin-top: var(--p1-ms);
+      margin-bottom: var(--p1-mi);
+      background: var(--p1-fundo);
+      display:grid; gap: var(--gap-sm);
+      width: 100% !important;
+    }
+    .personalizer-box__row{ display:flex; flex-direction:column; gap:6px; }
+    .personalizer-box label{ font-size: .9rem; opacity:.9; }
+    .personalizer-box input{
+      border: var(--style-border-width-inputs,1px) solid var(--color-border);
+      border-radius: var(--p1-l-radius);
+      padding: .6rem .75rem; width:100%;
+      background-color: var(--p1-linhas) !important;
+    }
+      .aviso {
+    color: var( --p1-cor-aviso);
+    font-weight: normal;
+    margin-left: 6px;
+    font-size: 11px;
+    margin-top: 2px
+  }
+   input::placeholder {
+    color: var(--p1-cor-holder);
+  }
+
+   .align-label-campo { 
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    font-size: 13px;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--p1-cor-campo);
+  }
+  .personalizer-warning.hidden { display: none !important; }
+  </style>
+
+  <!-- Caixa de personalização (será movida para dentro do form do produto) -->
+  <div class="personalizer-box" 
+       data-personalizer
+       data-product-id="{{ product.id }}">
+
+        {%- if settings.mostrar-p1-l1 -%}
+    <div class="personalizer-box__row">
+      <label class="align-label-campo" data-name-label>{{ settings.personaliza1-texto1 }}<span class="aviso">{{ settings.personaliza1-aviso1 }}</span></label>
+      <input data-name-input
+             type="text"
+             maxlength="{{ settings.p1-l1-qntd }}"
+             placeholder="{{ settings.personaliza1-holder1 }}"
+             name="properties[{{ settings.personaliza1-texto1 }}]">
+    </div>
+{%- endif -%}
+
+     {%- if settings.mostrar-p1-l2 -%}
+    <div class="personalizer-box__row">
+      <label class="align-label-campo" data-number-label>{{ settings.personaliza1-texto2 }}<span class="aviso">{{ settings.personaliza1-aviso2 }}</span></label>
+      <input data-number-input
+             type="text"
+                       
+             maxlength="{{ settings.p1-l2-qntd }}"
+             placeholder="{{ settings.personaliza1-holder2 }}"
+             name="properties[{{ settings.personaliza1-texto2 }}]">
+    </div>
+    {%- endif -%}
+
+  </div>
+
+
+<script>
+(function(){
+  // ======== Dados do produto (Liquid → JS) ========
+  const OPTION_NAMES = {{ product.options | json }};
+  const VARIANTS     = {{ product.variants | json }};
+  const PRODUCT_ID   = {{ product.id }};
+
+  // ======== Settings do tema (com defaults) ========
+  const OPT_NAME_RAW = {{ settings.personalizer_option_name | default: 'Personalização' | json }};
+  const TRIGGERS_RAW = {{ settings.personalizer_triggers | default: 'Personalizar' | json }};
+  const OFF_RAW      = {{ settings.personalizer_off_values | default: 'Sem Personalização' | json }};
+
+  // ======== Helpers ========
+  const norm = s => (s||'').toString().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase();
+
+  const SPLIT = s => (s||'')
+    .split(/[\n,]+/)
+    .map(norm)
+    .filter(Boolean);
+
+  const P_OPTION_NAME = norm(OPT_NAME_RAW || 'Personalização');
+  const TRIGGERS = SPLIT(TRIGGERS_RAW || 'Personalizar');
+  const OFFS     = SPLIT(OFF_RAW || 'Sem Personalização');
+
+  const P_INDEX = OPTION_NAMES.findIndex(n => norm(n) === P_OPTION_NAME);
+
+  const $box     = () => document.querySelector('[data-personalizer][data-product-id="{{ product.id }}"]');
+  const inQuick  = el => !!el.closest('.quick-add-modal__content');
+  const scopeOf  = (el) => el.closest('.product-information, .product-details, section[data-section-type="main-product"], .product, .shopify-section') || document;
+  const getForm  = (scope) => scope.querySelector('product-form-component form.shopify-product-form') || scope.querySelector('form.shopify-product-form');
+
+  function currentVariant(scope){
+    const form = getForm(scope);
+    const id = form?.querySelector('input[name="id"]')?.value;
+    return VARIANTS.find(v => String(v.id) === String(id)) || null;
+  }
+
+  // Lê valor da opção "Personalização" no Vessel
+  function readPersonalizacao(scope){
+    // 1) Pela variante atual
+    if (P_INDEX >= 0) {
+      const v = currentVariant(scope);
+      if (v && v.options && v.options[P_INDEX] != null) return v.options[P_INDEX];
+    }
+    // 2) Radios do variant-picker
+    if (P_INDEX >= 0) {
+      const pos = P_INDEX + 1; // data-input-id é 1-based
+      const radio = scope.querySelector(`variant-picker input[type="radio"][data-input-id^="${pos}-"]:checked`);
+      if (radio) return radio.value || radio.getAttribute('aria-label') || '';
+    }
+    // 3) Select options[<nome>]
+    if (P_INDEX >= 0) {
+      const nm = OPTION_NAMES[P_INDEX];
+      const sel = scope.querySelector(`variant-picker select[name="options[${CSS?.escape ? CSS.escape(nm) : nm}]"]`);
+      if (sel) return sel.value;
+    }
+    return '';
+  }
+
+  // Decide se deve exibir (true) ou esconder (false)
+  function shouldShow(scope){
+    // Se a opção não existe nesse produto, consideramos que o box é necessário (tag ativa)
+    if (P_INDEX < 0) return true;
+
+    const val = norm(readPersonalizacao(scope));
+    if (!val) return false;
+
+    if (TRIGGERS.length && TRIGGERS.includes(val)) return true;
+    if (OFFS.length && OFFS.includes(val)) return false;
+
+    // Se não bate com nenhum OFF e temos gatilhos configurados, só mostra quando bater
+    return false;
+  }
+
+  // Põe a caixa como primeiro elemento do form (no Vessel isso mantém abaixo dos seletores)
+  function placeBox(){
+    const box = $box(); if (!box || inQuick(box)) return;
+    const scope = scopeOf(box);
+    const form  = getForm(scope); if (!form) return;
+    const first = form.firstElementChild || null;
+    if (first !== box) form.insertBefore(box, first);
+    setVisibilityAndRequired();
+    bindFieldUX(); // UX/validação
+  }
+
+  // Mostra/esconde e controla 'required'
+  function setVisibilityAndRequired(){
+    const box = $box(); if (!box) return;
+    const scope = scopeOf(box);
+
+    const need = shouldShow(scope);
+    const name   = box.querySelector('[data-name-input]');
+    const number = box.querySelector('[data-number-input]');
+
+    if (need) {
+      box.style.display = '';
+      [name, number].forEach(inp => { if (!inp) return; inp.disabled = false; inp.setAttribute('required','required'); });
+    } else {
+      box.style.display = 'none';
+      [name, number].forEach(inp => {
+        if (!inp) return;
+        inp.removeAttribute('required');
+        inp.disabled = true;
+        inp.value = '';
+        if (inp.setCustomValidity) inp.setCustomValidity('');
+      });
+    }
+  }
+
+  // UX de validação: ao focar/digitar, some qualquer mensagem nativa remanescente
+  function bindFieldUX(){
+    const box = $box(); if (!box) return;
+    if (box.__uxBound) return; box.__uxBound = true;
+
+    const inputs = box.querySelectorAll('[data-name-input],[data-number-input]');
+    inputs.forEach(inp=>{
+      ['focus','input','pointerdown','keydown','click'].forEach(ev=>{
+        inp.addEventListener(ev, function(){
+          if (inp.setCustomValidity) inp.setCustomValidity('');
+        }, {passive:true});
+      });
+    });
+  }
+
+  // Bloqueia “comprar” se campos estiverem vazios quando exigidos
+  function guardAddToCart(){
+    const box = $box(); if (!box) return;
+    const scope = scopeOf(box);
+    const form  = getForm(scope); if (!form) return;
+
+    const name   = box.querySelector('[data-name-input]');
+    const number = box.querySelector('[data-number-input]');
+
+    const hasValues = () => {
+      if (!shouldShow(scope)) return true;
+      const okName   = !name   || name.disabled   || !!name.value.trim();
+      const okNumber = !number || number.disabled || !!number.value.trim();
+      return okName && okNumber;
+    };
+
+    function blockIfInvalid(e){
+      if (hasValues()) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (name && !name.disabled && !name.value.trim()) {
+        name.focus({ preventScroll: true });
+        name.reportValidity && name.reportValidity();
+      } else if (number && !number.disabled && !number.value.trim()){
+        number.focus({ preventScroll: true });
+        number.reportValidity && number.reportValidity();
+      }
+    }
+
+    if (!form.__pzSubmit){
+      form.__pzSubmit = true;
+      form.addEventListener('submit', blockIfInvalid, true);
+    }
+    if (!form.__pzClick){
+      form.__pzClick = true;
+      form.addEventListener('click', function(e){
+        const btn = e.target.closest('button,[type="submit"],[name="add"],[data-action="add-to-cart"],[role="button"]');
+        if (!btn) return;
+        if (!form.contains(btn) && btn.getAttribute('form') !== form.getAttribute('id')) return;
+        blockIfInvalid(e);
+      }, true);
+    }
+  }
+
+  // Reage a mudanças de variante
+  function bindVariantEvents(){
+    const box = $box(); if (!box || box.__bound) return;
+    box.__bound = true;
+
+    const scope = scopeOf(box);
+    const run = () => { placeBox(); setVisibilityAndRequired(); };
+
+    ['variant:update','variantUpdate','variant:change','variantChanged','product:variant-change',
+     'shopify:section:load','shopify:section:select'
+    ].forEach(ev => document.addEventListener(ev, run));
+
+    const picker = scope.querySelector('variant-picker') || scope;
+    picker.addEventListener('change', run, true);
+    picker.addEventListener('input',  run, true);
+
+    const mo = new MutationObserver(run);
+    mo.observe(scope, { childList:true, subtree:true });
+  }
+
+  function boot(){
+    placeBox();
+    setVisibilityAndRequired();
+    bindFieldUX();
+    guardAddToCart();
+    bindVariantEvents();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once:true });
+  } else {
+    boot();
+  }
+})();
+</script>
+
+{% endif %}

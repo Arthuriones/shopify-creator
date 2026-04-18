@@ -1,0 +1,58 @@
+
+  {% render 'botaocomprardireto' %}
+
+
+{% schema %}
+{
+  "name": "Bandeiras de Pagamento",
+  "tag": null,
+  "settings": [
+    { "type": "text", "id": "comprardireto", "label": "Texto do botão", "default": "Comprar e ir ao checkout" },
+    { "type": "text", "id": "texto_processando", "label": "Texto ao processar (opcional)", "default": "Adicionando…" },
+
+    { "type": "header", "content": "Cores (estado normal)" },
+    { "type": "color", "id": "cor_fundo", "label": "Fundo", "default": "#111111" },
+    { "type": "color", "id": "cor_texto", "label": "Texto", "default": "#FFFFFF" },
+    { "type": "color", "id": "cor_borda", "label": "Borda", "default": "#111111" },
+
+    { "type": "header", "content": "Cores (hover)" },
+    { "type": "color", "id": "cor_fundo_hover", "label": "Fundo (hover)", "default": "#000000" },
+    { "type": "color", "id": "cor_texto_hover", "label": "Texto (hover)", "default": "#FFFFFF" },
+    { "type": "color", "id": "cor_borda_hover", "label": "Borda (hover)", "default": "#000000" },
+
+    { "type": "header", "content": "Dimensões e tipografia" },
+    { "type": "range", "id": "altura", "label": "Altura (px)", "min": 36, "max": 80, "step": 1, "default": 48 },
+    { "type": "range", "id": "padding_horizontal", "label": "Padding horizontal (px)", "min": 12, "max": 48, "step": 1, "default": 30 },
+    { "type": "range", "id": "font_size", "label": "Tamanho da fonte (px)", "min": 12, "max": 28, "step": 1, "default": 16 },
+    { "type": "checkbox", "id": "bold", "label": "Texto em negrito", "default": true },
+
+    { "type": "header", "content": "Borda e raio" },
+    { "type": "range", "id": "borda_espessura", "label": "Espessura da borda (px)", "min": 0, "max": 6, "step": 1, "default": 2 },
+    { "type": "range", "id": "borda_raio", "label": "Arredondamento (px)", "min": 0, "max": 40, "step": 1, "default": 10 },
+
+    { "type": "header", "content": "Layout" },
+    { "type": "checkbox", "id": "largura_total", "label": "Ocupar largura total", "default": true },
+    {
+      "type": "select",
+      "id": "alinhamento",
+      "label": "Alinhamento (quando não for largura total)",
+      "default": "left",
+      "options": [
+        { "value": "left", "label": "Esquerda" },
+        { "value": "center", "label": "Centralizado" },
+        { "value": "right", "label": "Direita" }
+      ]
+    },
+
+    { "type": "header", "content": "Margens" },
+    { "type": "range", "id": "margem_superior", "label": "Margem superior (px)", "min": -80, "max": 80, "step": 2, "default": 0 },
+    { "type": "range", "id": "margem_inferior", "label": "Margem inferior (px)", "min": -80, "max": 80, "step": 2, "default": -10 }
+  ],
+  "presets": [
+    {
+      "name": "Botão comprar direto pro checkout",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

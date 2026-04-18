@@ -1,0 +1,149 @@
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+      <style>
+      
+
+  :root {
+--marginlocal1-top:  {{ block.settings.marginlocal1-top }}px;
+--marginlocal1-bottom:  {{ block.settings.marginlocal1-bottom }}px;
+
+--product-truck-background         : {{ block.settings.product_truck_background}};
+    --color-frete-fundo                : {{ block.settings.color_frete_fundo}};
+    --product-truck-color              : {{ block.settings.product_truck_color}};
+    --product-free-shipping-color      : {{ block.settings.product_free_shipping_color}};
+    --product-localization-color       : {{ block.settings.product_localization_color}};
+    --product-icon-return-color        : {{ block.settings.product_icon_return_color}};
+    --product-return-color             : {{ block.settings.product_return_color}};
+
+--bordaboxfretelocal   : {{ block.settings.bordaboxfretelocal}}px;
+
+--bordaboxfretelocali   : {{ block.settings.bordaboxfretelocali}}px;
+
+
+ --product-free-shipping-color      : {{ block.settings.product_free_shipping_color}};
+  --product-free-shipping-color2      : {{ block.settings.product_free_shipping_color2}};
+
+}
+
+
+      @media (max-width: 640px) {
+        .fretefundo > img {
+           height: 52px;
+        }
+        .fretefundo > p > span {
+           font-size: 12px;
+          color: var(--product-localization-color);
+
+        }
+        .fretefundo {
+           margin-top: 14px;
+        }
+       .txt-frete {
+           font-size: 10px;
+           font-weight: bold;
+           padding: 0;
+           margin: 0;
+           margin-right: -5px!important;
+          color: var(--product-localization-color);
+
+        }
+      }
+
+      .fretefundo {
+          display: flex;
+    align-items: center;
+    border-radius:  var(--bordaboxfretelocal);
+    padding: 10px 10px 10px 3px;
+    color: #a9a9a9;
+    border: 1px solid #bdbdbd70;
+    margin-top: var(--marginlocal1-top);
+    margin-bottom: var(--marginlocal1-bottom);
+    width: 100%;
+    background: var(--color-frete-fundo);
+      }
+
+      .ttl-frete {
+       flex-grow: 1;
+        font-size: 13px;
+       line-height: 1.3;
+      margin-bottom: 0px;
+          margin-top:0px;
+        color: rgb(var(--text-color) / .7);
+        
+      }
+
+      @media (min-width: 641px){
+      .txt-frete {
+           font-size: 12px;
+           font-weight: bold;
+           padding: 0;
+           margin: 0;
+          color: #36b376;
+
+      }}
+
+      .ip-frete {
+           display: block;
+          color: var(--product-localization-color);
+       font-size: 13px;
+
+      }
+      
+
+
+      </style>
+
+<div class="fretefundo">
+
+  <!-- ÍCONE (Caminhão ou Correios) -->
+  {%- if block.settings.frete1_caminhao -%}
+    <svg fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="
+      background: var(--product-truck-background);
+      margin: 0 8px;
+      width: 38px;
+      border-radius: var(--bordaboxfretelocali);
+      padding: 6px 6px;">
+      <path d="M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z" fill="var(--product-truck-color)" class="fill-ffffff" style="fill: var(--product-truck-background);"></path>
+      <path d="M13 16V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1m8-1a1 1 0 0 1-1 1H9m4-1V8a1 1 0 0 1 1-1h2.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V16a1 1 0 0 1-1 1h-1m-6-1a1 1 0 0 0 1 1h1M5 17a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0m6 0a2 2 0 1 0 4 0m-4 0a2 2 0 1 1 4 0" stroke="var(--product-truck-color)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="stroke-374151"></path>
+    </svg>
+  {%- else -%}
+    {%- if block.settings.frete1_correios -%}
+      <img
+        style="width:50px;height:auto;padding:7px;margin:0 3px 0 4px;"
+        src="{{ 'correios.png' | asset_url }}"
+        class="lazyload"
+        width="90"
+        height="35"
+        alt="logo dos correios">
+    {%- endif -%}
+  {%- endif -%}
+
+  <!-- TEXTO: 1ª linha = Frete Grátis + localização | 2ª linha = frase editável -->
+  <p class="ttl-frete" style="color: var(--product-free-shipping-color2); margin:0; line-height:1.25;">
+  <b style="color: var(--product-free-shipping-color)">{{ block.settings.frete1_frasegratis }}</b>
+  <span class="ip-frete" id="custom-address" style="display:inline; color: var(--product-localization-color );">Carregando informações...</span>
+  <br>
+  {{ block.settings.frete1_frase }}
+</p>
+
+
+  <!-- Localização dinâmica -->
+  <script>
+    $.getJSON("https://wtfismyip.com/json", function (localizacao) {
+      try {
+        var regiao = (localizacao && localizacao['YourFuckingLocation'])
+          ? localizacao['YourFuckingLocation'].replace(", Brazil", "")
+          : "";
+        if (regiao) {
+          $("#custom-address").html("{{ block.settings.frete1_para }} <b>" + regiao + " {{ block.settings.frete1_regiao }}</b>");
+        } else {
+          $("#custom-address").text(""); // fallback silencioso
+        }
+      } catch (e) {
+        $("#custom-address").text(""); // fallback em caso de erro
+      }
+    });
+  </script>
+
+</div>

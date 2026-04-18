@@ -1,0 +1,49 @@
+
+  {% render 'mercadolivre' %}
+
+
+{% schema %}
+{
+  "name": "Vendas MP Platinum",
+  "tag": null,
+  "settings": [
+    {
+      "type": "range",
+      "id": "margin-topmp",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margin-bottommp",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+      {
+      "type": "range",
+      "id": "arredondamp",
+      "label": "Margem Superior",
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "unit": "px",
+      "default": 5
+    },
+    
+  ],
+  "presets": [
+    {
+      "name": "Vendas MP Platinum",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}

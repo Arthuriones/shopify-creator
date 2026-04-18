@@ -1,0 +1,285 @@
+{%- comment -%}
+  Snippet: btn-checkout-transparente.liquid
+{%- endcomment -%}
+
+{%- assign _id = 'dm-checkout-btn-' | append: block.id -%}
+
+{%- comment -%} ✅ Não renderiza se o produto inteiro estiver indisponível (quando existir o objeto product) {%- endcomment -%}
+{%- assign _render_button = true -%}
+{%- if product and product.available == false -%}
+  {%- assign _render_button = false -%}
+{%- endif -%}
+
+{% if _render_button %}
+
+<div id="{{ _id }}-wrap" class="dm-checkout-wrap" style="text-align: {{ block.settings.alinhamento }};{% if block.settings.largura_total %} width: 100% !important; min-width: 100% !important; {% else %} width: auto; {% endif %}">
+  <button
+    id="{{ _id }}"
+    type="button"
+    class="dm-checkout-direct"
+    data-checkout-direct
+  >
+    <span>{{ block.settings.comprardireto }}</span>
+  </button>
+</div>
+
+<style>
+  /* Escopo por ID para não vazar estilos */
+  #{{ _id }}{
+    background: {{ block.settings.cor_fundo }};
+    color: {{ block.settings.cor_texto }};
+    border: {{ block.settings.borda_espessura }}px solid {{ block.settings.cor_borda }};
+    height: {{ block.settings.altura }}px;
+    line-height: {{ block.settings.altura }}px;
+    border-radius: {{ block.settings.borda_raio }}px !important;
+    display: inline-block;
+    padding: 0 {{ block.settings.padding_horizontal }}px;
+    {% if block.settings.largura_total %} width: 100% !important; min-width: 100% !important; {% else %} width: auto; {% endif %}
+    text-align: center;
+    font-size: {{ block.settings.font_size }}px;
+    font-weight: {% if block.settings.bold %}700{% else %}400{% endif %};
+    cursor: pointer;
+    margin-top: {{ block.settings.margem_superior }}px;
+    margin-bottom: {{ block.settings.margem_inferior }}px;
+    transition: background .2s, color .2s, border-color .2s, transform .15s ease;
+  }
+  #{{ _id }}:hover{
+    background: {{ block.settings.cor_fundo_hover }};
+    color: {{ block.settings.cor_texto_hover }};
+    border-color: {{ block.settings.cor_borda_hover }};
+    transform: translateY(-1px);
+  }
+</style>
+
+{% if settings.checkouttransparente %}
+
+<script>
+(function(){
+  var btn = document.getElementById('{{ _id }}');
+  var wrap = document.getElementById('{{ _id }}-wrap');
+  if (!btn || !wrap) return;
+
+  // ✅ Esconde/mostra conforme disponibilidade da variante (usando o estado do botão nativo de "Adicionar ao carrinho")
+  function getNearestForm(){
+    var container = btn.closest('.shopify-section, section, form, .product, .product__info, .product-form') || document;
+    return container.querySelector('form[action*="/cart/add"]') || document.querySelector('form[action*="/cart/add"]');
+  }
+
+  function findNativeATC(form){
+    if (!form) return null;
+    return (
+      form.querySelector('button[name="add"]') ||
+      form.querySelector('button[type="submit"]') ||
+      form.querySelector('[type="submit"]')
+    );
+  }
+
+  function isUnavailable(el){
+    if (!el) return false;
+    return (
+      el.disabled ||
+      el.getAttribute('aria-disabled') === 'true' ||
+      el.classList.contains('disabled')
+    );
+  }
+
+  function syncVisibility(){
+    var form = getNearestForm();
+    var atc = findNativeATC(form);
+    var unavailable = isUnavailable(atc);
+
+    wrap.style.display = unavailable ? 'none' : '';
+    btn.disabled = unavailable;
+  }
+
+  // Estado inicial
+  syncVisibility();
+
+  // Atualiza quando muda variante (maioria dos temas)
+  var form = getNearestForm();
+  if (form){
+    form.addEventListener('change', function(e){
+      var t = e.target;
+      if (!t) return;
+      if (t.matches('select[name="id"], input[name="id"]')) syncVisibility();
+    });
+
+    // Observa mudanças no botão nativo (temas que alteram disabled via JS)
+    var atc = findNativeATC(form);
+    if (atc){
+      var mo = new MutationObserver(syncVisibility);
+      mo.observe(atc, { attributes: true, attributeFilter: ['disabled','aria-disabled','class'] });
+    }
+  }
+
+  // Eventos comuns em alguns temas
+  document.addEventListener('variant:change', syncVisibility);
+  document.addEventListener('variant:changed', syncVisibility);
+
+  async function addAndGoToCheckout(){
+    try{
+      syncVisibility();
+      if (btn.disabled) return;
+
+      btn.disabled = true;
+      var span = btn.querySelector('span');
+      var original = span ? span.textContent : '';
+      if (span) span.textContent = '{{ block.settings.texto_processando | default: "Adicionando…" }}';
+
+      var form = getNearestForm();
+
+      if (form){
+        var fd = new FormData(form);
+
+        if (!fd.get('quantity')) {
+          var qty = form.querySelector('[name="quantity"]');
+          fd.set('quantity', (qty && qty.value) ? qty.value : '1');
+        }
+
+        if (!fd.get('id')) {
+          var variantId = form.querySelector('input[name="id"][type="hidden"]');
+          if (variantId && variantId.value) fd.set('id', variantId.value);
+        }
+
+        if (!fd.get('id')) {
+          window.location.href = '/cart';
+          return;
+        }
+
+        await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' },
+          body: fd,
+          credentials: 'same-origin'
+        });
+      }
+
+      window.location.href = '/cart';
+    } catch(e){
+      console.error('Checkout direto falhou:', e);
+      window.location.href = '/cart';
+    } finally {
+      btn.disabled = false;
+      syncVisibility();
+    }
+  }
+
+  btn.addEventListener('click', addAndGoToCheckout);
+})();
+</script>
+
+{% else %}
+
+<script>
+(function(){
+  var btn = document.getElementById('{{ _id }}');
+  var wrap = document.getElementById('{{ _id }}-wrap');
+  if (!btn || !wrap) return;
+
+  function getNearestForm(){
+    var container = btn.closest('.shopify-section, section, form, .product, .product__info, .product-form') || document;
+    return container.querySelector('form[action*="/cart/add"]') || document.querySelector('form[action*="/cart/add"]');
+  }
+
+  function findNativeATC(form){
+    if (!form) return null;
+    return (
+      form.querySelector('button[name="add"]') ||
+      form.querySelector('button[type="submit"]') ||
+      form.querySelector('[type="submit"]')
+    );
+  }
+
+  function isUnavailable(el){
+    if (!el) return false;
+    return (
+      el.disabled ||
+      el.getAttribute('aria-disabled') === 'true' ||
+      el.classList.contains('disabled')
+    );
+  }
+
+  function syncVisibility(){
+    var form = getNearestForm();
+    var atc = findNativeATC(form);
+    var unavailable = isUnavailable(atc);
+
+    wrap.style.display = unavailable ? 'none' : '';
+    btn.disabled = unavailable;
+  }
+
+  syncVisibility();
+
+  var form = getNearestForm();
+  if (form){
+    form.addEventListener('change', function(e){
+      var t = e.target;
+      if (!t) return;
+      if (t.matches('select[name="id"], input[name="id"]')) syncVisibility();
+    });
+
+    var atc = findNativeATC(form);
+    if (atc){
+      var mo = new MutationObserver(syncVisibility);
+      mo.observe(atc, { attributes: true, attributeFilter: ['disabled','aria-disabled','class'] });
+    }
+  }
+
+  document.addEventListener('variant:change', syncVisibility);
+  document.addEventListener('variant:changed', syncVisibility);
+
+  async function addAndGoToCheckout(){
+    try{
+      syncVisibility();
+      if (btn.disabled) return;
+
+      btn.disabled = true;
+      var span = btn.querySelector('span');
+      var original = span ? span.textContent : '';
+      if (span) span.textContent = '{{ block.settings.texto_processando | default: "Adicionando…" }}';
+
+      var form = getNearestForm();
+
+      if (form){
+        var fd = new FormData(form);
+
+        if (!fd.get('quantity')) {
+          var qty = form.querySelector('[name="quantity"]');
+          fd.set('quantity', (qty && qty.value) ? qty.value : '1');
+        }
+
+        if (!fd.get('id')) {
+          var variantId = form.querySelector('input[name="id"][type="hidden"]');
+          if (variantId && variantId.value) fd.set('id', variantId.value);
+        }
+
+        if (!fd.get('id')) {
+          window.location.href = '/checkout';
+          return;
+        }
+
+        await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' },
+          body: fd,
+          credentials: 'same-origin'
+        });
+      }
+
+      window.location.href = '/checkout';
+    } catch(e){
+      console.error('Checkout direto falhou:', e);
+      window.location.href = '/cart';
+    } finally {
+      btn.disabled = false;
+      syncVisibility();
+    }
+  }
+
+  btn.addEventListener('click', addAndGoToCheckout);
+})();
+</script>
+
+{% endif %}
+
+{% endif %}

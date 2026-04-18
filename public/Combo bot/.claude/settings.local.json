@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find 'C:\\\\Users\\\\arthu\\\\Área de Trabalho\\\\Combo bot\\\\Pbot Wars' -name *.lua -type f)"
+    ]
+  }
+}

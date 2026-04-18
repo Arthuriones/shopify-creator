@@ -1,0 +1,93 @@
+
+  {% render 'barraescassez' %}
+ 
+  
+
+
+{% schema %}
+{
+  "name": "Barra escassez",
+  "tag": null,
+  "settings": [
+  
+     {
+        "type": "paragraph",
+        "content": "Ajuste as cores e textos da barra de escassez em configurações > Barra de escassez"
+      },
+
+    {
+      "type": "range",
+      "id": "margin-topp",
+      "label": "Margem Superior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+     {
+      "type": "range",
+      "id": "margin-bottomp",
+      "label": "Margem Inferior",
+      "min": -100,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+     },
+      {
+        "type": "text",
+        "id": "escassez-text1",
+        "label": "Texto antes do numero",
+        "info": "Texto exibido antes do número de itens restantes",
+        "default": "Restam apenas"
+      },
+      {
+        "type": "text",
+        "id": "escassez-text2",
+        "label": "Texto após número de escassez",
+        "info": "Texto exibido após o número de itens restantes",
+        "default": "unidades desse produto"
+      },
+      {
+        "type": "color",
+        "id": "colorp_progress",
+        "label": "Cor Background Barra de escassez",
+        "info": "Cor do background da barra de escassez",
+        "default": "#A9A9A9"
+      },
+      {
+        "type": "color",
+        "id": "colors_progress",
+        "label": "Cor Barra de escassez",
+        "info": "Cor principal da barra de escassez",
+        "default": "#B90000"
+      },
+      {
+        "type": "range",
+        "id": "alt_progress",
+        "label": "Altura da Barra de escassez",
+        "min": 7,
+        "max": 20,
+        "unit": "px",
+        "default": 9
+      },
+      {
+        "type": "range",
+        "id": "font_progress",
+        "label": "Fonte da barra de escassez",
+        "min": 10,
+        "max": 20,
+        "unit": "px",
+        "default": 13
+      }
+    
+  ],
+  "presets": [
+    {
+      "name": "Barra escassez",
+      "category": "t:categories.basic"
+    }
+  ]
+}
+{% endschema %}
