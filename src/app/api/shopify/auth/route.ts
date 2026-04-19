@@ -52,18 +52,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Step 1: Iniciar OAuth — chamado com ?store_id=X
-  if (storeIdParam && !code) {
-    const { data: store, error } = await supabase
-      .from("stores")
-      .select("id, shop_domain, client_id")
-      .eq("id", storeIdParam)
-      .eq("user_id", user.id)
-      .single();
+  // Step 1: Iniciar OAuth — pode vir como:
+  // (a) ?store_id=X (clicou em Conectar no app)
+  // (b) ?shop=Y (Shopify redirecionou pro app_url quando o lojista clicou Install no dev.shopify.com)
+  if (!code && (storeIdParam || shop)) {
+    let store: { id: string; shop_domain: string; client_id: string } | null =
+      null;
 
-    if (error || !store) {
+    if (storeIdParam) {
+      const { data } = await supabase
+        .from("stores")
+        .select("id, shop_domain, client_id")
+        .eq("id", storeIdParam)
+        .eq("user_id", user.id)
+        .single();
+      store = data;
+    } else if (shop) {
+      const normalizedShop = normalizeShopDomain(shop);
+      if (!normalizedShop) {
+        return NextResponse.redirect(
+          dashboardUrl(request, "error=Dominio+invalido+no+install")
+        );
+      }
+      const { data } = await supabase
+        .from("stores")
+        .select("id, shop_domain, client_id")
+        .eq("shop_domain", normalizedShop)
+        .eq("user_id", user.id)
+        .single();
+      store = data;
+    }
+
+    if (!store) {
       return NextResponse.redirect(
-        dashboardUrl(request, "error=Loja+nao+encontrada")
+        dashboardUrl(
+          request,
+          "error=Cadastre+a+loja+no+app+antes+de+instalar+(preencha+dominio+e+credenciais)."
+        )
       );
     }
 

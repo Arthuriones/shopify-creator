@@ -769,7 +769,14 @@ export default function StoresPage() {
                   </p>
                   <p>
                     <strong className="text-foreground/90">4.</strong> Em{" "}
-                    <strong className="text-foreground/90">URL do app</strong>, cole o mesmo valor acima.
+                    <strong className="text-foreground/90">URL do app</strong>, cole apenas o dominio (sem o /api/shopify/auth):
+                  </p>
+                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
+                    {typeof window !== "undefined"
+                      ? window.location.origin
+                      : "https://SEU-DOMINIO"}
+                  </p>
+                  <p>
                     Marque <strong className="text-foreground/90">Usar fluxo de instalacao legado</strong> e clica em <strong className="text-foreground/90">Lancar</strong> a versao no topo da pagina.
                   </p>
                   <p>
