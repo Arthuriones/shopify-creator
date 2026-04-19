@@ -27,15 +27,30 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.redirect(new URL("/login", request.nextUrl.origin));
-  }
-
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const shop = searchParams.get("shop");
   const state = searchParams.get("state");
   const storeIdParam = searchParams.get("store_id");
+
+  console.log("[shopify/auth] incoming", {
+    hasUser: !!user,
+    hasCode: !!code,
+    hasShop: !!shop,
+    hasState: !!state,
+    hasStoreId: !!storeIdParam,
+    rawSearch: request.nextUrl.search,
+  });
+
+  if (!user) {
+    // Preserva os params para retomar depois do login
+    const loginUrl = new URL("/login", request.nextUrl.origin);
+    loginUrl.searchParams.set(
+      "next",
+      `/api/shopify/auth${request.nextUrl.search}`
+    );
+    return NextResponse.redirect(loginUrl);
+  }
 
   // Step 1: Iniciar OAuth — chamado com ?store_id=X
   if (storeIdParam && !code) {
@@ -127,7 +142,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Diagnostico mais util do que "Parametros invalidos"
+  const missing: string[] = [];
+  if (!code && !storeIdParam) missing.push("code/store_id");
+  if (code && !shop) missing.push("shop");
+  if (code && !state) missing.push("state");
+
+  const errorMsg =
+    missing.length > 0
+      ? `Callback do Shopify sem parametros: ${missing.join(", ")}. Verifique se a URL de redirecionamento no dev.shopify.com termina exatamente em /api/shopify/auth.`
+      : "Parametros invalidos no OAuth";
+
   return NextResponse.redirect(
-    dashboardUrl(request, "error=Parametros+invalidos+no+OAuth")
+    dashboardUrl(request, `error=${encodeURIComponent(errorMsg)}`)
   );
 }
