@@ -37,6 +37,8 @@ import {
   Loader2,
   AlertCircle,
   X,
+  HelpCircle,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -157,6 +159,7 @@ export default function StoresPage() {
   const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Profile editing
   const [profileOpen, setProfileOpen] = useState(false);
@@ -189,6 +192,25 @@ export default function StoresPage() {
 
   useEffect(() => {
     loadStores();
+  }, []);
+
+  // Feedback do callback de OAuth (?installed=1 ou ?error=...)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const installed = params.get("installed");
+    const errorMessage = params.get("error");
+    if (installed) {
+      toast.success("Loja instalada e conectada com sucesso!");
+    }
+    if (errorMessage) {
+      toast.error(errorMessage);
+    }
+    if (installed || errorMessage) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      window.history.replaceState({}, "", url.toString());
+    }
   }, []);
 
   useEffect(() => {
@@ -252,6 +274,13 @@ export default function StoresPage() {
 
       if (!res.ok) {
         toast.error(data.error || "Erro ao conectar loja");
+        return;
+      }
+
+      // App ainda nao instalado nessa loja: redireciona pro OAuth do Shopify
+      if (data.needsInstall && data.installUrl) {
+        toast.message("Abrindo a tela de autorizacao do Shopify...");
+        window.location.href = data.installUrl;
         return;
       }
 
@@ -680,7 +709,7 @@ export default function StoresPage() {
             <Plus className="mr-2 h-3.5 w-3.5" />
             Conectar Loja
           </DialogTrigger>
-          <DialogContent className="border-border/50 bg-card">
+          <DialogContent className="border-border/50 bg-card max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle
                 className="text-lg font-semibold"
@@ -689,6 +718,74 @@ export default function StoresPage() {
                 Conectar Loja Shopify
               </DialogTitle>
             </DialogHeader>
+
+            <div className="rounded-lg border border-border/40 bg-background/40">
+              <button
+                type="button"
+                onClick={() => setShowTutorial((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-[13px] text-foreground/90 hover:bg-background/60 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  Como criar e instalar o app no Shopify (passo a passo)
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
+                    showTutorial && "rotate-180"
+                  )}
+                />
+              </button>
+              {showTutorial && (
+                <div className="border-t border-border/40 px-4 py-3 space-y-2.5 text-[12px] text-muted-foreground leading-relaxed">
+                  <p>
+                    <strong className="text-foreground/90">1.</strong> Acesse{" "}
+                    <a
+                      href="https://dev.shopify.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground transition-colors"
+                    >
+                      dev.shopify.com
+                    </a>{" "}
+                    &rarr; Apps &rarr; <strong className="text-foreground/90">Create app</strong>. Da um nome qualquer.
+                  </p>
+                  <p>
+                    <strong className="text-foreground/90">2.</strong> No app criado, va em{" "}
+                    <strong className="text-foreground/90">Configuration</strong> e em{" "}
+                    <strong className="text-foreground/90">Acesso &rarr; Selecionar escopos</strong>, cole:
+                  </p>
+                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
+                    write_legal_policies,write_online_store_navigation,read_products,write_products,read_publications,write_publications,read_content,write_content,read_themes
+                  </p>
+                  <p>
+                    <strong className="text-foreground/90">3.</strong> Em{" "}
+                    <strong className="text-foreground/90">URLs de redirecionamento</strong>, cole exatamente:
+                  </p>
+                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
+                    {typeof window !== "undefined"
+                      ? `${window.location.origin}/api/shopify/auth`
+                      : "https://SEU-DOMINIO/api/shopify/auth"}
+                  </p>
+                  <p>
+                    <strong className="text-foreground/90">4.</strong> Em{" "}
+                    <strong className="text-foreground/90">URL do app</strong>, cole o mesmo valor acima.
+                    Marque <strong className="text-foreground/90">Usar fluxo de instalacao legado</strong> e clica em <strong className="text-foreground/90">Lancar</strong> a versao no topo da pagina.
+                  </p>
+                  <p>
+                    <strong className="text-foreground/90">5.</strong> Em{" "}
+                    <strong className="text-foreground/90">API credentials</strong>, copie o{" "}
+                    <strong className="text-foreground/90">Client ID</strong> e o{" "}
+                    <strong className="text-foreground/90">Client Secret</strong>.
+                  </p>
+                  <p>
+                    <strong className="text-foreground/90">6.</strong> Cole o dominio + Client ID + Client Secret abaixo e clique em <strong className="text-foreground/90">Conectar</strong>.
+                    Se o app ainda nao estiver instalado nessa loja, voce sera redirecionado para autorizar na Shopify automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+
             <form onSubmit={handleConnect} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">

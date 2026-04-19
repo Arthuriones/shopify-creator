@@ -128,6 +128,14 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
     const body = await res.text();
     const lowerBody = body.toLowerCase();
 
+    if (lowerBody.includes("application_cannot_be_found")) {
+      throw new ShopifyClientError(
+        "App nao esta instalado nessa loja. Crie o app no dev.shopify.com, gere o link de Custom Distribution para esta loja e instale antes de conectar.",
+        "INVALID_CREDENTIALS",
+        401
+      );
+    }
+
     if (
       res.status === 404 ||
       looksLikeHtml(contentType, body) ||

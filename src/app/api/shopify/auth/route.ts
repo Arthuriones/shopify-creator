@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { getShopInfo, getThemes } from "@/lib/shopify/client";
+import { normalizeShopDomain } from "@/lib/shopify/domain";
 
 const SCOPES = [
   "write_legal_policies",
@@ -12,80 +15,119 @@ const SCOPES = [
   "read_themes",
 ].join(",");
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const shop = searchParams.get("shop");
+function dashboardUrl(request: NextRequest, query?: string): string {
+  const url = new URL("/stores", request.nextUrl.origin);
+  if (query) url.search = query;
+  return url.toString();
+}
 
-  // Step 1: Shopify redirects here with ?shop=xxx on install
-  // We redirect to Shopify's OAuth authorize page
-  if (shop && !searchParams.get("code")) {
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
-    if (!clientId) {
-      return NextResponse.json(
-        { error: "SHOPIFY_CLIENT_ID not set in .env" },
-        { status: 500 }
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.redirect(new URL("/login", request.nextUrl.origin));
+  }
+
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const shop = searchParams.get("shop");
+  const state = searchParams.get("state");
+  const storeIdParam = searchParams.get("store_id");
+
+  // Step 1: Iniciar OAuth — chamado com ?store_id=X
+  if (storeIdParam && !code) {
+    const { data: store, error } = await supabase
+      .from("stores")
+      .select("id, shop_domain, client_id")
+      .eq("id", storeIdParam)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !store) {
+      return NextResponse.redirect(
+        dashboardUrl(request, "error=Loja+nao+encontrada")
       );
     }
 
     const redirectUri = `${request.nextUrl.origin}/api/shopify/auth`;
     const authUrl =
-      `https://${shop}/admin/oauth/authorize?` +
-      `client_id=${clientId}` +
-      `&scope=${SCOPES}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      `https://${store.shop_domain}/admin/oauth/authorize?` +
+      `client_id=${encodeURIComponent(store.client_id)}` +
+      `&scope=${encodeURIComponent(SCOPES)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&state=${encodeURIComponent(store.id)}`;
 
     return NextResponse.redirect(authUrl);
   }
 
-  // Step 2: Shopify redirects back with ?code=xxx&shop=xxx after merchant approves
-  const code = searchParams.get("code");
-  const shopDomain = shop;
-
-  if (code && shopDomain) {
-    const clientId = process.env.SHOPIFY_CLIENT_ID;
-    const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
-
-    if (!clientId || !clientSecret) {
-      return NextResponse.json(
-        { error: "SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET not set in .env" },
-        { status: 500 }
+  // Step 2: Callback do Shopify — vem com ?code=X&shop=Y&state=Z
+  if (code && shop && state) {
+    const normalizedShop = normalizeShopDomain(shop);
+    if (!normalizedShop) {
+      return NextResponse.redirect(
+        dashboardUrl(request, "error=Dominio+invalido+no+callback")
       );
     }
 
-    // Exchange code for access token
-    const tokenRes = await fetch(
-      `https://${shopDomain}/admin/oauth/access_token`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: clientId,
-          client_secret: clientSecret,
-          code,
-        }),
-      }
-    );
+    const { data: store, error } = await supabase
+      .from("stores")
+      .select("id, shop_domain, client_id, client_secret")
+      .eq("id", state)
+      .eq("user_id", user.id)
+      .single();
 
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text();
-      return NextResponse.json(
-        { error: `Token exchange failed: ${text}` },
-        { status: 500 }
+    if (error || !store) {
+      return NextResponse.redirect(
+        dashboardUrl(request, "error=Sessao+de+instalacao+invalida")
       );
     }
 
-    const data = await tokenRes.json();
-    console.log("[OAuth Install] Token response:", JSON.stringify(data, null, 2));
+    if (store.shop_domain !== normalizedShop) {
+      return NextResponse.redirect(
+        dashboardUrl(request, "error=Loja+do+callback+nao+confere")
+      );
+    }
 
-    return new NextResponse(
-      `<html><body style="font-family:sans-serif;padding:40px;text-align:center">
-        <h1>App instalado com sucesso!</h1>
-        <p>Scopes: <code>${data.scope}</code></p>
-        <p>Pode fechar esta aba e voltar ao app.</p>
-      </body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    );
+    // App instalado — agora Client Credentials Grant funciona
+    const creds = {
+      shopDomain: store.shop_domain,
+      clientId: store.client_id,
+      clientSecret: store.client_secret,
+    };
+
+    try {
+      const [shopData, themesData] = await Promise.all([
+        getShopInfo(creds),
+        getThemes(creds),
+      ]);
+
+      const activeTheme = themesData.themes.nodes.find(
+        (t: { role: string }) => t.role === "MAIN"
+      );
+
+      await supabase
+        .from("stores")
+        .update({
+          name: shopData.shop.name,
+          theme_id: activeTheme?.id || null,
+        })
+        .eq("id", store.id);
+
+      return NextResponse.redirect(
+        dashboardUrl(request, "installed=1")
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro pos-instalacao";
+      return NextResponse.redirect(
+        dashboardUrl(request, `error=${encodeURIComponent(message.slice(0, 200))}`)
+      );
+    }
   }
 
-  return NextResponse.json({ error: "Missing shop parameter" }, { status: 400 });
+  return NextResponse.redirect(
+    dashboardUrl(request, "error=Parametros+invalidos+no+OAuth")
+  );
 }

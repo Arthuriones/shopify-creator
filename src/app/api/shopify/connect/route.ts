@@ -96,6 +96,44 @@ export async function POST(request: NextRequest) {
       theme: activeTheme,
     });
   } catch (error) {
+    // Caso o app ainda nao tenha sido instalado nessa loja:
+    // salva as credenciais (para retomar no callback do OAuth)
+    // e devolve a URL de instalacao pro frontend redirecionar.
+    if (
+      error instanceof ShopifyClientError &&
+      error.code === "INVALID_CREDENTIALS" &&
+      /nao esta instalado|application_cannot_be_found/i.test(error.message)
+    ) {
+      const { data: store, error: upsertError } = await supabase
+        .from("stores")
+        .upsert(
+          {
+            user_id: user.id,
+            shop_domain: shopDomain,
+            client_id: clientId,
+            client_secret: clientSecret,
+            name: shopDomain,
+          },
+          { onConflict: "user_id,shop_domain" }
+        )
+        .select("id")
+        .single();
+
+      if (upsertError || !store) {
+        return NextResponse.json(
+          { error: "Falha ao salvar credenciais para iniciar a instalacao." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        needsInstall: true,
+        installUrl: `/api/shopify/auth?store_id=${store.id}`,
+        message:
+          "App ainda nao instalado nessa loja. Vamos abrir a tela de autorizacao do Shopify.",
+      });
+    }
+
     if (error instanceof ShopifyClientError) {
       return NextResponse.json(
         { error: error.message },
