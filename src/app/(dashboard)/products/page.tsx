@@ -414,20 +414,22 @@ export default function ProductsPage() {
   }, [catalogSearch, selectedStore]);
 
   function openCatalogEditor(productItem: ShopifyCatalogProduct) {
-    setEditingCatalogProduct(productItem);
-    setCatalogEditTitle(productItem.title || "");
-    setCatalogEditDescription(productItem.descriptionHtml || "");
-    setCatalogEditTags((productItem.tags || []).join(", "));
-    setCatalogEditSeoTitle(productItem.seo?.title || productItem.title || "");
-    setCatalogEditSeoDescription(productItem.seo?.description || "");
-    setCatalogEditorOpen(true);
+    const converted = toAliExpressProductFromCatalog(productItem);
+    setProduct(converted);
+    setBaseImportedProduct(converted);
+    setEditingExistingProductId(productItem.id);
+    
+    setEditTitle(productItem.title || "");
+    setEditDescription(productItem.descriptionHtml || "");
+    setEditTags((productItem.tags || []).join(", "));
+    setEditSeoTitle(productItem.seo?.title || productItem.title || "");
+    setEditSeoDescription(productItem.seo?.description || "");
+    setActiveTab("optimized");
+    
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleOptimizeCatalogProduct() {
-    if (!editingCatalogProduct || !selectedStore) return;
-
-    setCatalogOptimizing(true);
-    try {
+  // Remove handleOptimizeCatalogProduct since we use the main editor now
       const res = await fetch("/api/ai/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1251,52 +1253,74 @@ export default function ProductsPage() {
       .filter(Boolean);
 
     try {
-      const res = await fetch("/api/shopify/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: selectedStore,
-          product: {
-            title: publishTitle,
-            descriptionHtml: publishDescriptionHtml,
-            tags,
-            images: product.images.map((src, i) => ({
-              src: brandedImages[src] || generatedImages[src] || src,
-              altText: `${publishTitle} - ${i + 1}`,
-            })),
-            ...(product.variants.length > 1 && product.variantOptions.length > 0
-              ? {
-                  options: product.variantOptions.map((o) => o.name),
-                  variants: product.variants.map((v) => ({
-                    price: v.price.toFixed(2),
-                    compareAtPrice:
-                      v.originalPrice > v.price
-                        ? v.originalPrice.toFixed(2)
-                        : undefined,
-                    options: product.variantOptions.map(
-                      (o) => v.properties[o.name] || ""
-                    ),
-                  })),
-                }
-              : {
-                  variants: [
-                    {
-                      price: product.price.toFixed(2),
-                      compareAtPrice:
-                        product.originalPrice > product.price
-                          ? product.originalPrice.toFixed(2)
-                          : undefined,
-                    },
-                  ],
-                }),
-            seo: {
-              title: editSeoTitle || publishTitle,
-              description: editSeoDescription || publishTitle,
+      let res;
+      if (editingExistingProductId) {
+        res = await fetch("/api/shopify/products", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: selectedStore,
+            productId: editingExistingProductId,
+            updates: {
+              title: publishTitle,
+              descriptionHtml: publishDescriptionHtml,
+              tags,
+              seo: {
+                title: editSeoTitle || publishTitle,
+                description: editSeoDescription || publishTitle,
+              },
+              publishToStorefront,
             },
-            publishToStorefront,
-          },
-        }),
-      });
+          }),
+        });
+      } else {
+        res = await fetch("/api/shopify/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: selectedStore,
+            product: {
+              title: publishTitle,
+              descriptionHtml: publishDescriptionHtml,
+              tags,
+              images: product.images.map((src, i) => ({
+                src: brandedImages[src] || generatedImages[src] || src,
+                altText: `${publishTitle} - ${i + 1}`,
+              })),
+              ...(product.variants.length > 1 && product.variantOptions.length > 0
+                ? {
+                    options: product.variantOptions.map((o) => o.name),
+                    variants: product.variants.map((v) => ({
+                      price: v.price.toFixed(2),
+                      compareAtPrice:
+                        v.originalPrice > v.price
+                          ? v.originalPrice.toFixed(2)
+                          : undefined,
+                      options: product.variantOptions.map(
+                        (o) => v.properties[o.name] || ""
+                      ),
+                    })),
+                  }
+                : {
+                    variants: [
+                      {
+                        price: product.price.toFixed(2),
+                        compareAtPrice:
+                          product.originalPrice > product.price
+                            ? product.originalPrice.toFixed(2)
+                            : undefined,
+                      },
+                    ],
+                  }),
+              seo: {
+                title: editSeoTitle || publishTitle,
+                description: editSeoDescription || publishTitle,
+              },
+              publishToStorefront,
+            },
+          }),
+        });
+      }
 
       const data = await res.json();
 
@@ -2127,10 +2151,9 @@ export default function ProductsPage() {
             </TabsTrigger>
             <TabsTrigger
               value="optimized"
-              disabled={!optimized}
               className="text-[13px]"
             >
-              Otimizado
+              Editar
             </TabsTrigger>
           </TabsList>
 
@@ -2314,34 +2337,6 @@ export default function ProductsPage() {
                       </div>
                     )}
 
-                    <Button
-                      onClick={handleOptimize}
-                      disabled={optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche}
-                      className="w-full h-11 text-sm font-medium transition-all duration-200"
-                      style={{
-                        background:
-                          optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche
-                            ? "oklch(0.72 0.19 155 / 30%)"
-                            : "oklch(0.72 0.19 155)",
-                        color: "oklch(0.13 0.02 155)",
-                      }}
-                    >
-                      {optimizing ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Otimizando com IA...
-                        </span>
-                      ) : !selectedStore ? (
-                        "Selecione uma loja"
-                      ) : !stores.find((s) => s.id === selectedStore)?.niche ? (
-                        "Configure o perfil da loja"
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Otimizar com IA
-                        </>
-                      )}
-                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -2974,6 +2969,34 @@ export default function ProductsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <Button
+                      onClick={handleOptimize}
+                      disabled={optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche}
+                      className="w-full h-11 text-sm font-medium transition-all duration-200 mb-4"
+                      style={{
+                        background:
+                          optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche
+                            ? "oklch(0.72 0.19 155 / 30%)"
+                            : "oklch(0.72 0.19 155)",
+                        color: "oklch(0.13 0.02 155)",
+                      }}
+                    >
+                      {optimizing ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Otimizando com IA...
+                        </span>
+                      ) : !selectedStore ? (
+                        "Selecione uma loja"
+                      ) : !stores.find((s) => s.id === selectedStore)?.niche ? (
+                        "Configure o perfil da loja para usar IA"
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Gerar título e descrição com IA
+                        </>
+                      )}
+                    </Button>
                     <div className="space-y-2">
                       <Label className="text-[13px] text-muted-foreground">
                         Titulo
@@ -3086,113 +3109,6 @@ export default function ProductsPage() {
         </Tabs>
       )}
 
-      <Dialog open={catalogEditorOpen} onOpenChange={setCatalogEditorOpen}>
-        <DialogContent className="border-border/50 bg-card max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle
-              className="text-lg font-semibold"
-              style={{ letterSpacing: "-0.02em" }}
-            >
-              Editar Produto Ativo
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 border-border/50 text-[13px]"
-                disabled={catalogOptimizing}
-                onClick={handleOptimizeCatalogProduct}
-              >
-                {catalogOptimizing ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Otimizando...
-                  </span>
-                ) : (
-                  <>
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    Otimizar com IA
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                className="h-9 text-[13px]"
-                disabled={catalogSaving}
-                onClick={handleSaveCatalogProduct}
-                style={{
-                  background: "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
-                }}
-              >
-                {catalogSaving ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Salvando...
-                  </span>
-                ) : (
-                  <>
-                    <Upload className="mr-1.5 h-3.5 w-3.5" />
-                    Salvar na Shopify
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">Titulo</Label>
-              <Input
-                value={catalogEditTitle}
-                onChange={(e) => setCatalogEditTitle(e.target.value)}
-                className="h-10 bg-background/50 border-border/50 text-sm"
-              />
-              <CharCounter current={catalogEditTitle.length} max={70} />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">Descricao (HTML)</Label>
-              <Textarea
-                value={catalogEditDescription}
-                onChange={(e) => setCatalogEditDescription(e.target.value)}
-                rows={8}
-                className="bg-background/50 border-border/50 font-mono text-xs"
-              />
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">Tags</Label>
-                <Input
-                  value={catalogEditTags}
-                  onChange={(e) => setCatalogEditTags(e.target.value)}
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">SEO titulo</Label>
-                <Input
-                  value={catalogEditSeoTitle}
-                  onChange={(e) => setCatalogEditSeoTitle(e.target.value)}
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">SEO descricao</Label>
-              <Textarea
-                value={catalogEditSeoDescription}
-                onChange={(e) => setCatalogEditSeoDescription(e.target.value)}
-                rows={2}
-                className="bg-background/50 border-border/50 text-sm"
-              />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Image prompt dialog */}
       <Dialog open={imagePromptOpen} onOpenChange={setImagePromptOpen}>

@@ -1,4 +1,4 @@
-﻿import * as cheerio from "cheerio";
+import * as cheerio from "cheerio";
 import type {
   AliExpressProduct,
   AliExpressVariant,
@@ -897,24 +897,27 @@ function looksLikeTinyImage(pathname: string): boolean {
 function parseNumber(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return 0;
-  const firstChunk = value.match(/\d[\d.,]*/)?.[0];
-  if (!firstChunk) return 0;
+  
+  const extracted = value.replace(/[^\d.,]/g, '');
+  if (!extracted) return 0;
 
-  let normalized = firstChunk;
-  const hasComma = normalized.includes(",");
-  const hasDot = normalized.includes(".");
-
-  if (hasComma && hasDot) {
-    if (normalized.lastIndexOf(",") > normalized.lastIndexOf(".")) {
-      normalized = normalized.replace(/\./g, "").replace(",", ".");
+  let normalized = extracted;
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+  
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
     } else {
-      normalized = normalized.replace(/,/g, "");
+      normalized = normalized.replace(/,/g, '');
     }
-  } else if (hasComma && !hasDot) {
-    const [, decimal = ""] = normalized.split(",");
-    normalized = decimal.length > 0 && decimal.length <= 2
-      ? normalized.replace(",", ".")
-      : normalized.replace(/,/g, "");
+  } else if (lastComma > -1) {
+    const parts = normalized.split(',');
+    if (parts.length === 2 && parts[1].length <= 2) {
+      normalized = normalized.replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
   }
 
   const parsed = Number(normalized);

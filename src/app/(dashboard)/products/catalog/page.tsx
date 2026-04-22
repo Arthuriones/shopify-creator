@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ExternalLink, ImageIcon, Loader2, Pencil, RefreshCw, Save } from "lucide-react";
 
@@ -86,6 +87,7 @@ function normalizeDecimal(value: string): string {
 }
 
 export default function CatalogPage() {
+  const router = useRouter();
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
   const [products, setProducts] = useState<ShopifyCatalogProduct[]>([]);
@@ -218,22 +220,7 @@ export default function CatalogPage() {
   }, [loadProducts, search, selectedStore]);
 
   function openEditor(product: ShopifyCatalogProduct) {
-    setEditingProduct(product);
-    setEditTitle(product.title || "");
-    setEditDescription(product.descriptionHtml || "");
-    setEditTags((product.tags || []).join(", "));
-    setEditSeoTitle(product.seo?.title || product.title || "");
-    setEditSeoDescription(product.seo?.description || "");
-    setEditStatus(product.status || "ACTIVE");
-    setEditVariants(
-      (product.variants.nodes || []).map((variant) => ({
-        id: variant.id,
-        title: variant.title,
-        price: variant.price || "0.00",
-        compareAtPrice: variant.compareAtPrice || "",
-      }))
-    );
-    setEditorOpen(true);
+    router.push('/products?editId=' + product.id);
   }
 
   function updateVariantDraft(id: string, field: "price" | "compareAtPrice", value: string) {
