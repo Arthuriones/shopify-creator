@@ -613,6 +613,7 @@ export async function updateShopifyProduct(
       price: string;
       compareAtPrice?: string | null;
     }[];
+    images?: { src: string; altText: string }[];
     publishToStorefront?: boolean;
   }
 ) {
@@ -709,6 +710,27 @@ export async function updateShopifyProduct(
     | undefined;
   if (nextStatus === "ACTIVE" && input.publishToStorefront !== false) {
     storefrontPublication = await publishProductToStorefront(creds, input.productId);
+  }
+
+  if (input.images && input.images.length > 0) {
+    try {
+      const mediaQuery = `query { product(id: "${input.productId}") { media(first: 50) { nodes { id } } } }`;
+      const mediaRes = await shopifyGraphQL(creds, mediaQuery);
+      const mediaIds = mediaRes?.product?.media?.nodes?.map((n: { id: string }) => n.id) || [];
+      
+      if (mediaIds.length > 0) {
+        const deleteMutation = `mutation productDeleteMedia($productId: ID!, $mediaIds: [ID!]!) { productDeleteMedia(productId: $productId, mediaIds: $mediaIds) { deletedMediaIds } }`;
+        await shopifyGraphQL(creds, deleteMutation, { productId: input.productId, mediaIds });
+      }
+      
+      const createMutation = `mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) { productCreateMedia(productId: $productId, media: $media) { media { id } } }`;
+      await shopifyGraphQL(creds, createMutation, {
+        productId: input.productId,
+        media: input.images.map((img) => ({ originalSource: img.src, alt: img.altText, mediaContentType: "IMAGE" }))
+      });
+    } catch (err) {
+      console.warn("[shopify.updateShopifyProduct] Failed to sync media:", err);
+    }
   }
 
   return {

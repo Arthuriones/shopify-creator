@@ -1265,6 +1265,10 @@ export default function ProductsPage() {
               title: publishTitle,
               descriptionHtml: publishDescriptionHtml,
               tags,
+              images: product.images.map((src, i) => ({
+                src: brandedImages[src] || generatedImages[src] || src,
+                altText: `${publishTitle} - ${i + 1}`,
+              })),
               seo: {
                 title: editSeoTitle || publishTitle,
                 description: editSeoDescription || publishTitle,
@@ -2796,6 +2800,7 @@ export default function ProductsPage() {
                               className="flex-1 h-8 text-[11px]"
                               disabled={isGenerating || isBranding}
                               onClick={() => handleGenerateCleanImage(img)}
+                              title="Usa Gemini AI para reconstruir a foto sem textos ou logos."
                               style={{
                                 background: isGenerating || isBranding
                                   ? "oklch(0.72 0.19 155 / 30%)"
@@ -2804,7 +2809,7 @@ export default function ProductsPage() {
                               }}
                             >
                               <Sparkles className="mr-1 h-3 w-3" />
-                              Gerar com IA
+                              Remover Logo com IA
                             </Button>
                           ) : (
                             <Button

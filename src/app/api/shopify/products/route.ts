@@ -185,6 +185,7 @@ export async function PUT(request: NextRequest) {
                     : String(variant.compareAtPrice),
               }))
           : undefined,
+        images: Array.isArray(updates.images) ? updates.images : undefined,
         publishToStorefront: updates.publishToStorefront !== false,
       }
     );
