@@ -537,6 +537,12 @@ function pickSalePrice(priceInfo: Record<string, unknown> | null): number {
     parseNumber(readUnknown(asRecord(priceInfo.salePrice), ["formatedAmount"])) ||
     parseNumber(readUnknown(priceInfo, ["salePriceString", "salePriceLocal"])) ||
     parseNumber(readUnknown(priceInfo, ["activityAmount"])) ||
+    parseNumber(readUnknown(asRecord(priceInfo.activityAmount), ["value", "formatedAmount"])) ||
+    parseNumber(readUnknown(priceInfo, ["discountPrice", "promotionPrice", "currentPrice"])) ||
+    parseNumber(readUnknown(asRecord(priceInfo.discountPrice), ["value", "formatedAmount"])) ||
+    parseNumber(readUnknown(priceInfo, ["minPrice", "min_price"])) ||
+    parseNumber(readUnknown(asRecord(priceInfo.minPrice), ["value", "formatedAmount"])) ||
+    parseNumber(readUnknown(priceInfo, ["price"])) ||
     0
   );
 }

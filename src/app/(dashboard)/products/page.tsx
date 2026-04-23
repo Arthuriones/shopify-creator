@@ -1227,7 +1227,7 @@ function ProductsPageContent() {
       setEditTags("");
       setEditSeoTitle(baseTitle.slice(0, 60));
       setEditSeoDescription(plainDescription.slice(0, 155));
-      setActiveTab("preview");
+      setActiveTab("optimized");
       if (autoApplyLogoOnImport && selectedStore) {
         const selectedStoreData = stores.find((store) => store.id === selectedStore);
         if (selectedStoreData?.logo_path) {

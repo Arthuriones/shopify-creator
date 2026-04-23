@@ -681,12 +681,36 @@ function parseProductPage(html: string): AliExpressProduct {
       $(".product-price-value").first().text() ||
       $('[data-pl="product-price"]').text() ||
       $('[data-pl="product-price-current"]').text() ||
-      $(".uniform-banner-box-price").text();
+      $(".uniform-banner-box-price").text() ||
+      $('[class*="price--current"]').first().text() ||
+      $('[class*="product-price"]').first().text() ||
+      $('[class*="Price_current"]').first().text() ||
+      $('span[itemprop="price"]').attr("content") ||
+      $('meta[itemprop="price"]').attr("content") ||
+      "";
     productData.price = parseNumber(priceText) || 0;
+  }
+
+  // Try to get price from variant list when base price is still 0
+  if (!productData.price && productData.variants.length > 0) {
+    const variantPrices = productData.variants
+      .map((v) => v.price)
+      .filter((p) => p > 0);
+    if (variantPrices.length > 0) {
+      productData.price = Math.min(...variantPrices);
+    }
   }
 
   if (!productData.originalPrice) {
     productData.originalPrice = productData.price;
+  }
+
+  if (!productData.price) {
+    console.warn("[aliexpress.scraper] price is 0 after all extraction", {
+      title: productData.title?.slice(0, 80),
+      variantCount: productData.variants.length,
+      variantPrices: productData.variants.slice(0, 5).map((v) => v.price),
+    });
   }
 
   return productData;
@@ -966,6 +990,26 @@ function extractFromData(data: Record<string, unknown>): AliExpressProduct {
     if (!obj || typeof obj !== "object") return;
     const record = obj as Record<string, unknown>;
 
+    // Schema.org ld+json Product
+    if (record["@type"] === "Product" || record["@type"] === "product") {
+      if (typeof record.name === "string" && !result.title) {
+        result.title = record.name;
+      }
+      if (typeof record.description === "string" && !result.description) {
+        result.description = record.description;
+      }
+      const offers = record.offers as Record<string, unknown> | undefined;
+      if (offers && !result.price) {
+        const offerPrice = parseNumber(offers.price) || parseNumber(offers.lowPrice);
+        if (offerPrice > 0) {
+          result.price = offerPrice;
+          if (!result.originalPrice) {
+            result.originalPrice = parseNumber(offers.highPrice) || offerPrice;
+          }
+        }
+      }
+    }
+
     if (typeof record.subject === "string" && !result.title) {
       result.title = record.subject;
     }
@@ -973,11 +1017,55 @@ function extractFromData(data: Record<string, unknown>): AliExpressProduct {
       result.description = record.description;
     }
 
-    if (record.minPrice && !result.price) {
-      result.price = parseNumber(record.minPrice);
+    // Broad price field detection — covers many AliExpress data structures
+    if (!result.price) {
+      const priceFields = [
+        "minPrice", "min_price", "salePrice", "sale_price",
+        "activityAmount", "actSkuCalPrice", "currentPrice",
+        "price", "formattedActivityPrice", "formatedActivityPrice",
+        "discountPrice", "promotionPrice",
+      ];
+      for (const field of priceFields) {
+        if (record[field]) {
+          const parsed = parseNumber(record[field]);
+          if (parsed > 0) {
+            result.price = parsed;
+            break;
+          }
+          // Handle nested { value, currency } objects
+          const nested = record[field] as Record<string, unknown>;
+          if (nested && typeof nested === "object") {
+            const nestedValue = parseNumber(nested.value) || parseNumber(nested.formatedAmount) || parseNumber(nested.amountText);
+            if (nestedValue > 0) {
+              result.price = nestedValue;
+              break;
+            }
+          }
+        }
+      }
     }
-    if (record.maxPrice && !result.originalPrice) {
-      result.originalPrice = parseNumber(record.maxPrice);
+    if (!result.originalPrice) {
+      const origFields = [
+        "maxPrice", "max_price", "originalPrice", "original_price",
+        "comparePrice", "compareAtPrice", "skuCalPrice", "retailPrice",
+      ];
+      for (const field of origFields) {
+        if (record[field]) {
+          const parsed = parseNumber(record[field]);
+          if (parsed > 0) {
+            result.originalPrice = parsed;
+            break;
+          }
+          const nested = record[field] as Record<string, unknown>;
+          if (nested && typeof nested === "object") {
+            const nestedValue = parseNumber(nested.value) || parseNumber(nested.formatedAmount) || parseNumber(nested.amountText);
+            if (nestedValue > 0) {
+              result.originalPrice = nestedValue;
+              break;
+            }
+          }
+        }
+      }
     }
     if (record.averageStar && !result.rating) {
       result.rating = parseNumber(record.averageStar);
