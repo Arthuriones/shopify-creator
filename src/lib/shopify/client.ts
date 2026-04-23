@@ -142,7 +142,7 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
       lowerBody.includes("cloudflare")
     ) {
       throw new ShopifyClientError(
-        "Nao foi possivel acessar essa loja. Use o dominio .myshopify.com da sua loja.",
+        `Nao foi possivel acessar o dominio "${creds.shopDomain}". Se este for um dominio customizado, tente usar o dominio interno ".myshopify.com" da loja para a conexao de API.`,
         "INVALID_DOMAIN",
         400
       );
