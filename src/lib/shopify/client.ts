@@ -127,24 +127,21 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
     const contentType = res.headers.get("content-type") || "";
     const body = await res.text();
     const lowerBody = body.toLowerCase();
+    const isMyShopifyDomain = /\.myshopify\.com$/i.test(normalizedShopDomain);
+
+    console.log("[shopify/getAccessToken] failed", {
+      status: res.status,
+      contentType,
+      bodySnippet: body.slice(0, 300),
+      shopDomain: normalizedShopDomain,
+      isMyShopifyDomain,
+    });
 
     if (lowerBody.includes("application_cannot_be_found")) {
       throw new ShopifyClientError(
         "App nao esta instalado nessa loja. Crie o app no dev.shopify.com, gere o link de Custom Distribution para esta loja e instale antes de conectar.",
         "INVALID_CREDENTIALS",
         401
-      );
-    }
-
-    if (
-      res.status === 404 ||
-      looksLikeHtml(contentType, body) ||
-      lowerBody.includes("cloudflare")
-    ) {
-      throw new ShopifyClientError(
-        `Nao foi possivel acessar o dominio "${creds.shopDomain}". Se este for um dominio customizado, tente usar o dominio interno ".myshopify.com" da loja para a conexao de API.`,
-        "INVALID_DOMAIN",
-        400
       );
     }
 
@@ -161,11 +158,38 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
       );
     }
 
+    // If the domain is a valid .myshopify.com but we got 404/HTML, the app
+    // is almost certainly not installed yet (Shopify returns the storefront
+    // HTML page instead of an API response in this scenario).
+    if (
+      isMyShopifyDomain &&
+      (res.status === 404 || looksLikeHtml(contentType, body))
+    ) {
+      throw new ShopifyClientError(
+        "App nao esta instalado nessa loja. Instale o app primeiro: no dev.shopify.com, va em seu App > Distribution > gere o link de Custom Distribution e instale na loja.",
+        "INVALID_CREDENTIALS",
+        401
+      );
+    }
+
+    // Non-.myshopify.com domains that return 404/HTML are actually invalid domains
+    if (
+      res.status === 404 ||
+      looksLikeHtml(contentType, body) ||
+      lowerBody.includes("cloudflare")
+    ) {
+      throw new ShopifyClientError(
+        `Nao foi possivel acessar o dominio "${creds.shopDomain}". Tente usar o dominio interno ".myshopify.com" da loja.`,
+        "INVALID_DOMAIN",
+        400
+      );
+    }
+
     const details = sanitizeErrorText(body);
     throw new ShopifyClientError(
       details
-        ? `Falha ao autenticar na Shopify: ${details}`
-        : "Falha ao autenticar na Shopify.",
+        ? `Falha ao autenticar na Shopify (${res.status}): ${details}`
+        : `Falha ao autenticar na Shopify (status ${res.status}).`,
       "REQUEST_FAILED",
       502
     );
