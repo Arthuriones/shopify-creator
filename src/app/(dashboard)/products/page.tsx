@@ -111,17 +111,36 @@ type LogoPosition =
   | "bottom-center"
   | "bottom-right";
 
+interface PerImageLogoConfig {
+  position: LogoPosition;
+  scale: number;
+  margin: number;
+  opacity: number;
+  logoPath?: string;
+}
+
+interface AvailableLogo {
+  path: string;
+  label: string;
+  url: string;
+}
+
 const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
-  { value: "top-left", label: "Topo esquerdo" },
-  { value: "top-center", label: "Topo centro" },
-  { value: "top-right", label: "Topo direito" },
-  { value: "center-left", label: "Centro esquerdo" },
-  { value: "center", label: "Centro" },
-  { value: "center-right", label: "Centro direito" },
-  { value: "bottom-left", label: "Inferior esquerdo" },
-  { value: "bottom-center", label: "Inferior centro" },
-  { value: "bottom-right", label: "Inferior direito" },
+  { value: "top-left", label: "↖ Topo esq" },
+  { value: "top-center", label: "↑ Topo" },
+  { value: "top-right", label: "↗ Topo dir" },
+  { value: "center-left", label: "← Centro esq" },
+  { value: "center", label: "● Centro" },
+  { value: "center-right", label: "→ Centro dir" },
+  { value: "bottom-left", label: "↙ Inf esq" },
+  { value: "bottom-center", label: "↓ Inferior" },
+  { value: "bottom-right", label: "↘ Inf dir" },
 ];
+
+function getLogoUrl(logoPath: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  return `${supabaseUrl}/storage/v1/object/public/store-logos/${logoPath}`;
+}
 
 function CharCounter({ current, max }: { current: number; max: number }) {
   const ratio = current / max;
@@ -325,6 +344,26 @@ function ProductsPageContent() {
   const [logoOpacityPercent, setLogoOpacityPercent] = useState(100);
   const [selectedMainImage, setSelectedMainImage] = useState(0);
   const [selectedVariantOptions, setSelectedVariantOptions] = useState<Record<string, string>>({});
+
+  // Per-image logo config
+  const [imageLogoConfigs, setImageLogoConfigs] = useState<Record<string, PerImageLogoConfig>>({});
+  const [availableLogos, setAvailableLogos] = useState<AvailableLogo[]>([]);
+
+  function getImageLogoConfig(imageUrl: string): PerImageLogoConfig {
+    return imageLogoConfigs[imageUrl] || {
+      position: logoPosition,
+      scale: logoScalePercent,
+      margin: logoMarginPercent,
+      opacity: logoOpacityPercent,
+    };
+  }
+
+  function updateImageLogoConfig(imageUrl: string, partial: Partial<PerImageLogoConfig>) {
+    setImageLogoConfigs((prev) => ({
+      ...prev,
+      [imageUrl]: { ...getImageLogoConfig(imageUrl), ...partial },
+    }));
+  }
 
   // AI generated images
   const [generatedImages, setGeneratedImages] = useState<Record<string, string>>({});
@@ -582,10 +621,16 @@ function ProductsPageContent() {
 
   async function applyLogoToImage(
     sourceImageUrl: string,
+    originalImageUrl?: string,
     showErrorToast: boolean = true
   ): Promise<string | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
+
+    // Use per-image config if available, else global defaults
+    const config = originalImageUrl
+      ? getImageLogoConfig(originalImageUrl)
+      : { position: logoPosition, scale: logoScalePercent, margin: logoMarginPercent, opacity: logoOpacityPercent };
 
     try {
       const res = await fetch("/api/image/branded", {
@@ -595,10 +640,11 @@ function ProductsPageContent() {
         body: JSON.stringify({
           imageUrl: sourceImageUrl,
           storeId: selectedStore,
-          position: logoPosition,
-          logoScalePercent,
-          marginPercent: logoMarginPercent,
-          logoOpacityPercent,
+          position: config.position,
+          logoScalePercent: config.scale,
+          marginPercent: config.margin,
+          logoOpacityPercent: config.opacity,
+          logoPath: config.logoPath || undefined,
         }),
       });
 
@@ -630,7 +676,7 @@ function ProductsPageContent() {
 
     setBrandingImage(imageUrl);
     const sourceImageUrl = generatedImages[imageUrl] || imageUrl;
-    const resultUrl = await applyLogoToImage(sourceImageUrl);
+    const resultUrl = await applyLogoToImage(sourceImageUrl, imageUrl);
     if (resultUrl) {
       setBrandedImages((prev) => ({ ...prev, [imageUrl]: resultUrl }));
       toast.success("Logo aplicada na imagem!");
@@ -663,7 +709,7 @@ function ProductsPageContent() {
           if (!img) break;
 
           const sourceImageUrl = generatedImages[img] || img;
-          const brandedUrl = await applyLogoToImage(sourceImageUrl, false);
+          const brandedUrl = await applyLogoToImage(sourceImageUrl, img, false);
           if (brandedUrl) {
             results[img] = brandedUrl;
             setBrandedImages((prev) => ({ ...prev, [img]: brandedUrl }));
@@ -984,6 +1030,52 @@ function ProductsPageContent() {
     }
     loadStores();
   }, [storeIdParam]);
+
+  // Load available logos when store changes
+  useEffect(() => {
+    if (!selectedStore) {
+      setAvailableLogos([]);
+      return;
+    }
+
+    async function loadLogos() {
+      const supabase = createClient();
+      const logos: AvailableLogo[] = [];
+
+      // Main store logo
+      const store = stores.find((s) => s.id === selectedStore);
+      if (store?.logo_path) {
+        logos.push({
+          path: store.logo_path,
+          label: "Logo principal",
+          url: getLogoUrl(store.logo_path),
+        });
+      }
+
+      // Additional logos from store_assets
+      const { data: assets } = await supabase
+        .from("store_assets")
+        .select("id, file_path, label")
+        .eq("store_id", selectedStore)
+        .order("created_at", { ascending: false });
+
+      if (assets) {
+        for (const asset of assets) {
+          const assetLabel = (asset.label || "").toLowerCase();
+          if (assetLabel === "logo" || assetLabel.startsWith("logo")) {
+            logos.push({
+              path: asset.file_path,
+              label: asset.label || "Logo",
+              url: getLogoUrl(asset.file_path),
+            });
+          }
+        }
+      }
+
+      setAvailableLogos(logos);
+    }
+    loadLogos();
+  }, [selectedStore, stores]);
 
   useEffect(() => {
     if (!editId || !selectedStore) return;
@@ -2227,17 +2319,19 @@ function ProductsPageContent() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {product.images.map((img, i) => {
                     const generated = generatedImages[img];
                     const branded = brandedImages[img];
                     const displayImg = branded || generated || img;
                     const isGenerating = generatingImage === img;
                     const isBranding = brandingImage === img;
+                    const imgConfig = getImageLogoConfig(img);
 
                     return (
-                      <div key={i} className="space-y-2">
-                        <div className="relative aspect-square overflow-hidden rounded-lg border border-border/50">
+                      <div key={i} className="space-y-2 rounded-lg border border-border/30 p-2" style={{ background: "oklch(0.14 0.005 260 / 50%)" }}>
+                        {/* Image preview */}
+                        <div className="relative aspect-square overflow-hidden rounded-md border border-border/50">
                           <Image
                             src={displayImg}
                             alt={`Produto ${i + 1}`}
@@ -2255,47 +2349,106 @@ function ProductsPageContent() {
                           )}
                           {generated && !branded && !isGenerating && !isBranding && (
                             <div
-                              className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
-                              style={{
-                                background: "oklch(0.72 0.19 155 / 90%)",
-                                color: "oklch(0.13 0.02 155)",
-                              }}
+                              className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium"
+                              style={{ background: "oklch(0.72 0.19 155 / 90%)", color: "oklch(0.13 0.02 155)" }}
                             >
-                              GERADA COM IA
+                              LIMPA COM IA
                             </div>
                           )}
                           {branded && !isGenerating && !isBranding && (
                             <div
-                              className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
-                              style={{
-                                background: "oklch(0.80 0.15 80 / 90%)",
-                                color: "oklch(0.15 0.02 80)",
-                              }}
+                              className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium"
+                              style={{ background: "oklch(0.80 0.15 80 / 90%)", color: "oklch(0.15 0.02 80)" }}
                             >
                               COM LOGO
                             </div>
                           )}
                         </div>
+
+                        {/* Per-image logo config */}
+                        <div className="space-y-1.5">
+                          {/* Logo picker + Position */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {availableLogos.length > 0 && (
+                              <Select
+                                value={imgConfig.logoPath || availableLogos[0]?.path || ""}
+                                onValueChange={(val) => updateImageLogoConfig(img, { logoPath: val || undefined })}
+                              >
+                                <SelectTrigger className="h-7 text-[10px] bg-background/50 border-border/40">
+                                  <SelectValue placeholder="Logo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableLogos.map((logo) => (
+                                    <SelectItem key={logo.path} value={logo.path} className="text-[11px]">
+                                      <span className="flex items-center gap-1.5">
+                                        <img src={logo.url} alt="" className="h-4 w-4 object-contain rounded" />
+                                        {logo.label}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Select
+                              value={imgConfig.position}
+                              onValueChange={(val) => updateImageLogoConfig(img, { position: val as LogoPosition })}
+                            >
+                              <SelectTrigger className="h-7 text-[10px] bg-background/50 border-border/40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {LOGO_POSITION_OPTIONS.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value} className="text-[11px]">
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Compact sliders */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <span className="text-[9px] text-muted-foreground/70">Tamanho {imgConfig.scale}%</span>
+                              <input
+                                type="range" min={8} max={40}
+                                value={imgConfig.scale}
+                                onChange={(e) => updateImageLogoConfig(img, { scale: Number(e.target.value) })}
+                                className="w-full h-1 accent-[oklch(0.72_0.19_155)]"
+                              />
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-muted-foreground/70">Opacidade {imgConfig.opacity}%</span>
+                              <input
+                                type="range" min={20} max={100}
+                                value={imgConfig.opacity}
+                                onChange={(e) => updateImageLogoConfig(img, { opacity: Number(e.target.value) })}
+                                className="w-full h-1 accent-[oklch(0.72_0.19_155)]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
                         <div className="flex gap-1.5">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 text-[11px] border-border/50 px-2"
+                            className="h-7 text-[10px] border-border/50 px-2"
                             onClick={() => handleBrandImage(img)}
                             disabled={
-                              isGenerating ||
-                              isBranding ||
-                              !selectedStore ||
-                              !stores.find((s) => s.id === selectedStore)?.logo_path
+                              isGenerating || isBranding || !selectedStore ||
+                              (!stores.find((s) => s.id === selectedStore)?.logo_path && availableLogos.length === 0)
                             }
                             title="Aplicar logo nesta imagem"
                           >
-                            <Stamp className="h-3 w-3" />
+                            <Stamp className="h-3 w-3 mr-1" />
+                            Logo
                           </Button>
                           {!generated ? (
                             <Button
                               size="sm"
-                              className="flex-1 h-8 text-[11px]"
+                              className="flex-1 h-7 text-[10px]"
                               disabled={isGenerating || isBranding}
                               onClick={() => handleGenerateCleanImage(img)}
                               title="Usa Gemini AI para reconstruir a foto sem textos ou logos."
@@ -2307,13 +2460,13 @@ function ProductsPageContent() {
                               }}
                             >
                               <Sparkles className="mr-1 h-3 w-3" />
-                              Remover Logo com IA
+                              Limpar com IA
                             </Button>
                           ) : (
                             <Button
                               size="sm"
                               variant="outline"
-                              className="flex-1 h-8 text-[11px] border-border/50"
+                              className="flex-1 h-7 text-[10px] border-border/50"
                               onClick={async () => {
                                 try {
                                   const res = await fetch(generated);
@@ -2335,7 +2488,7 @@ function ProductsPageContent() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 text-[11px] border-border/50 px-2"
+                            className="h-7 text-[10px] border-border/50 px-2"
                             onClick={() => handleGenerateImagePrompt(img)}
                             title="Gerar prompt para DALL-E/Midjourney"
                           >

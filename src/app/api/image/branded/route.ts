@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
     const logoScalePercent = clamp(asNumber(body.logoScalePercent, 20), 8, 40);
     const marginPercent = clamp(asNumber(body.marginPercent, 3), 0, 10);
     const logoOpacityPercent = clamp(asNumber(body.logoOpacityPercent, 100), 20, 100);
+    const customLogoPath = typeof body.logoPath === "string" ? body.logoPath.trim() : "";
 
     if (!imageUrl || !storeId) {
       return NextResponse.json(
@@ -145,23 +146,28 @@ export async function POST(request: NextRequest) {
       ? (positionInput as LogoPosition)
       : "bottom-right";
 
-    const { data: store } = await supabase
-      .from("stores")
-      .select("logo_path")
-      .eq("id", storeId)
-      .eq("user_id", user.id)
-      .single();
+    // Determine which logo to use: custom per-image or store default
+    let logoPathToUse = customLogoPath;
+    if (!logoPathToUse) {
+      const { data: store } = await supabase
+        .from("stores")
+        .select("logo_path")
+        .eq("id", storeId)
+        .eq("user_id", user.id)
+        .single();
 
-    if (!store?.logo_path) {
-      return NextResponse.json(
-        { error: "Logo nao configurada. Configure a loja primeiro." },
-        { status: 400 }
-      );
+      if (!store?.logo_path) {
+        return NextResponse.json(
+          { error: "Logo nao configurada. Configure a loja primeiro." },
+          { status: 400 }
+        );
+      }
+      logoPathToUse = store.logo_path;
     }
 
     const { data: logoData, error: logoError } = await supabase.storage
       .from("store-logos")
-      .download(store.logo_path);
+      .download(logoPathToUse);
 
     if (logoError || !logoData) {
       return NextResponse.json(

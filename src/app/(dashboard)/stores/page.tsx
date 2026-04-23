@@ -183,7 +183,9 @@ export default function StoresPage() {
   const [materialsStoreId, setMaterialsStoreId] = useState("");
   const [quickAssetFiles, setQuickAssetFiles] = useState<File[]>([]);
   const [quickAssetsSaving, setQuickAssetsSaving] = useState(false);
+  const [additionalLogoFiles, setAdditionalLogoFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const additionalLogoInputRef = useRef<HTMLInputElement>(null);
   const assetsInputRef = useRef<HTMLInputElement>(null);
   const quickAssetsInputRef = useRef<HTMLInputElement>(null);
   const normalizedShopDomain = normalizeShopDomain(shopDomain);
@@ -367,6 +369,7 @@ export default function StoresPage() {
     );
     setLogoPreview(store.logo_path ? getLogoUrl(store.logo_path) : null);
     setLogoFile(null);
+    setAdditionalLogoFiles([]);
     setAssetFiles([]);
     await loadStoreAssets(store.id);
     setProfileOpen(true);
@@ -388,6 +391,27 @@ export default function StoresPage() {
 
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
+  }
+
+  function handleAdditionalLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validFiles: File[] = [];
+    for (const file of files) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error(`Logo muito grande: ${file.name}. Max 2MB.`);
+        continue;
+      }
+      if (!["image/png", "image/svg+xml", "image/webp", "image/jpeg"].includes(file.type)) {
+        toast.error(`Formato invalido: ${file.name}`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+    if (validFiles.length > 0) {
+      setAdditionalLogoFiles((prev) => [...prev, ...validFiles].slice(0, 5));
+    }
   }
 
   function handleAssetsSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -591,6 +615,37 @@ export default function StoresPage() {
 
         logoPath = path;
         setLogoUploading(false);
+      }
+
+      // Upload additional logos as store_assets with label "logo"
+      if (additionalLogoFiles.length > 0) {
+        if (!userId) throw new Error("Nao autenticado");
+        const logoRecords: { store_id: string; file_path: string; label: string }[] = [];
+
+        for (const [idx, file] of additionalLogoFiles.entries()) {
+          const ext = file.name.split(".").pop() || "png";
+          const path = `${userId}/${editingStore.id}/logo-${Date.now()}-${idx}.${ext}`;
+
+          const { error: upErr } = await supabase.storage
+            .from("store-logos")
+            .upload(path, file, { upsert: false });
+
+          if (upErr) {
+            console.warn("Additional logo upload error:", upErr.message);
+            continue;
+          }
+
+          logoRecords.push({
+            store_id: editingStore.id,
+            file_path: path,
+            label: `logo:${file.name.replace(/\.[^.]+$/, "")}`,
+          });
+        }
+
+        if (logoRecords.length > 0) {
+          await supabase.from("store_assets").insert(logoRecords);
+        }
+        setAdditionalLogoFiles([]);
       }
 
       if (assetFiles.length > 0) {
@@ -1214,6 +1269,71 @@ export default function StoresPage() {
                   className="hidden"
                 />
               </div>
+            </div>
+
+            {/* Logos adicionais */}
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">
+                Logos Adicionais
+              </Label>
+              <p className="text-[11px] text-muted-foreground/50">
+                Envie versoes alternativas da logo para usar em diferentes imagens.
+              </p>
+
+              {/* Existing additional logos from store_assets */}
+              {storeAssets.filter((a) => (a.label || "").toLowerCase().startsWith("logo")).length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {storeAssets
+                    .filter((a) => (a.label || "").toLowerCase().startsWith("logo"))
+                    .map((asset) => (
+                      <div key={asset.id} className="relative group">
+                        <div className="aspect-square rounded-md border border-border/40 overflow-hidden" style={{ background: "oklch(0.12 0.005 260)" }}>
+                          <Image
+                            src={getLogoUrl(asset.file_path)}
+                            alt={asset.label || "Logo"}
+                            width={80}
+                            height={80}
+                            className="w-full h-full object-contain"
+                            unoptimized
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground/60 truncate block mt-0.5">
+                          {(asset.label || "Logo").replace(/^logo:?/i, "").trim() || "Logo"}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* Pending uploads */}
+              {additionalLogoFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {additionalLogoFiles.map((file, i) => (
+                    <Badge key={`${file.name}-${i}`} variant="outline" className="text-[10px] border-border/40">
+                      {file.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] border-border/50"
+                onClick={() => additionalLogoInputRef.current?.click()}
+              >
+                <Upload className="mr-1.5 h-3 w-3" />
+                Adicionar logo
+              </Button>
+              <input
+                ref={additionalLogoInputRef}
+                type="file"
+                accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                onChange={handleAdditionalLogoSelect}
+                multiple
+                className="hidden"
+              />
             </div>
 
             {/* Materiais da marca */}
