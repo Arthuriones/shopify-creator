@@ -674,6 +674,13 @@ function ProductsPageContent() {
       return;
     }
 
+    // Clear old branded version so we always start from original/AI-cleaned
+    setBrandedImages((prev) => {
+      const next = { ...prev };
+      delete next[imageUrl];
+      return next;
+    });
+
     setBrandingImage(imageUrl);
     const sourceImageUrl = generatedImages[imageUrl] || imageUrl;
     const resultUrl = await applyLogoToImage(sourceImageUrl, imageUrl);
@@ -682,6 +689,22 @@ function ProductsPageContent() {
       toast.success("Logo aplicada na imagem!");
     }
     setBrandingImage(null);
+  }
+
+  function handleRemoveImage(imageUrl: string) {
+    if (!product) return;
+    const newImages = product.images.filter((img) => img !== imageUrl);
+    if (newImages.length === 0) {
+      toast.error("O produto precisa de pelo menos 1 imagem.");
+      return;
+    }
+    setProduct({ ...product, images: newImages });
+    // Clean up related state
+    setBrandedImages((prev) => { const n = { ...prev }; delete n[imageUrl]; return n; });
+    setGeneratedImages((prev) => { const n = { ...prev }; delete n[imageUrl]; return n; });
+    setImageLogoConfigs((prev) => { const n = { ...prev }; delete n[imageUrl]; return n; });
+    if (selectedMainImage >= newImages.length) setSelectedMainImage(0);
+    toast.success("Imagem removida.");
   }
 
   async function handleBrandAllImages(options?: {
@@ -2431,6 +2454,16 @@ function ProductsPageContent() {
 
                         {/* Action buttons */}
                         <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[10px] border-border/50 px-2 text-red-400 hover:text-red-300 hover:border-red-400/50"
+                            onClick={() => handleRemoveImage(img)}
+                            disabled={isGenerating || isBranding}
+                            title="Remover esta imagem"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
