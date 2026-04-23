@@ -52,7 +52,7 @@ export function StoreSettingsCard({
         <div className="space-y-2">
           <Select
             value={selectedStore}
-            onValueChange={setSelectedStore}
+            onValueChange={(val) => setSelectedStore(val || "")}
           >
             <SelectTrigger className="w-full bg-background/50 border-border/50">
               <SelectValue placeholder="Selecione uma loja..." />

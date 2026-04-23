@@ -5,8 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 // 1. Optimize Product Text
 export const optimizeProductText = inngest.createFunction(
-  { id: "optimize-product-text" },
-  { event: "ai/optimize.product" },
+  { id: "optimize-product-text", triggers: [{ event: "ai/optimize.product" }] },
   async ({ event, step }) => {
     const { jobId, product, storeId, userId } = event.data;
 
@@ -55,8 +54,7 @@ export const optimizeProductText = inngest.createFunction(
 
 // 2. Remove Logo
 export const removeLogoFromImage = inngest.createFunction(
-  { id: "remove-logo" },
-  { event: "ai/remove.logo" },
+  { id: "remove-logo", triggers: [{ event: "ai/remove.logo" }] },
   async ({ event, step }) => {
     // TBD implementation using the same logic as /api/image/generate
     return { success: true };
@@ -65,8 +63,7 @@ export const removeLogoFromImage = inngest.createFunction(
 
 // 3. Apply Logo
 export const applyLogoToAllImages = inngest.createFunction(
-  { id: "apply-logo" },
-  { event: "image/apply.logo" },
+  { id: "apply-logo", triggers: [{ event: "image/apply.logo" }] },
   async ({ event, step }) => {
     // TBD implementation using sharp
     return { success: true };
@@ -75,8 +72,7 @@ export const applyLogoToAllImages = inngest.createFunction(
 
 // 4. Publish to Shopify
 export const publishToShopify = inngest.createFunction(
-  { id: "publish-shopify" },
-  { event: "shopify/publish" },
+  { id: "publish-shopify", triggers: [{ event: "shopify/publish" }] },
   async ({ event, step }) => {
     // TBD implementation
     return { success: true };
@@ -85,8 +81,7 @@ export const publishToShopify = inngest.createFunction(
 
 // 5. Bulk Import Product
 export const bulkImportProduct = inngest.createFunction(
-  { id: "bulk-import-product", concurrency: 3 }, // process max 3 at a time to avoid scraping limits
-  { event: "product/bulk.import" },
+  { id: "bulk-import-product", concurrency: 3, triggers: [{ event: "product/bulk.import" }] },
   async ({ event, step }) => {
     const { jobId, url, storeId, userId } = event.data;
     const supabase = await createClient();

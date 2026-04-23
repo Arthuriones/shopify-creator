@@ -266,6 +266,7 @@ export default function ProductsPage() {
   const [product, setProduct] = useState<AliExpressProduct | null>(null);
   const [variantPriceInputs, setVariantPriceInputs] = useState<Record<string, string>>({});
   const [baseImportedProduct, setBaseImportedProduct] = useState<AliExpressProduct | null>(null);
+  const [editingExistingProductId, setEditingExistingProductId] = useState<string | null>(null);
   const [optimized, setOptimized] = useState<OptimizationResult | null>(null);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
