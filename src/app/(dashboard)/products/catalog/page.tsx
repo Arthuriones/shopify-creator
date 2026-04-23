@@ -220,7 +220,7 @@ export default function CatalogPage() {
   }, [loadProducts, search, selectedStore]);
 
   function openEditor(product: ShopifyCatalogProduct) {
-    router.push('/products?editId=' + product.id);
+    router.push(`/products?editId=${encodeURIComponent(product.id)}&storeId=${encodeURIComponent(selectedStore)}`);
   }
 
   function updateVariantDraft(id: string, field: "price" | "compareAtPrice", value: string) {

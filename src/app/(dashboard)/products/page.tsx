@@ -255,7 +255,14 @@ function applyStorePricingRules(
   return applyMultiplierToProduct(source, multiplier);
 }
 
-export default function ProductsPage() {
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
+function ProductsPageContent() {
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("editId");
+  const storeIdParam = searchParams.get("storeId");
+
   const [isHydrated, setIsHydrated] = useState(false);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -957,18 +964,60 @@ export default function ProductsPage() {
               price_markup_percent: 0,
             }))
           );
-          if (fallback.data.length === 1) setSelectedStore(fallback.data[0].id);
+          if (storeIdParam && fallback.data.some(s => s.id === storeIdParam)) {
+            setSelectedStore(storeIdParam);
+          } else if (fallback.data.length === 1) {
+            setSelectedStore(fallback.data[0].id);
+          }
         }
         return;
       }
 
       if (data) {
         setStores(data);
-        if (data.length === 1) setSelectedStore(data[0].id);
+        if (storeIdParam && data.some(s => s.id === storeIdParam)) {
+          setSelectedStore(storeIdParam);
+        } else if (data.length === 1) {
+          setSelectedStore(data[0].id);
+        }
       }
     }
     loadStores();
-  }, []);
+  }, [storeIdParam]);
+
+  useEffect(() => {
+    if (!editId || !selectedStore) return;
+    
+    // Only load if we haven't loaded it yet (prevent infinite reload if store changes)
+    if (editingExistingProductId === editId) return;
+
+    async function loadExistingProduct() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/shopify/products?storeId=${selectedStore}&search=${encodeURIComponent(`id:${editId}`)}`);
+        const data = await res.json();
+        if (data.products && data.products.length > 0) {
+          openCatalogEditor(data.products[0]);
+        } else {
+          // If search by ID fails, fallback to loading catalog and finding it
+          const resAll = await fetch(`/api/shopify/products?storeId=${selectedStore}&first=50`);
+          const dataAll = await resAll.json();
+          const found = dataAll.products?.find((p: ShopifyCatalogProduct) => p.id === editId);
+          if (found) {
+            openCatalogEditor(found);
+          } else {
+            toast.error("Produto não encontrado.");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Erro ao buscar produto.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadExistingProduct();
+  }, [editId, selectedStore, editingExistingProductId]);
 
   useEffect(() => {
     if (!selectedStore) {
@@ -2508,5 +2557,13 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[500px]"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+      <ProductsPageContent />
+    </Suspense>
   );
 }
