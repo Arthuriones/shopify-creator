@@ -18,7 +18,10 @@ type LambdaChromium = {
 
 async function launchAliBrowser() {
   if (!IS_VERCEL) {
-    return chromium.launch({ headless: true });
+    return chromium.launch({ 
+      headless: true, // You can set this to false if you want to see the browser opening
+      channel: "chrome", // Uses the real Google Chrome installed on the computer to bypass bot detection
+    });
   }
 
   try {

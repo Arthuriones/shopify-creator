@@ -285,8 +285,8 @@ function ProductsPageContent() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [publishJobId, setPublishJobId] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
-  const [optimizeJobId, setOptimizeJobId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [product, setProduct] = useState<AliExpressProduct | null>(null);
@@ -1180,35 +1180,6 @@ function ProductsPageContent() {
     }
   }, [optimized]);
 
-  // Polling for Optimize Job
-  useEffect(() => {
-    if (!optimizeJobId) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/jobs?id=${optimizeJobId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const job = data.job;
-
-        if (job.status === "completed") {
-          setOptimized(job.result);
-          setActiveTab("optimized");
-          setOptimizing(false);
-          setOptimizeJobId(null);
-          toast.success("Otimizacao em segundo plano concluida com sucesso!");
-        } else if (job.status === "failed") {
-          toast.error(`Falha na otimizacao: ${job.error || "Erro desconhecido"}`);
-          setOptimizing(false);
-          setOptimizeJobId(null);
-        }
-      } catch (err) {
-        // Just ignore network errors while polling
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [optimizeJobId]);
 
   useEffect(() => {
     if (!product || product.variantOptions.length === 0) {
@@ -1389,30 +1360,32 @@ function ProductsPageContent() {
     }
 
     setOptimizing(true);
+    toast.info("Otimizando produto com IA... Isso pode levar alguns segundos.");
 
     try {
-      const res = await fetch("/api/jobs", {
+      const res = await fetch("/api/product/optimize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "optimize",
           storeId: selectedStore,
-          payload: { product }
+          product
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || "Erro ao iniciar otimizacao");
+        toast.error(data.error || "Erro ao otimizar produto");
         setOptimizing(false);
         return;
       }
 
-      setOptimizeJobId(data.job.id);
-      toast.success("Otimizacao iniciada em segundo plano! Voce pode aguardar ou fazer outras coisas.");
+      setOptimized(data.optimized);
+      setActiveTab("optimized");
+      toast.success("Produto otimizado com sucesso!");
     } catch {
-      toast.error("Erro ao iniciar otimizacao");
+      toast.error("Erro na comunicação com a IA");
+    } finally {
       setOptimizing(false);
     }
   }
