@@ -253,7 +253,7 @@ export default function StoresPage() {
     e.preventDefault();
 
     if (!normalizedShopDomain) {
-      toast.error("Use o dominio da loja no formato sualoja.myshopify.com.");
+      toast.error("Por favor, insira um domínio válido (ex: loja.myshopify.com ou loja.com).");
       return;
     }
 
@@ -796,10 +796,10 @@ export default function StoresPage() {
             <form onSubmit={handleConnect} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Dominio da Loja (.myshopify.com)
+                  Dominio da Loja (ex: loja.myshopify.com ou loja.com)
                 </Label>
                 <Input
-                  placeholder="minha-loja.myshopify.com"
+                  placeholder="loja.myshopify.com ou loja.com"
                   value={shopDomain}
                   onChange={(e) => setShopDomain(e.target.value)}
                   autoCapitalize="none"
