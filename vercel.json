@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "src/app/api/aliexpress/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/image/generate/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

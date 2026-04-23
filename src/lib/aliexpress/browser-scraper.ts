@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 import type {
   AliExpressProduct,
   AliExpressVariant,

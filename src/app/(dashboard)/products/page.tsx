@@ -2352,7 +2352,7 @@ function ProductsPageContent() {
 
           {/* TAB: Otimizado */}
           <TabsContent value="optimized" className="animate-fade-in">
-            {optimized && (
+            {product && (
               <div className="grid gap-6 lg:grid-cols-2">
                 {/* Preview */}
                 <Card className="border-border/50">
@@ -2369,35 +2369,69 @@ function ProductsPageContent() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {product.images.length > 0 && (
-                      <div className="relative aspect-square overflow-hidden rounded-lg border border-border/50">
-                        <Image
-                          src={brandedImages[product.images[0]] || generatedImages[product.images[0]] || product.images[0]}
-                          alt={editTitle}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                        {brandedImages[product.images[0]] ? (
-                          <div
-                            className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
-                            style={{
-                              background: "oklch(0.80 0.15 80 / 90%)",
-                              color: "oklch(0.15 0.02 80)",
-                            }}
-                          >
-                            COM LOGO
+                      <div className="space-y-2">
+                        <div className="relative aspect-square overflow-hidden rounded-lg border border-border/50">
+                          <Image
+                            src={brandedImages[product.images[selectedMainImage]] || generatedImages[product.images[selectedMainImage]] || product.images[selectedMainImage]}
+                            alt={editTitle}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                          {brandedImages[product.images[selectedMainImage]] ? (
+                            <div
+                              className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
+                              style={{
+                                background: "oklch(0.80 0.15 80 / 90%)",
+                                color: "oklch(0.15 0.02 80)",
+                              }}
+                            >
+                              COM LOGO
+                            </div>
+                          ) : generatedImages[product.images[selectedMainImage]] ? (
+                            <div
+                              className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
+                              style={{
+                                background: "oklch(0.72 0.19 155 / 90%)",
+                                color: "oklch(0.13 0.02 155)",
+                              }}
+                            >
+                              LIMPA COM IA
+                            </div>
+                          ) : null}
+                        </div>
+                        {product.images.length > 1 && (
+                          <div className="grid grid-cols-5 gap-1.5">
+                            {product.images.slice(0, 5).map((img, i) => {
+                              const displayThumb = brandedImages[img] || generatedImages[img] || img;
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={() => setSelectedMainImage(i)}
+                                  className={`relative aspect-square overflow-hidden rounded-md border transition-all duration-200 ${
+                                    selectedMainImage === i
+                                      ? "border-[oklch(0.72_0.19_155)] ring-1 ring-[oklch(0.72_0.19_155)]"
+                                      : "border-border/50 hover:border-border"
+                                  }`}
+                                >
+                                  <Image
+                                    src={displayThumb}
+                                    alt={`Produto ${i + 1}`}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                  {(brandedImages[img] || generatedImages[img]) && (
+                                    <div
+                                      className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full"
+                                      style={{ background: brandedImages[img] ? "oklch(0.80 0.15 80)" : "oklch(0.72 0.19 155)" }}
+                                    />
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
-                        ) : generatedImages[product.images[0]] ? (
-                          <div
-                            className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
-                            style={{
-                              background: "oklch(0.72 0.19 155 / 90%)",
-                              color: "oklch(0.13 0.02 155)",
-                            }}
-                          >
-                            GERADA COM IA
-                          </div>
-                        ) : null}
+                        )}
                       </div>
                     )}
                     <h3

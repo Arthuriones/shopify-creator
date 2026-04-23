@@ -131,7 +131,49 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // App instalado — agora Client Credentials Grant funciona
+    // Step 2a: Trocar o authorization code por um access token
+    // (obrigatório para completar a instalação do app na loja)
+    try {
+      const tokenRes = await fetch(
+        `https://${store.shop_domain}/admin/oauth/access_token`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: store.client_id,
+            client_secret: store.client_secret,
+            code,
+          }),
+        }
+      );
+
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        console.error("[shopify/auth] code exchange failed", {
+          status: tokenRes.status,
+          body: body.slice(0, 300),
+        });
+        return NextResponse.redirect(
+          dashboardUrl(
+            request,
+            `error=${encodeURIComponent("Falha ao trocar o codigo de autorizacao. Tente conectar novamente.")}`
+          )
+        );
+      }
+
+      // Code exchange succeeded — app is now installed
+      console.log("[shopify/auth] code exchange OK for", store.shop_domain);
+    } catch (exchangeErr) {
+      console.error("[shopify/auth] code exchange error", exchangeErr);
+      return NextResponse.redirect(
+        dashboardUrl(
+          request,
+          `error=${encodeURIComponent("Erro de rede ao trocar codigo de autorizacao.")}`
+        )
+      );
+    }
+
+    // Step 2b: Agora o Client Credentials Grant funciona
     const creds = {
       shopDomain: store.shop_domain,
       clientId: store.client_id,

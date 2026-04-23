@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium", "undici"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "ae01.alicdn.com" },
