@@ -898,7 +898,8 @@ function parseNumber(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return 0;
   
-  const extracted = value.replace(/[^\d.,]/g, '');
+  const firstPart = value.split("-")[0];
+  const extracted = firstPart.replace(/[^\d.,]/g, '');
   if (!extracted) return 0;
 
   let normalized = extracted;

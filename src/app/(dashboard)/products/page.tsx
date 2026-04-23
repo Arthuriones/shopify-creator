@@ -52,6 +52,12 @@ import { createClient } from "@/lib/supabase/client";
 import type { AliExpressProduct, OptimizationResult } from "@/types";
 import Image from "next/image";
 import Link from "next/link";
+import { ImportCard } from "@/components/products/ImportCard";
+import { StoreSettingsCard } from "@/components/products/StoreSettingsCard";
+import { PricingCard } from "@/components/products/PricingCard";
+import { ImportSummaryCard } from "@/components/products/ImportSummaryCard";
+import { LogoCustomizationCard } from "@/components/products/LogoCustomizationCard";
+import { EditorFormCard } from "@/components/products/EditorFormCard";
 
 interface StoreOption {
   id: string;
@@ -254,9 +260,11 @@ export default function ProductsPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  const [optimizeJobId, setOptimizeJobId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [product, setProduct] = useState<AliExpressProduct | null>(null);
+  const [variantPriceInputs, setVariantPriceInputs] = useState<Record<string, string>>({});
   const [baseImportedProduct, setBaseImportedProduct] = useState<AliExpressProduct | null>(null);
   const [optimized, setOptimized] = useState<OptimizationResult | null>(null);
   const [stores, setStores] = useState<StoreOption[]>([]);
@@ -264,7 +272,7 @@ export default function ProductsPage() {
   const [priceDraft, setPriceDraft] = useState("");
   const [comparePriceDraft, setComparePriceDraft] = useState("");
   const [bulkMarkupDraft, setBulkMarkupDraft] = useState("0");
-  const [activeTab, setActiveTab] = useState("preview");
+  const [activeTab, setActiveTab] = useState("optimized");
   const [storeAssets, setStoreAssets] = useState<StoreAsset[]>([]);
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -429,35 +437,6 @@ export default function ProductsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Remove handleOptimizeCatalogProduct since we use the main editor now
-      const res = await fetch("/api/ai/optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId: selectedStore,
-          product: toAliExpressProductFromCatalog(editingCatalogProduct),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Nao foi possivel otimizar o produto.");
-        return;
-      }
-
-      const result = data.result as OptimizationResult;
-      setCatalogEditTitle(result.title);
-      setCatalogEditDescription(result.description);
-      setCatalogEditTags(result.tags.join(", "));
-      setCatalogEditSeoTitle(result.seoTitle);
-      setCatalogEditSeoDescription(result.seoDescription);
-      toast.success("Texto do produto otimizado com IA!");
-    } catch {
-      toast.error("Erro ao otimizar produto.");
-    } finally {
-      setCatalogOptimizing(false);
-    }
-  }
 
   async function handleSaveCatalogProduct() {
     if (!editingCatalogProduct || !selectedStore) return;
@@ -1028,6 +1007,36 @@ export default function ProductsPage() {
     }
   }, [optimized]);
 
+  // Polling for Optimize Job
+  useEffect(() => {
+    if (!optimizeJobId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/jobs?id=${optimizeJobId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const job = data.job;
+
+        if (job.status === "completed") {
+          setOptimized(job.result);
+          setActiveTab("optimized");
+          setOptimizing(false);
+          setOptimizeJobId(null);
+          toast.success("Otimizacao em segundo plano concluida com sucesso!");
+        } else if (job.status === "failed") {
+          toast.error(`Falha na otimizacao: ${job.error || "Erro desconhecido"}`);
+          setOptimizing(false);
+          setOptimizeJobId(null);
+        }
+      } catch (err) {
+        // Just ignore network errors while polling
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [optimizeJobId]);
+
   useEffect(() => {
     if (!product || product.variantOptions.length === 0) {
       setSelectedVariantOptions({});
@@ -1083,6 +1092,12 @@ export default function ProductsPage() {
     const activeStore = stores.find((store) => store.id === selectedStore);
     const recalculated = applyStorePricingRules(baseImportedProduct, activeStore);
     setProduct(recalculated);
+
+    const initialPrices: Record<string, string> = {};
+    recalculated.variants.forEach((v) => {
+      initialPrices[v.sku] = v.price.toFixed(2).replace(".", ",");
+    });
+    setVariantPriceInputs(initialPrices);
   }, [baseImportedProduct, selectedStore, stores]);
 
   async function handleScrape(e: React.FormEvent) {
@@ -1113,6 +1128,7 @@ export default function ProductsPage() {
       const imported = data.product as AliExpressProduct;
       const normalizedProduct: AliExpressProduct = {
         ...imported,
+        original_url: url,
         title: sanitizeTitle(imported.title),
         images: normalizeImportedImages(imported.images),
       };
@@ -1202,31 +1218,45 @@ export default function ProductsPage() {
     setOptimizing(true);
 
     try {
-      const res = await fetch("/api/ai/optimize", {
+      const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product,
+          type: "optimize",
           storeId: selectedStore,
+          payload: { product }
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || "Erro na otimizacao");
+        toast.error(data.error || "Erro ao iniciar otimizacao");
+        setOptimizing(false);
         return;
       }
 
-      setOptimized(data.result);
-      setActiveTab("optimized");
-      toast.success("Produto otimizado!");
+      setOptimizeJobId(data.job.id);
+      toast.success("Otimizacao iniciada em segundo plano! Voce pode aguardar ou fazer outras coisas.");
     } catch {
-      toast.error("Erro na otimizacao");
-    } finally {
+      toast.error("Erro ao iniciar otimizacao");
       setOptimizing(false);
     }
   }
+
+  const handleVariantPriceChange = (sku: string, newPriceRaw: string) => {
+    setVariantPriceInputs(prev => ({ ...prev, [sku]: newPriceRaw }));
+    const newPrice = parseFloat(newPriceRaw.replace(",", "."));
+    if (isNaN(newPrice)) return;
+    if (product) {
+      setProduct({
+        ...product,
+        variants: product.variants.map((v) =>
+          v.sku === sku ? { ...v, price: newPrice } : v
+        ),
+      });
+    }
+  };
 
   async function handlePublish() {
     if (!product || !selectedStore) {
@@ -1453,81 +1483,15 @@ export default function ProductsPage() {
 
       {/* Config */}
       <Card className="border-border/50">
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-6">
+          <StoreSettingsCard 
+            stores={stores}
+            selectedStore={selectedStore}
+            setSelectedStore={(val) => setSelectedStore(val ?? "")}
+            selectedStoreData={selectedStoreData}
+          />
+
           <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
-                  Loja destino
-                </Label>
-                {stores.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma loja conectada.{" "}
-                    <Link href="/stores" className="underline hover:text-foreground transition-colors duration-200">
-                      Conectar loja
-                    </Link>
-                  </p>
-                ) : (
-                  <Select
-                    value={selectedStore}
-                    onValueChange={(v) => setSelectedStore(v ?? "")}
-                  >
-                    <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                      <SelectValue placeholder="Selecione a loja" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stores.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
-                  Perfil da loja
-                </Label>
-                {selectedStore ? (
-                  selectedStoreData?.niche ? (
-                    <div className="flex h-10 items-center gap-2 rounded-md border border-border/50 bg-background/50 px-3">
-                      <Badge
-                        className="text-[11px]"
-                        style={{
-                          background: "oklch(0.72 0.19 155 / 10%)",
-                          color: "oklch(0.72 0.19 155)",
-                          border: "none",
-                        }}
-                      >
-                        {selectedStoreData.niche}
-                      </Badge>
-                      {selectedStoreData.logo_path && (
-                        <Badge variant="outline" className="text-[11px] border-border/30">
-                          Logo configurada
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="text-[11px] border-border/30">
-                        Moeda {selectedStoreData.currency_code || "USD"}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-border/50 bg-background/50">
-                      <p className="text-sm text-muted-foreground">
-                        Perfil incompleto.{" "}
-                        <Link href="/stores" className="underline hover:text-foreground transition-colors">
-                          Configurar
-                        </Link>
-                      </p>
-                    </div>
-                  )
-                ) : (
-                  <div className="h-10 flex items-center px-3 rounded-md border border-border/50 bg-background/50">
-                    <p className="text-sm text-muted-foreground/50">Selecione uma loja</p>
-                  </div>
-                )}
-              </div>
-            </div>
             <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -1560,577 +1524,61 @@ export default function ProductsPage() {
                 Se a loja tiver logo configurada, todas as midias vao para o preview ja com marca.
               </p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
-                Link do AliExpress
-              </Label>
-              <form onSubmit={handleScrape} className="flex gap-2">
-                <Input
-                  placeholder="https://aliexpress.com/item/..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="flex-1 h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
-                  required
-                />
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="h-10 px-4 text-sm font-medium transition-all duration-200"
-                  style={{
-                    background: loading
-                      ? "oklch(0.72 0.19 155 / 70%)"
-                      : "oklch(0.72 0.19 155)",
-                    color: "oklch(0.13 0.02 155)",
-                  }}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="mr-2 h-3.5 w-3.5" />
-                      Importar
-                    </>
-                  )}
-                </Button>
-              </form>
-            </div>
+
+            <ImportCard 
+              url={url}
+              setUrl={setUrl}
+              loading={loading}
+              handleScrape={handleScrape}
+            />
           </div>
         </CardContent>
       </Card>
 
       {product && (
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle
-              className="text-[13px] font-medium uppercase text-muted-foreground"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              Preco e moeda do produto
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Ajuste valores manualmente e veja o preview atualizar em tempo real.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="border-border/40 text-[11px]">
-                Moeda ativa: {activeCurrency}
-              </Badge>
-              {selectedStoreData?.auto_convert_prices ? (
-                <Badge
-                  className="text-[11px]"
-                  style={{
-                    background: "oklch(0.72 0.19 155 / 12%)",
-                    color: "oklch(0.72 0.19 155)",
-                    border: "none",
-                  }}
-                >
-                  Conversao automatica ligada
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="border-border/40 text-[11px]">
-                  Conversao automatica desligada
-                </Badge>
-              )}
-              {selectedStoreData && (
-                <span className="text-xs text-muted-foreground/80">
-                  Regra da loja: taxa {selectedStoreData.currency_rate || 1} x markup{" "}
-                  {selectedStoreData.price_markup_percent || 0}%
-                </span>
-              )}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">Preco principal</Label>
-                <Input
-                  value={priceDraft}
-                  onChange={(e) => setPriceDraft(e.target.value)}
-                  inputMode="decimal"
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">Preco de compare</Label>
-                <Input
-                  value={comparePriceDraft}
-                  onChange={(e) => setComparePriceDraft(e.target.value)}
-                  inputMode="decimal"
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <Button
-                  type="button"
-                  className="h-10 w-full text-sm"
-                  onClick={handleApplyPriceDraft}
-                  style={{
-                    background: "oklch(0.72 0.19 155)",
-                    color: "oklch(0.13 0.02 155)",
-                  }}
-                >
-                  Aplicar precos
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">
-                  Ajuste em lote das variantes (%)
-                </Label>
-                <Input
-                  value={bulkMarkupDraft}
-                  onChange={(e) => setBulkMarkupDraft(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="Ex: 12 para subir 12%, -8 para reduzir 8%"
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 border-border/50"
-                  onClick={handleApplyBulkMarkup}
-                >
-                  Aplicar markup
-                </Button>
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 border-border/50"
-                  disabled={!baseImportedProduct}
-                  onClick={() => {
-                    if (!baseImportedProduct) return;
-                    const recalculated = applyStorePricingRules(baseImportedProduct, selectedStoreData);
-                    setProduct(recalculated);
-                    toast.success("Regras da loja reaplicadas aos precos.");
-                  }}
-                >
-                  Reaplicar regra da loja
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <PricingCard 
+          product={product}
+          setProduct={setProduct}
+          baseImportedProduct={baseImportedProduct}
+          selectedStoreData={selectedStoreData}
+          activeCurrency={activeCurrency}
+          priceDraft={priceDraft}
+          setPriceDraft={setPriceDraft}
+          comparePriceDraft={comparePriceDraft}
+          setComparePriceDraft={setComparePriceDraft}
+          bulkMarkupDraft={bulkMarkupDraft}
+          setBulkMarkupDraft={setBulkMarkupDraft}
+          handleApplyPriceDraft={handleApplyPriceDraft}
+          handleApplyBulkMarkup={handleApplyBulkMarkup}
+          applyStorePricingRules={applyStorePricingRules}
+          setVariantPriceInputs={setVariantPriceInputs}
+        />
       )}
 
-      <Card className="border-border/50">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle
-                className="text-[13px] font-medium uppercase text-muted-foreground"
-                style={{ letterSpacing: "0.05em" }}
-              >
-                Produtos ativos da loja
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">
-                Leia, edite e otimize os produtos que ja estao ativos na Shopify.
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 border-border/50"
-              disabled={!selectedStore || catalogRefreshing}
-              onClick={() => void loadCatalogProducts({ silent: true })}
-            >
-              {catalogRefreshing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {!selectedStore ? (
-            <p className="text-sm text-muted-foreground">
-              Selecione uma loja para carregar os produtos ativos.
-            </p>
-          ) : (
-            <>
-              <div className="flex gap-2">
-                <Input
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Buscar por titulo..."
-                  className="h-9 bg-background/50 border-border/50 text-sm"
-                />
-              </div>
 
-              {catalogLoading ? (
-                <div className="space-y-2">
-                  <div className="skeleton h-16 w-full rounded-md" />
-                  <div className="skeleton h-16 w-full rounded-md" />
-                  <div className="skeleton h-16 w-full rounded-md" />
-                </div>
-              ) : catalogProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhum produto ativo encontrado para esta loja.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {catalogProducts.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 rounded-md border border-border/40 bg-background/40 p-2.5"
-                    >
-                      <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border/30 bg-background/50">
-                        {item.images.nodes[0]?.url ? (
-                          <Image
-                            src={item.images.nodes[0].url}
-                            alt={item.title}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center">
-                            <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.variants.nodes[0]?.price
-                            ? formatPrice(Number(item.variants.nodes[0].price), activeCurrency)
-                            : "Sem preco"}
-                          {" • "}
-                          {item.status}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-8 border-border/50 text-[11px]"
-                          onClick={() => openCatalogEditor(item)}
-                        >
-                          <Pencil className="mr-1 h-3 w-3" />
-                          Editar
-                        </Button>
-                        {getShopifyAdminProductUrl(item.id) && (
-                          <a
-                            href={getShopifyAdminProductUrl(item.id)!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex h-8 items-center rounded-md border border-border/50 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {stores.length > 0 && (
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle
-              className="text-[13px] font-medium uppercase text-muted-foreground"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              Materiais da marca da loja
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Envie banners e referencias da identidade visual para guiar a recriacao das imagens
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!selectedStore ? (
-              <p className="text-sm text-muted-foreground">
-                Selecione uma loja para enviar os materiais.
-              </p>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 border-border/50"
-                    onClick={() => materialsInputRef.current?.click()}
-                  >
-                    <Upload className="mr-1.5 h-3.5 w-3.5" />
-                    Adicionar materiais
-                  </Button>
-                  <Button
-                    type="button"
-                    className="h-9"
-                    style={{
-                      background: materialsSaving
-                        ? "oklch(0.72 0.19 155 / 40%)"
-                        : "oklch(0.72 0.19 155)",
-                      color: "oklch(0.13 0.02 155)",
-                    }}
-                    onClick={handleSaveMaterials}
-                    disabled={materialsSaving || materialFiles.length === 0}
-                  >
-                    {materialsSaving ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Salvando...
-                      </span>
-                    ) : (
-                      "Salvar materiais"
-                    )}
-                  </Button>
-                  <input
-                    ref={materialsInputRef}
-                    type="file"
-                    accept="image/png,image/webp,image/jpeg,image/jpg"
-                    onChange={handleMaterialsSelect}
-                    multiple
-                    className="hidden"
-                  />
-                </div>
-
-                {materialFiles.length > 0 && (
-                  <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
-                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-                      Prontos para salvar ({materialFiles.length})
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {materialFiles.map((file, index) => (
-                        <Badge
-                          key={`${file.name}-${index}`}
-                          variant="outline"
-                          className="text-[10px] border-border/40"
-                        >
-                          {file.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {materialsLoading ? (
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
-                    {[...Array(5)].map((_, index) => (
-                      <div key={index} className="skeleton aspect-square rounded-md" />
-                    ))}
-                  </div>
-                ) : storeAssets.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
-                    {storeAssets.map((asset) => (
-                      <div key={asset.id} className="relative group">
-                        <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-background/40">
-                          <Image
-                            src={getAssetUrl(asset.file_path)}
-                            alt={asset.label || "Material da marca"}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveMaterial(asset)}
-                          className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-border/50 bg-card opacity-0 transition-opacity group-hover:opacity-100"
-                          title="Remover material"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Esta loja ainda nao tem materiais cadastrados.
-                  </p>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {product && (
+        <ImportSummaryCard 
+          product={product}
+          previewDescription={previewDescription}
+        />
       )}
 
       {product && (
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle
-              className="text-[13px] font-medium uppercase text-muted-foreground"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              Resumo da importacao
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Tudo o que foi trazido do anuncio para voce validar antes de publicar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-md border border-border/40 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Fotos</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">{product.images.length}</p>
-              </div>
-              <div className="rounded-md border border-border/40 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Variantes</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">{product.variants.length}</p>
-              </div>
-              <div className="rounded-md border border-border/40 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Opcoes de variacao</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">{product.variantOptions.length}</p>
-              </div>
-              <div className="rounded-md border border-border/40 bg-background/40 p-3">
-                <p className="text-xs text-muted-foreground">Descricao</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {previewDescription ? "Importada" : "Vazia"}
-                </p>
-              </div>
-            </div>
-
-            {product.variantOptions.length > 0 && (
-              <div className="space-y-2 rounded-md border border-border/35 bg-background/30 p-3">
-                <p className="text-xs font-medium uppercase text-muted-foreground" style={{ letterSpacing: "0.04em" }}>
-                  Opcoes encontradas
-                </p>
-                <div className="space-y-2">
-                  {product.variantOptions.map((option) => (
-                    <div key={option.name} className="space-y-1">
-                      <p className="text-sm font-medium text-foreground/90">
-                        {option.name} ({option.values.length})
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {option.values.slice(0, 12).map((value) => (
-                          <Badge key={`${option.name}-${value.name}`} variant="outline" className="border-border/35 text-[11px]">
-                            {value.name}
-                          </Badge>
-                        ))}
-                        {option.values.length > 12 && (
-                          <span className="text-xs text-muted-foreground">+{option.values.length - 12} mais</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {product && (
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle
-              className="text-[13px] font-medium uppercase text-muted-foreground"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              Customizacao de Midia (Logo)
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Ajuste posicao, tamanho e opacidade da logo. Ao aplicar, o preview atualiza automaticamente.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">Posicao</Label>
-                <Select
-                  value={logoPosition}
-                  onValueChange={(value) => setLogoPosition((value as LogoPosition) ?? "bottom-right")}
-                >
-                  <SelectTrigger className="h-9 bg-background/50 border-border/50 text-xs">
-                    <SelectValue placeholder="Selecione a posicao" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LOGO_POSITION_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">
-                  Tamanho ({logoScalePercent}%)
-                </Label>
-                <input
-                  type="range"
-                  min={8}
-                  max={40}
-                  value={logoScalePercent}
-                  onChange={(e) => setLogoScalePercent(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">
-                  Margem ({logoMarginPercent}%)
-                </Label>
-                <input
-                  type="range"
-                  min={0}
-                  max={10}
-                  value={logoMarginPercent}
-                  onChange={(e) => setLogoMarginPercent(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[12px] text-muted-foreground">
-                  Opacidade ({logoOpacityPercent}%)
-                </Label>
-                <input
-                  type="range"
-                  min={20}
-                  max={100}
-                  value={logoOpacityPercent}
-                  onChange={(e) => setLogoOpacityPercent(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => void handleBrandAllImages()}
-                disabled={
-                  brandingAll ||
-                  !selectedStore ||
-                  !stores.find((store) => store.id === selectedStore)?.logo_path
-                }
-                className="h-9 text-[13px]"
-                style={{
-                  background: "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
-                }}
-              >
-                {brandingAll ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Aplicando logo ({brandingProgress?.done ?? 0}/{brandingProgress?.total ?? 0})...
-                  </span>
-                ) : (
-                  <>
-                    <Stamp className="mr-1.5 h-3.5 w-3.5" />
-                    Aplicar logo em todas as midias
-                  </>
-                )}
-              </Button>
-              {!stores.find((store) => store.id === selectedStore)?.logo_path && (
-                <span className="text-xs text-muted-foreground">
-                  Configure a logo da loja na pagina Lojas para usar essa funcao.
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <LogoCustomizationCard 
+          logoPosition={logoPosition}
+          setLogoPosition={setLogoPosition}
+          logoScalePercent={logoScalePercent}
+          setLogoScalePercent={setLogoScalePercent}
+          logoMarginPercent={logoMarginPercent}
+          setLogoMarginPercent={setLogoMarginPercent}
+          logoOpacityPercent={logoOpacityPercent}
+          setLogoOpacityPercent={setLogoOpacityPercent}
+          brandingAll={brandingAll}
+          brandingProgress={brandingProgress}
+          handleBrandAllImages={handleBrandAllImages}
+          selectedStore={selectedStore}
+          stores={stores}
+        />
       )}
 
       {/* Loading skeleton */}
@@ -2960,154 +2408,30 @@ export default function ProductsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Editor */}
-                <Card className="border-border/50">
-                  <CardHeader>
-                    <CardTitle
-                      className="text-[13px] font-medium uppercase text-muted-foreground"
-                      style={{ letterSpacing: "0.05em" }}
-                    >
-                      Editar
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Ajuste antes de publicar
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Button
-                      onClick={handleOptimize}
-                      disabled={optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche}
-                      className="w-full h-11 text-sm font-medium transition-all duration-200 mb-4"
-                      style={{
-                        background:
-                          optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche
-                            ? "oklch(0.72 0.19 155 / 30%)"
-                            : "oklch(0.72 0.19 155)",
-                        color: "oklch(0.13 0.02 155)",
-                      }}
-                    >
-                      {optimizing ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Otimizando com IA...
-                        </span>
-                      ) : !selectedStore ? (
-                        "Selecione uma loja"
-                      ) : !stores.find((s) => s.id === selectedStore)?.niche ? (
-                        "Configure o perfil da loja para usar IA"
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Gerar título e descrição com IA
-                        </>
-                      )}
-                    </Button>
-                    <div className="space-y-2">
-                      <Label className="text-[13px] text-muted-foreground">
-                        Titulo
-                      </Label>
-                      <Input
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
-                      />
-                      <CharCounter current={editTitle.length} max={70} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[13px] text-muted-foreground">
-                        Descricao (HTML)
-                      </Label>
-                      <Textarea
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                        rows={8}
-                        className="bg-background/50 border-border/50 font-mono text-xs transition-colors duration-200 focus:border-primary/50"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[13px] text-muted-foreground">
-                        Tags (separadas por virgula)
-                      </Label>
-                      <Input
-                        value={editTags}
-                        onChange={(e) => setEditTags(e.target.value)}
-                        className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[13px] text-muted-foreground">
-                        SEO Titulo
-                      </Label>
-                      <Input
-                        value={editSeoTitle}
-                        onChange={(e) => setEditSeoTitle(e.target.value)}
-                        className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
-                      />
-                      <CharCounter current={editSeoTitle.length} max={60} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[13px] text-muted-foreground">
-                        SEO Descricao
-                      </Label>
-                      <Textarea
-                        value={editSeoDescription}
-                        onChange={(e) => setEditSeoDescription(e.target.value)}
-                        rows={2}
-                        className="bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
-                      />
-                      <CharCounter
-                        current={editSeoDescription.length}
-                        max={155}
-                      />
-                    </div>
-
-                    <Button
-                      className="w-full h-11 text-sm font-medium transition-all duration-200"
-                      onClick={handlePublish}
-                      disabled={publishing || !selectedStore || published}
-                      style={
-                        published
-                          ? {
-                              background: "oklch(0.72 0.19 155 / 15%)",
-                              color: "oklch(0.72 0.19 155)",
-                            }
-                          : {
-                              background:
-                                publishing || !selectedStore
-                                  ? "oklch(0.72 0.19 155 / 30%)"
-                                  : "oklch(0.72 0.19 155)",
-                              color: "oklch(0.13 0.02 155)",
-                            }
-                      }
-                    >
-                      {published ? (
-                        <span className="flex items-center gap-2 animate-scale-in">
-                          <Check className="h-4 w-4" />
-                          Publicado na {selectedStoreName}
-                        </span>
-                      ) : publishing ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Publicando...
-                        </span>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Publicar na {selectedStoreName || "Shopify"}
-                          {product.variants.length > 1 && (
-                            <span className="ml-1 text-[11px] opacity-70">
-                              ({product.variants.length} variantes)
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
+                <EditorFormCard
+                  product={product}
+                  stores={stores}
+                  selectedStore={selectedStore}
+                  activeCurrency={activeCurrency}
+                  optimizing={optimizing}
+                  handleOptimize={handleOptimize}
+                  editTitle={editTitle}
+                  setEditTitle={setEditTitle}
+                  editDescription={editDescription}
+                  setEditDescription={setEditDescription}
+                  editTags={editTags}
+                  setEditTags={setEditTags}
+                  editSeoTitle={editSeoTitle}
+                  setEditSeoTitle={setEditSeoTitle}
+                  editSeoDescription={editSeoDescription}
+                  setEditSeoDescription={setEditSeoDescription}
+                  variantPriceInputs={variantPriceInputs}
+                  handleVariantPriceChange={handleVariantPriceChange}
+                  publishing={publishing}
+                  published={published}
+                  handlePublish={handlePublish}
+                  formatPrice={formatPrice}
+                />
               </div>
             )}
           </TabsContent>

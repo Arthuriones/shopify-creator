@@ -4,7 +4,7 @@ import type { CSSProperties, ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Store, Package, Sparkles, Settings2, LogOut } from "lucide-react";
+import { Store, Package, Sparkles, Settings2, LogOut, LayoutDashboard } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -16,12 +16,16 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/stores", label: "Lojas", icon: Store },
   {
     href: "/products",
     label: "Produtos",
     icon: Package,
-    children: [{ href: "/products/catalog", label: "Catalogo" }],
+    children: [
+      { href: "/products/catalog", label: "Catalogo" },
+      { href: "/bulk", label: "Importacao em Lote" }
+    ],
   },
   { href: "/optimizer", label: "Otimizador", icon: Sparkles },
   { href: "/store-setup", label: "Setup da Loja", icon: Settings2 },

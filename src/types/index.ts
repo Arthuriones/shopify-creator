@@ -69,6 +69,7 @@ export interface AliExpressVariant {
 
 export interface AliExpressProduct {
   title: string;
+  original_url?: string;
   description: string;
   price: number;
   originalPrice: number;
@@ -108,4 +109,17 @@ export interface StoreSetup {
   };
   pages: { title: string; handle: string; body: string }[];
   copyright: string;
+}
+
+export interface BackgroundJob {
+  id: string;
+  user_id: string;
+  store_id: string;
+  type: "optimize" | "remove_logo" | "apply_logo" | "publish" | "bulk_import";
+  status: "pending" | "processing" | "completed" | "failed";
+  progress: Record<string, any>;
+  result: Record<string, any> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
 }
