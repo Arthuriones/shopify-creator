@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -89,6 +90,37 @@ export function EditorFormCard({
   handlePublish,
   formatPrice,
 }: EditorFormCardProps) {
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
+
+  async function handleGenerateDescription() {
+    setIsGeneratingDesc(true);
+    try {
+      const res = await fetch("/api/product/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle || product.title,
+          rawDescription: product.description || "",
+          storeId: selectedStore,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || "Erro ao gerar descrição");
+        return;
+      }
+
+      const data = await res.json();
+      setEditDescription(data.descriptionHtml);
+      toast.success("Descrição gerada com IA!");
+    } catch {
+      toast.error("Erro na comunicação com a IA");
+    } finally {
+      setIsGeneratingDesc(false);
+    }
+  }
+
   const selectedStoreName = stores.find((s) => s.id === selectedStore)?.name;
 
   return (
@@ -129,7 +161,7 @@ export function EditorFormCard({
           ) : (
             <>
               <Sparkles className="mr-2 h-4 w-4" />
-              Gerar titulo e descricao com IA
+              Gerar titulo e tags com IA
             </>
           )}
         </Button>
@@ -146,9 +178,30 @@ export function EditorFormCard({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-[13px] text-muted-foreground">
-            Descricao (HTML)
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-[13px] text-muted-foreground">
+              Descrição (HTML)
+            </Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateDescription}
+              disabled={isGeneratingDesc || !selectedStore}
+              className="h-7 text-[11px] border-border/50"
+              style={{
+                background: isGeneratingDesc ? "oklch(0.72 0.19 155 / 10%)" : "transparent",
+                color: "oklch(0.72 0.19 155)",
+              }}
+            >
+              {isGeneratingDesc ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 h-3 w-3" />
+              )}
+              {isGeneratingDesc ? "Gerando..." : "Gerar Descrição"}
+            </Button>
+          </div>
           <Textarea
             value={editDescription}
             onChange={(e) => setEditDescription(e.target.value)}
