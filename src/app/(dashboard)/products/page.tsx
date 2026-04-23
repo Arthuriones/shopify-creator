@@ -560,6 +560,14 @@ function ProductsPageContent() {
 
   async function handleGenerateCleanImage(imageUrl: string) {
     setGeneratingImage(imageUrl);
+
+    // Clear any existing logo so the new clean image takes precedence
+    setBrandedImages((prev) => {
+      const next = { ...prev };
+      delete next[imageUrl];
+      return next;
+    });
+
     try {
       const res = await fetch("/api/image/generate", {
         method: "POST",
