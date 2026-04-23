@@ -45,12 +45,16 @@ export async function POST(request: NextRequest) {
   const clientSecret = asTrimmedString(payload.clientSecret);
   const shopDomain = normalizeShopDomain(shopDomainInput);
 
-  if (!shopDomain || !clientId || !clientSecret) {
+  if (!shopDomain) {
     return NextResponse.json(
-      {
-        error:
-          "Informe dominio (.myshopify.com), Client ID e Client Secret para conectar.",
-      },
+      { error: "Domínio da loja inválido ou não informado. Use o formato loja.myshopify.com ou seu domínio customizado." },
+      { status: 400 }
+    );
+  }
+
+  if (!clientId || !clientSecret) {
+    return NextResponse.json(
+      { error: "Client ID e Client Secret são obrigatórios para a conexão." },
       { status: 400 }
     );
   }

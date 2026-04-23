@@ -814,8 +814,7 @@ export default function StoresPage() {
                 </p>
                 {!isShopDomainValid && (
                   <p className="text-xs text-destructive">
-                    Dominio invalido. O formato aceito eh apenas{" "}
-                    <span className="font-mono">*.myshopify.com</span>.
+                    Domínio inválido. Use um formato como loja.myshopify.com ou seu domínio próprio (loja.com).
                   </p>
                 )}
               </div>
