@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Download, FileJson, Loader2, Route, Store, WandSparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  Copy,
+  Download,
+  FileJson,
+  FileOutput,
+  GitBranch,
+  Loader2,
+  PackageCheck,
+  Route,
+  ShieldCheck,
+  Store,
+  WandSparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,6 +109,64 @@ function parseJsonMap(value: string, label: string) {
   } catch {
     throw new Error(`${label} precisa ser um JSON objeto valido.`);
   }
+}
+
+function formatStoreLabel(store?: StoreOption) {
+  if (!store) return "Selecione uma loja";
+  if (store.shop_domain) return store.shop_domain;
+  if (store.name && store.name !== store.id) return store.name;
+  return `Loja ${store.id.slice(0, 8)}`;
+}
+
+function ServiceIntro({
+  icon: Icon,
+  title,
+  description,
+  steps,
+}: {
+  icon: typeof Copy;
+  title: string;
+  description: string;
+  steps: string[];
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold leading-tight text-foreground">
+            {title}
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+      <ol className="mt-4 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+        {steps.map((step, index) => (
+          <li
+            key={step}
+            className="flex min-w-0 items-start gap-2 rounded-lg border border-border/50 bg-background/45 p-3"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
+              {index + 1}
+            </span>
+            <span className="leading-5">{step}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }
 
 export default function ClonePage() {
@@ -321,8 +392,8 @@ export default function ClonePage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <header className="flex flex-col gap-3 border-b border-border/60 pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-7 animate-fade-in">
+      <header className="flex flex-col gap-4 border-b border-border/60 pb-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="mb-3 flex items-center gap-2">
             <Badge variant="secondary" className="rounded-md">
@@ -333,135 +404,198 @@ export default function ClonePage() {
             </Badge>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Clone e roteamento
+            Central de clone e checkout
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Importe vitrines Shopify, exporte catálogo e conecte uma vitrine a uma dark store.
+            Três serviços separados para importar produtos, exportar catálogo e
+            rotear pedidos da vitrine para uma dark store sem confundir o cliente.
           </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
+          {[
+            ["1", "Analisar", "Lê /products.json da loja de origem."],
+            ["2", "Exportar ou aplicar", "Gera arquivo ou cria produtos na loja conectada."],
+            ["3", "Rotear checkout", "Conecta variantes da vitrine com a dark store."],
+          ].map(([number, title, description]) => (
+            <div
+              key={number}
+              className="rounded-lg border border-border/60 bg-card/70 p-3"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
+                  {number}
+                </span>
+                {title}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {description}
+              </p>
+            </div>
+          ))}
         </div>
       </header>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <Card className="border-border/60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Copy className="h-4 w-4 text-primary" />
-              Clone de loja Shopify
-            </CardTitle>
-            <CardDescription>Origem publica via /products.json.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-[1fr_120px]">
-              <div className="space-y-2">
-                <Label htmlFor="source">Loja de origem</Label>
-                <Input
-                  id="source"
-                  value={source}
-                  onChange={(event) => setSource(event.target.value)}
-                  placeholder="exemplo.myshopify.com ou dominio.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="limit">Limite</Label>
-                <Input
-                  id="limit"
-                  value={limit}
-                  onChange={(event) => setLimit(event.target.value)}
-                  inputMode="numeric"
-                />
-              </div>
-            </div>
+      <section className="space-y-4" aria-labelledby="clone-shopify">
+        <ServiceIntro
+          icon={Copy}
+          title="Serviço 1: clonar loja Shopify"
+          description="Use quando quiser copiar produtos de uma vitrine pública. A origem pode ser um domínio próprio ou myshopify.com; o sistema busca o catálogo público e mostra uma prévia antes de gravar algo."
+          steps={[
+            "Informe a loja pública de origem.",
+            "Analise a prévia para conferir produtos e variantes.",
+            "Aplique na loja conectada ou exporte o catálogo.",
+          ]}
+        />
 
-            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-              <div className="space-y-2">
-                <Label>Destino conectado</Label>
-                <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma loja" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name} ({store.shop_domain})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <label className="flex h-8 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={publishToStorefront}
-                  onChange={(event) => setPublishToStorefront(event.target.checked)}
-                  className="h-4 w-4 accent-primary"
-                />
-                Publicar
-              </label>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Vitrine para mapear</Label>
-                <Select value={sourceStoreId} onValueChange={(value) => setSourceStoreId(value || "")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Loja vitrine" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <Card className="rounded-lg border-border/60">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <PackageCheck className="h-4 w-4 text-primary" />
+                Configurar clone
+              </CardTitle>
+              <CardDescription>
+                Nada é publicado antes de clicar em Aplicar na loja.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_128px]">
+                <div className="space-y-2">
+                  <Label htmlFor="source">Loja de origem</Label>
+                  <Input
+                    id="source"
+                    value={source}
+                    onChange={(event) => setSource(event.target.value)}
+                    placeholder="exemplo.myshopify.com ou dominio.com"
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Use apenas o domínio; a busca pública usa /products.json.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="limit">Limite</Label>
+                  <Input
+                    id="limit"
+                    value={limit}
+                    onChange={(event) => setLimit(event.target.value)}
+                    inputMode="numeric"
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Máximo por execução.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Duplicados</Label>
-                <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value || "skip")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="skip">Pular existentes</SelectItem>
-                    <SelectItem value="create">Criar mesmo assim</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Destino conectado</Label>
+                  <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Selecione uma loja" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.id}>
+                          <span className="block max-w-[320px] truncate">
+                            {formatStoreLabel(store)}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Loja onde os produtos serão criados.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Duplicados</Label>
+                  <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value || "skip")}>
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="skip">Pular existentes</SelectItem>
+                      <SelectItem value="create">Criar mesmo assim</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Evita produtos repetidos quando a origem já foi clonada.
+                  </p>
+                </div>
               </div>
 
-              <label className="flex items-center gap-2 rounded-lg border border-border/70 px-3 py-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={createRoutingConfig}
-                  onChange={(event) => setCreateRoutingConfig(event.target.checked)}
-                  className="h-4 w-4 accent-primary"
-                />
-                Gerar rota
-              </label>
-            </div>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={publishToStorefront}
+                    onChange={(event) => setPublishToStorefront(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span>
+                    <span className="block font-medium text-foreground">
+                      Publicar na loja
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      Produtos entram disponíveis na Shopify de destino.
+                    </span>
+                  </span>
+                </label>
 
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handlePreview} disabled={previewLoading || storesLoading}>
-                {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                Analisar
-              </Button>
-              <Button variant="outline" onClick={() => handleExport("json")} disabled={Boolean(exportLoading)}>
-                {exportLoading === "json" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
-                JSON
-              </Button>
-              <Button variant="outline" onClick={() => handleExport("csv")} disabled={Boolean(exportLoading)}>
-                {exportLoading === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                CSV
-              </Button>
-              <Button onClick={handleApply} disabled={applyLoading || !targetStoreId}>
-                {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
-                Aplicar na loja
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-3">
+                  <Label>Vitrine para mapear</Label>
+                  <Select value={sourceStoreId} onValueChange={(value) => setSourceStoreId(value || "")}>
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Loja vitrine" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.id}>
+                          <span className="block max-w-[260px] truncate">
+                            {formatStoreLabel(store)}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Origem do mapa quando a rota automática for criada.
+                  </p>
+                </div>
 
-        <Card className="border-border/60">
+                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={createRoutingConfig}
+                    onChange={(event) => setCreateRoutingConfig(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span>
+                    <span className="block font-medium text-foreground">
+                      Preparar rota de checkout
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      Salva mapas para ligar vitrine e dark store depois.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
+                <Button onClick={handlePreview} disabled={previewLoading || storesLoading}>
+                  {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                  Analisar origem
+                </Button>
+                <Button onClick={handleApply} disabled={applyLoading || !targetStoreId}>
+                  {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
+                  Aplicar na loja
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="text-lg">Prévia</CardTitle>
             <CardDescription>
@@ -470,9 +604,10 @@ export default function ClonePage() {
           </CardHeader>
           <CardContent>
             {preview.length === 0 ? (
-              <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border/70 text-sm text-muted-foreground">
-                A prévia aparece aqui.
-              </div>
+              <EmptyState>
+                Depois de analisar, os primeiros produtos aparecem aqui com imagem,
+                preço e quantidade de variantes.
+              </EmptyState>
             ) : (
               <div className="max-h-[430px] space-y-2 overflow-auto pr-1">
                 {preview.slice(0, 30).map((product) => (
@@ -507,17 +642,76 @@ export default function ClonePage() {
             )}
           </CardContent>
         </Card>
+        </div>
       </section>
 
-      <section>
-        <Card className="border-border/60">
+      <section className="space-y-4" aria-labelledby="catalog-export">
+        <ServiceIntro
+          icon={FileOutput}
+          title="Serviço 2: exportar catálogo"
+          description="Use quando não quiser aplicar produtos imediatamente. A exportação usa a mesma origem analisada e gera um arquivo para conferência, backup ou importação manual."
+          steps={[
+            "Preencha a origem Shopify.",
+            "Clique em JSON para dados completos.",
+            "Clique em CSV para planilha operacional.",
+          ]}
+        />
+
+        <Card className="rounded-lg border-border/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Download className="h-4 w-4 text-primary" />
+              Arquivos de saída
+            </CardTitle>
+            <CardDescription>
+              O arquivo respeita o limite configurado no serviço de clone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/60 bg-background/45 p-3">
+                <p className="text-sm font-medium text-foreground">JSON</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Melhor para automações e reimportação completa.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/45 p-3">
+                <p className="text-sm font-medium text-foreground">CSV</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Melhor para revisar preço, SKU e títulos em planilha.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/45 p-3">
+                <p className="text-sm font-medium text-foreground">Origem atual</p>
+                <p className="mt-1 truncate text-xs leading-5 text-muted-foreground">
+                  {source || "Nenhuma loja informada"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 md:justify-end">
+              <Button variant="outline" onClick={() => handleExport("json")} disabled={Boolean(exportLoading)}>
+                {exportLoading === "json" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileJson className="h-4 w-4" />}
+                Baixar JSON
+              </Button>
+              <Button variant="outline" onClick={() => handleExport("csv")} disabled={Boolean(exportLoading)}>
+                {exportLoading === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Baixar CSV
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="text-lg">Histórico de clone</CardTitle>
-            <CardDescription>Últimas execuções registradas no Supabase.</CardDescription>
+            <CardDescription>
+              Últimas execuções registradas no Supabase.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {cloneRuns.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
+              <div className="rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
                 Nenhuma execução registrada.
               </div>
             ) : (
@@ -563,14 +757,28 @@ export default function ClonePage() {
         </Card>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
-        <Card className="border-border/60">
+      <section className="space-y-4" aria-labelledby="routed-checkout">
+        <ServiceIntro
+          icon={GitBranch}
+          title="Serviço 3: routed checkout"
+          description="Use quando a vitrine deve vender para o cliente, mas o checkout final precisa ser montado na dark store. O script do tema lê o carrinho da vitrine e troca as variantes antes de enviar o cliente ao checkout."
+          steps={[
+            "Escolha a loja vitrine e a dark store.",
+            "Cole mapas de SKU ou variantes em JSON.",
+            "Ative o token gerado no tema da vitrine.",
+          ]}
+        />
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Route className="h-4 w-4 text-primary" />
-              Checkout roteado
+              Criar rota
             </CardTitle>
-            <CardDescription>Mapeamento SKU/variant para dark store.</CardDescription>
+            <CardDescription>
+              Mapeamento SKU/variant para dark store. Use pelo menos um dos mapas.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
@@ -582,17 +790,19 @@ export default function ClonePage() {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
               <div className="space-y-2">
                 <Label>Vitrine</Label>
                 <Select value={routeSourceStoreId} onValueChange={(value) => setRouteSourceStoreId(value || "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Origem" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent align="start">
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
-                        {store.name}
+                        <span className="block max-w-[260px] truncate">
+                          {formatStoreLabel(store)}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -602,13 +812,15 @@ export default function ClonePage() {
               <div className="space-y-2">
                 <Label>Dark store</Label>
                 <Select value={routeTargetStoreId} onValueChange={(value) => setRouteTargetStoreId(value || "")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Destino" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent align="start">
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
-                        {store.name}
+                        <span className="block max-w-[260px] truncate">
+                          {formatStoreLabel(store)}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -618,10 +830,10 @@ export default function ClonePage() {
               <div className="space-y-2">
                 <Label>Modo</Label>
                 <Select value={routeMode} onValueChange={(value) => setRouteMode(value || "standard")}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent align="start">
                     <SelectItem value="standard">standard</SelectItem>
                     <SelectItem value="enterprise">enterprise</SelectItem>
                     <SelectItem value="enterprise_static">enterprise_static</SelectItem>
@@ -638,8 +850,11 @@ export default function ClonePage() {
                   value={skuMap}
                   onChange={(event) => setSkuMap(event.target.value)}
                   rows={7}
-                  className="font-mono text-xs"
+                  className="min-h-36 resize-y overflow-auto font-mono text-xs leading-5"
                 />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Chave: SKU da vitrine. Valor: variant GID da dark store.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="variant-map">Variant map</Label>
@@ -648,8 +863,21 @@ export default function ClonePage() {
                   value={variantMap}
                   onChange={(event) => setVariantMap(event.target.value)}
                   rows={7}
-                  className="font-mono text-xs"
+                  className="min-h-36 resize-y overflow-auto font-mono text-xs leading-5"
                 />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Chave: variant GID da vitrine. Valor: variant GID da dark store.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-primary/25 bg-primary/8 p-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="leading-6">
+                  Depois de criar a rota, copie o token exibido em Rotas ativas
+                  para as configurações do tema da vitrine.
+                </p>
               </div>
             </div>
 
@@ -660,7 +888,7 @@ export default function ClonePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60">
+        <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="text-lg">Rotas ativas</CardTitle>
             <CardDescription>
@@ -669,7 +897,7 @@ export default function ClonePage() {
           </CardHeader>
           <CardContent>
             {configs.length === 0 ? (
-              <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border/70 text-sm text-muted-foreground">
+              <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
                 Nenhuma rota criada.
               </div>
             ) : (
@@ -691,7 +919,11 @@ export default function ClonePage() {
                       </Badge>
                     </div>
                     <div className="mt-3 rounded-md bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
-                      token: {config.public_token}
+                      <span className="mr-2 inline-flex items-center gap-1 font-sans text-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                        Token
+                      </span>
+                      <span className="break-all">{config.public_token}</span>
                     </div>
                   </div>
                 ))}
@@ -699,6 +931,7 @@ export default function ClonePage() {
             )}
           </CardContent>
         </Card>
+        </div>
       </section>
     </div>
   );
