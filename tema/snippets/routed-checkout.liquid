@@ -1,0 +1,16 @@
+{%- liquid
+  assign routed_enabled = settings.routed_checkout_enabled
+  assign routed_token = settings.routed_checkout_token | strip
+  assign routed_app_url = settings.routed_checkout_app_url | strip
+-%}
+
+{%- if routed_enabled and routed_token != blank and routed_app_url != blank -%}
+  <script id="routed-checkout-config" type="application/json">
+    {
+      "enabled": true,
+      "token": {{ routed_token | json }},
+      "resolveUrl": {{ routed_app_url | append: "/api/checkout-routes/resolve" | json }}
+    }
+  </script>
+  <script src="{{ 'routed-checkout.js' | asset_url }}" defer></script>
+{%- endif -%}

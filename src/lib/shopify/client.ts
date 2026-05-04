@@ -29,7 +29,7 @@ export class ShopifyClientError extends Error {
   }
 }
 
-interface ShopifyCredentials {
+export interface ShopifyCredentials {
   shopDomain: string;
   clientId: string;
   clientSecret: string;
@@ -522,8 +522,11 @@ export async function createProduct(
     storefrontPublication = await publishProductToStorefront(creds, product.id);
   }
 
+  const syncedProduct = await getProductById(creds, product.id).catch(() => null);
+
   return {
     ...createResult,
+    syncedProduct,
     storefrontPublication,
   };
 }
@@ -621,6 +624,40 @@ export async function getProducts(
     first: safeFirst,
     query: queryFilter || null,
   });
+}
+
+export async function getProductById(creds: ShopifyCredentials, productId: string) {
+  const query = `
+    query getProductById($id: ID!) {
+      product(id: $id) {
+        id
+        title
+        handle
+        status
+        descriptionHtml
+        tags
+        seo { title description }
+        images(first: 20) { nodes { url altText } }
+        options {
+          name
+          values
+        }
+        variants(first: 100) {
+          nodes {
+            id
+            title
+            sku
+            price
+            compareAtPrice
+            selectedOptions { name value }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query, { id: productId });
+  return data?.product || null;
 }
 
 export async function updateShopifyProduct(

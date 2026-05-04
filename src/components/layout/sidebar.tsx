@@ -4,7 +4,7 @@ import type { CSSProperties, ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Store, Package, Sparkles, Settings2, LogOut, LayoutDashboard } from "lucide-react";
+import { Store, Package, Sparkles, Settings2, LogOut, LayoutDashboard, Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
       { href: "/bulk", label: "Importacao em Lote" }
     ],
   },
+  { href: "/clone", label: "Clone", icon: Copy },
   { href: "/optimizer", label: "Otimizador", icon: Sparkles },
   { href: "/store-setup", label: "Setup da Loja", icon: Settings2 },
 ];
@@ -58,7 +59,7 @@ export function Sidebar() {
             Shopify Creator
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Importe do AliExpress, personalize e publique na sua loja.
+            Importe, clone, personalize e publique na sua loja.
           </p>
         </div>
 
@@ -154,7 +155,7 @@ export function Sidebar() {
         </button>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-sidebar-border/70 bg-sidebar/95 px-1 py-1 backdrop-blur-md md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-sidebar-border/70 bg-sidebar/95 px-1 py-1 backdrop-blur-md md:hidden">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -162,7 +163,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
+                "flex min-w-[76px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-foreground"
                   : "text-muted-foreground"

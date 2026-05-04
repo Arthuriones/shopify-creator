@@ -117,8 +117,8 @@ export interface BackgroundJob {
   store_id: string;
   type: "optimize" | "remove_logo" | "apply_logo" | "publish" | "bulk_import";
   status: "pending" | "processing" | "completed" | "failed";
-  progress: Record<string, any>;
-  result: Record<string, any> | null;
+  progress: Record<string, unknown>;
+  result: Record<string, unknown> | null;
   error: string | null;
   created_at: string;
   updated_at: string;

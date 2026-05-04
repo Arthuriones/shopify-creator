@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "tema/**",
+    "public/Combo bot/**",
+    "failed_html.html",
+    "herocart.html",
   ]),
 ]);
 

@@ -38,6 +38,23 @@
         "id": "checkouttransparente",
         "label": "Usar checkout transparente",
         "default": true
+      },
+      {
+        "type": "checkbox",
+        "id": "routed_checkout_enabled",
+        "label": "Usar Routed Checkout (vitrine -> dark store)",
+        "default": false
+      },
+      {
+        "type": "text",
+        "id": "routed_checkout_app_url",
+        "label": "URL do Shopify Creator",
+        "default": "https://seu-app.com"
+      },
+      {
+        "type": "text",
+        "id": "routed_checkout_token",
+        "label": "Token publico da rota"
       }
     ]
   },
@@ -66,7 +83,7 @@
       "id": "precoparcela-cor",
       "label": "Cor do valor parcelado",
       "default": "#000"
-    },
+    }
     ]
   },
   {
@@ -2722,8 +2739,7 @@
 
  {
         "type": "header",
-        "content": "Botão Continuar Comprando",
-        
+        "content": "Botão Continuar Comprando"
       },
       {
         "type": "checkbox",
@@ -2757,16 +2773,14 @@
         "type": "color",
         "id": "recomendafundo1",
         "label": "Background botão continuar comprando",
-        "default": "#000",
-        
+        "default": "#000"
       },
 
   {
         "type": "color",
         "id": "recomendafonte1",
         "label": "Fonte botão continuar comprando",
-        "default": "#fff",
-        
+        "default": "#fff"
       },
  {
         "type": "range",
@@ -2776,8 +2790,7 @@
         "max": 50,
         "step": 1,
         "unit": "px",
-        "default": 8,
-        
+        "default": 8
       },
 
 
@@ -2880,7 +2893,7 @@
       "type": "color",
       "id": "shipping_icon_color",
       "label": "Cor do Icone",
-      "default": "#0546e0",
+      "default": "#0546e0"
     },
     {
       "type": "richtext",
