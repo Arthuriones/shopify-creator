@@ -86,6 +86,28 @@ interface CloneRun {
 
 type CloneView = "overview" | "shopify" | "export" | "routed-checkout";
 
+interface ConnectedVariant {
+  id: string;
+  title: string;
+  sku?: string | null;
+  price?: string;
+  selectedOptions?: { name: string; value: string }[];
+}
+
+interface ConnectedProduct {
+  id: string;
+  title: string;
+  handle: string;
+  status?: string;
+  variants: { nodes: ConnectedVariant[] };
+}
+
+interface FlatVariant extends ConnectedVariant {
+  productTitle: string;
+  productHandle: string;
+  label: string;
+}
+
 const DEFAULT_SKU_MAP = `{
   "SKU-DA-VITRINE": "gid://shopify/ProductVariant/1234567890"
 }`;
@@ -115,6 +137,80 @@ function parseJsonMap(value: string, label: string) {
   } catch {
     throw new Error(`${label} precisa ser um JSON objeto valido.`);
   }
+}
+
+function normalizeMatchKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
+  return products.flatMap((product) =>
+    (product.variants?.nodes || []).map((variant) => {
+      const optionText =
+        variant.selectedOptions
+          ?.map((option) => option.value)
+          .filter(Boolean)
+          .join(" / ") || variant.title;
+      return {
+        ...variant,
+        productTitle: product.title,
+        productHandle: product.handle,
+        label: `${product.title}${optionText && optionText !== "Default Title" ? ` - ${optionText}` : ""}`,
+      };
+    })
+  );
+}
+
+function buildSuggestedMaps(
+  sourceProducts: ConnectedProduct[],
+  targetProducts: ConnectedProduct[]
+) {
+  const sourceVariants = flattenVariants(sourceProducts);
+  const targetVariants = flattenVariants(targetProducts);
+  const targetBySku = new Map<string, FlatVariant>();
+  const targetByLabel = new Map<string, FlatVariant>();
+
+  targetVariants.forEach((variant) => {
+    if (variant.sku?.trim()) {
+      targetBySku.set(variant.sku.trim().toLowerCase(), variant);
+    }
+    targetByLabel.set(normalizeMatchKey(variant.label), variant);
+  });
+
+  const skuMap: Record<string, string> = {};
+  const variantMap: Record<string, string> = {};
+  const matches: {
+    source: FlatVariant;
+    target: FlatVariant;
+    reason: "sku" | "titulo";
+  }[] = [];
+  const unmatched: FlatVariant[] = [];
+
+  sourceVariants.forEach((sourceVariant) => {
+    const sku = sourceVariant.sku?.trim();
+    const targetVariant = sku
+      ? targetBySku.get(sku.toLowerCase())
+      : targetByLabel.get(normalizeMatchKey(sourceVariant.label));
+
+    if (targetVariant) {
+      if (sku) skuMap[sku] = targetVariant.id;
+      variantMap[sourceVariant.id] = targetVariant.id;
+      matches.push({
+        source: sourceVariant,
+        target: targetVariant,
+        reason: sku ? "sku" : "titulo",
+      });
+    } else {
+      unmatched.push(sourceVariant);
+    }
+  });
+
+  return { sourceVariants, targetVariants, skuMap, variantMap, matches, unmatched };
 }
 
 function formatStoreLabel(store?: StoreOption) {
@@ -244,7 +340,13 @@ function ServiceOverview() {
   );
 }
 
-function RoutedCheckoutTutorial() {
+function RoutedCheckoutTutorial({
+  installSnippet,
+  routeToken,
+}: {
+  installSnippet: string;
+  routeToken: string;
+}) {
   const flow = [
     "Cliente adiciona produtos na loja vitrine.",
     "O script intercepta o clique ou envio do checkout.",
@@ -255,24 +357,24 @@ function RoutedCheckoutTutorial() {
 
   const installSteps = [
     {
-      title: "Publicar os arquivos no tema",
+      title: "Abrir o arquivo certo",
       detail:
-        "Envie o asset routed-checkout.js e o snippet routed-checkout.liquid para o tema da loja vitrine.",
+        "Na Shopify da loja vitrine, entre em Online Store > Themes > ... > Edit code e abra layout/theme.liquid.",
     },
     {
       title: "Renderizar antes do fechamento do body",
       detail:
-        "No layout/theme.liquid, mantenha a chamada do snippet próxima ao fim do body para interceptar botões de checkout já renderizados.",
+        "Cole o script pronto exatamente antes de </body>. Esse é o mesmo local indicado na referência.",
     },
     {
-      title: "Configurar o tema",
+      title: "Usar o token da rota",
       detail:
-        "Em Theme settings, habilite Routed Checkout, informe a URL pública do app e cole o token da rota ativa.",
+        "O atributo data-token deve ser o token da rota ativa criada nesta tela. Sem token, o loader não roda.",
     },
     {
-      title: "Testar com carrinho real",
+      title: "Ajustar o carrinho nativo",
       detail:
-        "Adicione um produto da vitrine ao carrinho e clique em checkout. Se o mapa falhar, o script volta para o checkout nativo.",
+        "No Dawn e temas grátis, troque Cart type para Pop-up notification. Em temas pagos, procure Cart ou Product notifications.",
     },
   ];
 
@@ -331,7 +433,7 @@ function RoutedCheckoutTutorial() {
             Instalação do script
           </CardTitle>
           <CardDescription>
-            O script deve existir no tema da vitrine, não na dark store.
+            Instale na loja vitrine. Nao use cartoriginals.web.app: aquele loader carrega o app da referência, nao este projeto.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -358,22 +460,26 @@ function RoutedCheckoutTutorial() {
 
       <Card className="rounded-lg border-border/60 xl:col-span-2">
         <CardHeader>
-          <CardTitle className="text-lg">Trechos que precisam existir no tema</CardTitle>
+          <CardTitle className="text-lg">Código pronto para colar no tema</CardTitle>
           <CardDescription>
-            A chamada do snippet fica antes de <code>&lt;/body&gt;</code>; o snippet injeta config e asset de forma assíncrona.
+            Cole no arquivo <code>layout/theme.liquid</code>, imediatamente antes de <code>&lt;/body&gt;</code>.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <Label>layout/theme.liquid</Label>
-            <CodeBlock>{"{% render 'routed-checkout' %}\n</body>"}</CodeBlock>
+            <Label>Instalação rápida</Label>
+            <CodeBlock>{installSnippet}</CodeBlock>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Token usado: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
+            </p>
           </div>
           <div className="space-y-2">
-            <Label>snippets/routed-checkout.liquid</Label>
-            <CodeBlock>{`<script id="routed-checkout-config" type="application/json">
-  { "token": "...", "resolveUrl": "https://app.com/api/checkout-routes/resolve" }
-</script>
-<script src="{{ 'routed-checkout.js' | asset_url }}" defer></script>`}</CodeBlock>
+            <Label>Checklist de teste</Label>
+            <CodeBlock>{`1. Salve o theme.liquid
+2. Abra a vitrine em janela anonima
+3. Adicione um produto mapeado ao carrinho
+4. Clique em checkout
+5. Confira se a URL final é da dark store`}</CodeBlock>
           </div>
         </CardContent>
       </Card>
@@ -408,6 +514,12 @@ export default function ClonePage() {
   const [skuMap, setSkuMap] = useState(DEFAULT_SKU_MAP);
   const [variantMap, setVariantMap] = useState(DEFAULT_VARIANT_MAP);
   const [routeSaving, setRouteSaving] = useState(false);
+  const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
+  const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
+  const [routeProductsLoading, setRouteProductsLoading] = useState(false);
+  const [routeProductsError, setRouteProductsError] = useState("");
+  const [appOrigin, setAppOrigin] = useState("");
+  const [autofilledMapKey, setAutofilledMapKey] = useState("");
 
   const activeView: CloneView = pathname.endsWith("/shopify")
     ? "shopify"
@@ -444,6 +556,45 @@ export default function ClonePage() {
     () => stores.find((store) => store.id === targetStoreId),
     [stores, targetStoreId]
   );
+
+  const selectedRouteConfig = useMemo(
+    () =>
+      configs.find(
+        (config) =>
+          config.source_store_id === routeSourceStoreId &&
+          config.target_store_id === routeTargetStoreId &&
+          config.enabled
+      ) || configs.find((config) => config.enabled) || null,
+    [configs, routeSourceStoreId, routeTargetStoreId]
+  );
+
+  const suggestedRouteMaps = useMemo(
+    () => buildSuggestedMaps(sourceProducts, targetProducts),
+    [sourceProducts, targetProducts]
+  );
+
+  const routeMapKey = useMemo(
+    () =>
+      `${routeSourceStoreId}:${routeTargetStoreId}:${suggestedRouteMaps.matches.length}:${suggestedRouteMaps.sourceVariants.length}:${suggestedRouteMaps.targetVariants.length}`,
+    [
+      routeSourceStoreId,
+      routeTargetStoreId,
+      suggestedRouteMaps.matches.length,
+      suggestedRouteMaps.sourceVariants.length,
+      suggestedRouteMaps.targetVariants.length,
+    ]
+  );
+
+  const installToken = selectedRouteConfig?.public_token || "";
+  const installSnippet = `<script
+  src="${appOrigin || "https://seu-app.com"}/routed-checkout-loader.js"
+  data-token="${installToken || "COLE_O_TOKEN_DA_ROTA"}"
+  async>
+</script>`;
+
+  useEffect(() => {
+    setAppOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     async function loadStores() {
@@ -504,6 +655,67 @@ export default function ClonePage() {
     void loadConfigs();
     void loadCloneRuns();
   }, []);
+
+  useEffect(() => {
+    if (activeView !== "routed-checkout" || !routeSourceStoreId || !routeTargetStoreId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadRouteProducts() {
+      setRouteProductsLoading(true);
+      setRouteProductsError("");
+      try {
+        const [sourceRes, targetRes] = await Promise.all([
+          fetch(`/api/shopify/products?storeId=${routeSourceStoreId}&first=250`),
+          fetch(`/api/shopify/products?storeId=${routeTargetStoreId}&first=250`),
+        ]);
+        const [sourceData, targetData] = await Promise.all([
+          sourceRes.json(),
+          targetRes.json(),
+        ]);
+
+        if (!sourceRes.ok) {
+          throw new Error(sourceData.error || "Nao foi possivel carregar produtos da vitrine.");
+        }
+        if (!targetRes.ok) {
+          throw new Error(targetData.error || "Nao foi possivel carregar produtos da dark store.");
+        }
+
+        if (!cancelled) {
+          setSourceProducts((sourceData.products || []) as ConnectedProduct[]);
+          setTargetProducts((targetData.products || []) as ConnectedProduct[]);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRouteProductsError(
+            error instanceof Error ? error.message : "Falha ao carregar produtos reais."
+          );
+          setSourceProducts([]);
+          setTargetProducts([]);
+        }
+      } finally {
+        if (!cancelled) setRouteProductsLoading(false);
+      }
+    }
+
+    void loadRouteProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, routeSourceStoreId, routeTargetStoreId]);
+
+  useEffect(() => {
+    if (activeView !== "routed-checkout") return;
+    if (!routeMapKey || routeMapKey === autofilledMapKey) return;
+    if (suggestedRouteMaps.matches.length === 0) return;
+
+    setSkuMap(JSON.stringify(suggestedRouteMaps.skuMap, null, 2));
+    setVariantMap(JSON.stringify(suggestedRouteMaps.variantMap, null, 2));
+    setAutofilledMapKey(routeMapKey);
+  }, [activeView, autofilledMapKey, routeMapKey, suggestedRouteMaps]);
 
   async function runClone(action: "preview" | "export-json" | "export-csv" | "apply") {
     const payload = {
@@ -601,6 +813,15 @@ export default function ClonePage() {
       toast.error(error instanceof Error ? error.message : "Falha ao aplicar clone.");
     } finally {
       setApplyLoading(false);
+    }
+  }
+
+  async function copyToClipboard(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copiado.`);
+    } catch {
+      toast.error(`Nao foi possivel copiar ${label}.`);
     }
   }
 
@@ -1019,7 +1240,10 @@ export default function ClonePage() {
           ]}
         />
 
-        <RoutedCheckoutTutorial />
+        <RoutedCheckoutTutorial
+          installSnippet={installSnippet}
+          routeToken={installToken}
+        />
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="rounded-lg border-border/60">
@@ -1094,9 +1318,123 @@ export default function ClonePage() {
               </div>
             </div>
 
+            <div className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Mapas gerados com produtos reais
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    A vitrine e a dark store são lidas pela API da Shopify. SKUs iguais geram SKU map e Variant map automaticamente.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSkuMap(JSON.stringify(suggestedRouteMaps.skuMap, null, 2));
+                      setVariantMap(JSON.stringify(suggestedRouteMaps.variantMap, null, 2));
+                      setAutofilledMapKey(routeMapKey);
+                      toast.success("Mapas reais aplicados nos campos.");
+                    }}
+                    disabled={suggestedRouteMaps.matches.length === 0}
+                  >
+                    <WandSparkles className="h-3.5 w-3.5" />
+                    Usar mapas reais
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyToClipboard(installSnippet, "script")}
+                    disabled={!installToken}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar script
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <p className="text-xs text-muted-foreground">Vitrine</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {routeProductsLoading ? "..." : suggestedRouteMaps.sourceVariants.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">variantes lidas</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <p className="text-xs text-muted-foreground">Dark store</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {routeProductsLoading ? "..." : suggestedRouteMaps.targetVariants.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">variantes lidas</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <p className="text-xs text-muted-foreground">Correspondências</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {routeProductsLoading ? "..." : suggestedRouteMaps.matches.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">por SKU/título</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <p className="text-xs text-muted-foreground">Sem par</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {routeProductsLoading ? "..." : suggestedRouteMaps.unmatched.length}
+                  </p>
+                  <p className="text-xs text-muted-foreground">revisar manualmente</p>
+                </div>
+              </div>
+
+              {routeProductsError ? (
+                <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {routeProductsError}
+                </div>
+              ) : null}
+
+              {suggestedRouteMaps.matches.length > 0 ? (
+                <div className="mt-4 max-h-56 overflow-auto rounded-lg border border-border/60">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-card text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Produto na vitrine</th>
+                        <th className="px-3 py-2 font-medium">SKU</th>
+                        <th className="px-3 py-2 font-medium">Variant dark store</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {suggestedRouteMaps.matches.slice(0, 40).map((match) => (
+                        <tr key={match.source.id} className="border-t border-border/50">
+                          <td className="max-w-[260px] truncate px-3 py-2 text-foreground">
+                            {match.source.label}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-muted-foreground">
+                            {match.source.sku || match.reason}
+                          </td>
+                          <td className="max-w-[260px] truncate px-3 py-2 text-muted-foreground">
+                            {match.target.label}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="sku-map">SKU map</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="sku-map">SKU map</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(skuMap, "SKU map")}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar
+                  </Button>
+                </div>
                 <Textarea
                   id="sku-map"
                   value={skuMap}
@@ -1109,7 +1447,17 @@ export default function ClonePage() {
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="variant-map">Variant map</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="variant-map">Variant map</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(variantMap, "Variant map")}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar
+                  </Button>
+                </div>
                 <Textarea
                   id="variant-map"
                   value={variantMap}
@@ -1177,6 +1525,24 @@ export default function ClonePage() {
                       </span>
                       <span className="break-all">{config.public_token}</span>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() =>
+                        copyToClipboard(
+                          `<script
+  src="${appOrigin || "https://seu-app.com"}/routed-checkout-loader.js"
+  data-token="${config.public_token}"
+  async>
+</script>`,
+                          "script da rota"
+                        )
+                      }
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar código do tema
+                    </Button>
                   </div>
                 ))}
               </div>

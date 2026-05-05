@@ -611,6 +611,7 @@ export async function getProducts(
             nodes {
               id
               title
+              sku
               price
               compareAtPrice
               selectedOptions { name value }

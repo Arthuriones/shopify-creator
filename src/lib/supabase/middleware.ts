@@ -4,10 +4,11 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
-  const publicApiPaths = [
+  const publicPaths = [
     "/api/health",
     "/api/checkout-routes/resolve",
     "/api/jobs/bulk-import/process",
+    "/routed-checkout-loader.js",
   ];
 
   const supabase = createServerClient(
@@ -39,7 +40,7 @@ export async function updateSession(request: NextRequest) {
     !user &&
     !pathname.startsWith("/login") &&
     !pathname.startsWith("/callback") &&
-    !publicApiPaths.some((publicPath) => pathname.startsWith(publicPath))
+    !publicPaths.some((publicPath) => pathname.startsWith(publicPath))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
