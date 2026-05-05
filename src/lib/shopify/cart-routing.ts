@@ -18,6 +18,28 @@ function numericVariantId(value: string | number | undefined): string | null {
   return match?.[1] || null;
 }
 
+function variantLookupKeys(value: string | number | undefined): string[] {
+  if (value === undefined || value === null || value === "") return [];
+  const raw = String(value);
+  const numeric = numericVariantId(value);
+  return [
+    raw,
+    numeric ? `gid://shopify/ProductVariant/${numeric}` : "",
+    numeric || "",
+  ].filter((key, index, keys) => key && keys.indexOf(key) === index);
+}
+
+function lookupVariantMap(
+  map: Record<string, string | number> | undefined,
+  value: string | number | undefined
+) {
+  if (!map) return undefined;
+  for (const key of variantLookupKeys(value)) {
+    if (map[key] !== undefined) return map[key];
+  }
+  return undefined;
+}
+
 export function resolveCheckoutLines(
   lines: CheckoutRouteLine[],
   maps: CheckoutRouteMaps
@@ -25,11 +47,10 @@ export function resolveCheckoutLines(
   return lines
     .map((line) => {
       const quantity = Math.max(1, Math.floor(Number(line.quantity || 1)));
-      const sourceKey = String(line.sourceVariantId || "");
       const skuKey = String(line.sku || "").trim();
       const mapped =
         line.targetVariantId ||
-        (sourceKey ? maps.variantMap?.[sourceKey] : undefined) ||
+        lookupVariantMap(maps.variantMap, line.sourceVariantId) ||
         (skuKey ? maps.skuMap?.[skuKey] : undefined);
       const variantId = numericVariantId(mapped);
 

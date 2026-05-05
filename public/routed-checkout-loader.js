@@ -25,6 +25,9 @@
         '[class*="checkout"]',
         '[data-checkout]',
         '[data-testid*="checkout"]',
+        'a',
+        'button',
+        '[role="button"]',
         'a[href="/checkout"]',
         'a[href*="/checkout"]',
         'button[name="checkout"]',
@@ -42,7 +45,7 @@
 
     return Boolean(
       checkoutElement.getAttribute("name") === "checkout" ||
-        /checkout|finalizar|comprar|pagamento|fechar pedido/.test(text) ||
+        /checkout|finalizar|pagamento|fechar pedido/.test(text) ||
         (href && /checkout|checkouts|cart/.test(href)) ||
         (action && /checkout|checkouts|cart/.test(action))
     );
@@ -69,9 +72,10 @@
 
   function toRouteLines(cart) {
     return (cart.items || []).map(function (item) {
+      var variantId = item.variant_id || item.id;
       return {
         sku: item.sku || "",
-        sourceVariantId: item.variant_id || item.id,
+        sourceVariantId: variantId ? "gid://shopify/ProductVariant/" + variantId : "",
         quantity: item.quantity || 1,
       };
     });
