@@ -53,8 +53,8 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[274px] flex-col border-r border-sidebar-border/80 bg-sidebar/95 backdrop-blur-md md:flex">
-        <div className="border-b border-sidebar-border/70 px-5 pb-4 pt-5">
+      <aside className="sticky top-0 hidden h-screen w-[304px] flex-col border-r border-sidebar-border bg-sidebar shadow-2xl shadow-black/20 md:flex">
+        <div className="border-b border-sidebar-border px-6 pb-5 pt-6">
           <div
             className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg shadow-primary/25"
             style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
@@ -62,17 +62,17 @@ export function Sidebar() {
             <Package className="h-5 w-5" style={{ color: "oklch(0.13 0.02 155)" }} />
           </div>
           <p
-            className="font-heading text-xl font-semibold text-sidebar-foreground"
+            className="font-heading text-2xl font-bold text-sidebar-foreground"
             style={{ letterSpacing: "-0.02em" }}
           >
             Shopify Creator
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 text-[0.95rem] leading-6 text-sidebar-foreground/75">
             Importe, clone, personalize e publique na sua loja.
           </p>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1.5 px-4 py-5">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const hasActiveChild = item.children?.some(
@@ -83,7 +83,7 @@ export function Sidebar() {
                 <Link
                   href={item.href}
                   className={cn(
-                    "group relative flex items-center gap-3 rounded-xl px-3.5 py-3 text-[15px] font-medium transition-all duration-200",
+                    "group relative flex items-center gap-3 rounded-lg px-4 py-3.5 text-[16px] font-semibold transition-all duration-200",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-foreground shadow-sm shadow-black/20"
                       : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
@@ -107,7 +107,7 @@ export function Sidebar() {
                   {item.label}
                 </Link>
                 {item.children && (
-                  <div className="space-y-1 pl-10">
+                  <div className="space-y-1.5 pl-11">
                     {item.children.map((child) => {
                       const isChildActive =
                         pathname === child.href || pathname.startsWith(`${child.href}/`);
@@ -116,7 +116,7 @@ export function Sidebar() {
                           key={child.href}
                           href={child.href}
                           className={cn(
-                            "block rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                            "block rounded-md px-3 py-2 text-[14px] font-semibold transition-colors",
                             isChildActive
                               ? "bg-sidebar-accent/80 text-sidebar-foreground"
                               : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
@@ -133,10 +133,10 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="border-t border-sidebar-border/70 p-3">
+        <div className="border-t border-sidebar-border p-4">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-[15px] font-medium text-muted-foreground transition-all duration-200 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-3.5 text-[16px] font-semibold text-sidebar-foreground/75 transition-all duration-200 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
           >
             <LogOut className="h-4 w-4" />
             Sair

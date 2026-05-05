@@ -347,6 +347,24 @@ function RoutedCheckoutTutorial({
   installSnippet: string;
   routeToken: string;
 }) {
+  const plainMeaning = [
+    {
+      title: "Vitrine",
+      detail:
+        "É a loja que o cliente vê, navega e adiciona produtos ao carrinho. O script é instalado aqui.",
+    },
+    {
+      title: "Dark store",
+      detail:
+        "É a loja que realmente recebe o checkout/pedido. Ela precisa ter produtos equivalentes aos da vitrine.",
+    },
+    {
+      title: "Mapa",
+      detail:
+        "É a tabela que diz: este SKU ou variant da vitrine vira esta variant da dark store.",
+    },
+  ];
+
   const flow = [
     "Cliente adiciona produtos na loja vitrine.",
     "O script intercepta o clique ou envio do checkout.",
@@ -379,6 +397,30 @@ function RoutedCheckoutTutorial({
   ];
 
   return (
+    <div className="space-y-4">
+      <Card className="rounded-lg border-primary/30 bg-primary/8">
+        <CardHeader>
+          <CardTitle className="text-xl">
+            Em português direto: o que este recurso faz?
+          </CardTitle>
+          <CardDescription>
+            Ele deixa uma loja vender como vitrine, mas manda o cliente pagar em outra loja. O cliente vê a vitrine normal; só no clique de checkout o carrinho é recriado na dark store com os produtos equivalentes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {plainMeaning.map((item) => (
+            <div key={item.title} className="rounded-lg border border-border/60 bg-card/80 p-4">
+              <p className="font-heading text-base font-bold text-foreground">
+                {item.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Card className="rounded-lg border-border/60">
         <CardHeader>
@@ -433,7 +475,7 @@ function RoutedCheckoutTutorial({
             Instalação do script
           </CardTitle>
           <CardDescription>
-            Instale na loja vitrine. Nao use cartoriginals.web.app: aquele loader carrega o app da referência, nao este projeto.
+            Instale na loja vitrine. Não use cartoriginals.web.app: aquele loader carrega o app da referência, não este projeto.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -469,8 +511,11 @@ function RoutedCheckoutTutorial({
           <div className="space-y-2">
             <Label>Instalação rápida</Label>
             <CodeBlock>{installSnippet}</CodeBlock>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Token usado: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
+            <p className="text-sm leading-6 text-muted-foreground">
+              Cole tudo. Em uso normal, você só muda o <code>data-token</code> se criar outra rota. O <code>src</code> deve apontar para o domínio público deste app.
+            </p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Token usado agora: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
             </p>
           </div>
           <div className="space-y-2">
@@ -483,6 +528,7 @@ function RoutedCheckoutTutorial({
           </div>
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
@@ -1130,13 +1176,41 @@ export default function ClonePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Download className="h-4 w-4 text-primary" />
-              Arquivos de saída
+              Loja e arquivos de saída
             </CardTitle>
             <CardDescription>
-              O arquivo respeita o limite configurado no serviço de clone.
+              Informe aqui a loja pública que será exportada. Não depende da página de clone.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
+              <div className="space-y-2">
+                <Label htmlFor="export-source">Loja para exportar</Label>
+                <Input
+                  id="export-source"
+                  value={source}
+                  onChange={(event) => setSource(event.target.value)}
+                  placeholder="exemplo.myshopify.com ou dominio.com"
+                />
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Cole o domínio público da loja. O exportador lê <code>/products.json</code> e monta o arquivo.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="export-limit">Limite</Label>
+                <Input
+                  id="export-limit"
+                  value={limit}
+                  onChange={(event) => setLimit(event.target.value)}
+                  inputMode="numeric"
+                />
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Quantidade máxima.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border/60 bg-background/45 p-3">
                 <p className="text-sm font-medium text-foreground">JSON</p>
@@ -1167,6 +1241,7 @@ export default function ClonePage() {
                 {exportLoading === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 Baixar CSV
               </Button>
+            </div>
             </div>
           </CardContent>
         </Card>
