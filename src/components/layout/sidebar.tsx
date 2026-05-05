@@ -27,7 +27,16 @@ const navItems: NavItem[] = [
       { href: "/bulk", label: "Importacao em Lote" }
     ],
   },
-  { href: "/clone", label: "Clone", icon: Copy },
+  {
+    href: "/clone",
+    label: "Clone",
+    icon: Copy,
+    children: [
+      { href: "/clone/shopify", label: "Clonar Shopify" },
+      { href: "/clone/export", label: "Exportar Catalogo" },
+      { href: "/clone/routed-checkout", label: "Routed Checkout" },
+    ],
+  },
   { href: "/optimizer", label: "Otimizador", icon: Sparkles },
   { href: "/store-setup", label: "Setup da Loja", icon: Settings2 },
 ];

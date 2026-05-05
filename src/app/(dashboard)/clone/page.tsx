@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
+  ArrowRight,
   CheckCircle2,
+  Code2,
   Copy,
   Download,
   FileJson,
@@ -79,6 +83,8 @@ interface CloneRun {
   } | null;
   created_at: string;
 }
+
+type CloneView = "overview" | "shopify" | "export" | "routed-checkout";
 
 const DEFAULT_SKU_MAP = `{
   "SKU-DA-VITRINE": "gid://shopify/ProductVariant/1234567890"
@@ -169,7 +175,214 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
+function CodeBlock({ children }: { children: string }) {
+  return (
+    <pre className="overflow-x-auto rounded-lg border border-border/70 bg-background/70 p-3 text-xs leading-6 text-muted-foreground">
+      <code>{children}</code>
+    </pre>
+  );
+}
+
+function ServiceOverview() {
+  const services = [
+    {
+      href: "/clone/shopify",
+      icon: Copy,
+      title: "Clonar loja Shopify",
+      description:
+        "Importe produtos de uma vitrine pública via /products.json, veja a prévia e aplique em uma loja conectada.",
+      bullets: ["Origem pública", "Prévia antes de gravar", "Aplicação em loja conectada"],
+    },
+    {
+      href: "/clone/export",
+      icon: FileOutput,
+      title: "Exportar catálogo",
+      description:
+        "Gere arquivos JSON ou CSV da origem informada para backup, revisão em planilha ou importação manual.",
+      bullets: ["JSON completo", "CSV operacional", "Histórico de execuções"],
+    },
+    {
+      href: "/clone/routed-checkout",
+      icon: GitBranch,
+      title: "Routed checkout",
+      description:
+        "Faça uma vitrine vender enquanto o checkout final é montado na dark store com variantes mapeadas.",
+      bullets: ["SKU map", "Variant map", "Script no tema"],
+    },
+  ];
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-3">
+      {services.map((service) => (
+        <Link
+          key={service.href}
+          href={service.href}
+          className="group rounded-lg border border-border/60 bg-card p-4 transition-colors hover:border-primary/45 hover:bg-card/80"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/12 text-primary">
+              <service.icon className="h-4 w-4" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-foreground">
+            {service.title}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {service.description}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {service.bullets.map((bullet) => (
+              <Badge key={bullet} variant="outline" className="rounded-md">
+                {bullet}
+              </Badge>
+            ))}
+          </div>
+        </Link>
+      ))}
+    </section>
+  );
+}
+
+function RoutedCheckoutTutorial() {
+  const flow = [
+    "Cliente adiciona produtos na loja vitrine.",
+    "O script intercepta o clique ou envio do checkout.",
+    "A vitrine envia token e linhas do carrinho para /api/checkout-routes/resolve.",
+    "O app troca SKU/variant da vitrine pelas variantes da dark store.",
+    "O cliente é enviado ao checkout da dark store sem perceber a troca.",
+  ];
+
+  const installSteps = [
+    {
+      title: "Publicar os arquivos no tema",
+      detail:
+        "Envie o asset routed-checkout.js e o snippet routed-checkout.liquid para o tema da loja vitrine.",
+    },
+    {
+      title: "Renderizar antes do fechamento do body",
+      detail:
+        "No layout/theme.liquid, mantenha a chamada do snippet próxima ao fim do body para interceptar botões de checkout já renderizados.",
+    },
+    {
+      title: "Configurar o tema",
+      detail:
+        "Em Theme settings, habilite Routed Checkout, informe a URL pública do app e cole o token da rota ativa.",
+    },
+    {
+      title: "Testar com carrinho real",
+      detail:
+        "Adicione um produto da vitrine ao carrinho e clique em checkout. Se o mapa falhar, o script volta para o checkout nativo.",
+    },
+  ];
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Card className="rounded-lg border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Route className="h-4 w-4 text-primary" />
+            Tutorial: como o roteamento funciona
+          </CardTitle>
+          <CardDescription>
+            Fluxo prático inspirado no documento HeroCart anexado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-border/60 bg-background/45 p-4">
+            <h3 className="text-sm font-semibold text-foreground">
+              Fluxo do pedido
+            </h3>
+            <ol className="mt-3 space-y-2">
+              {flow.map((item, index) => (
+                <li key={item} className="flex gap-3 text-sm text-muted-foreground">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <span className="leading-6">{item}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              ["standard", "Checkout na mesma loja, sem roteamento."],
+              ["enterprise", "Roteamento avançado para cenários com múltiplas lojas."],
+              ["enterprise_static", "Roteamento fixo para uma dark store específica."],
+            ].map(([mode, description]) => (
+              <div key={mode} className="rounded-lg border border-border/60 bg-background/45 p-3">
+                <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
+                  {mode}
+                </code>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Code2 className="h-4 w-4 text-primary" />
+            Instalação do script
+          </CardTitle>
+          <CardDescription>
+            O script deve existir no tema da vitrine, não na dark store.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ol className="space-y-3">
+            {installSteps.map((step, index) => (
+              <li
+                key={step.title}
+                className="rounded-lg border border-border/60 bg-background/45 p-3"
+              >
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
+                    {index + 1}
+                  </span>
+                  {step.title}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {step.detail}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg border-border/60 xl:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-lg">Trechos que precisam existir no tema</CardTitle>
+          <CardDescription>
+            A chamada do snippet fica antes de <code>&lt;/body&gt;</code>; o snippet injeta config e asset de forma assíncrona.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <Label>layout/theme.liquid</Label>
+            <CodeBlock>{"{% render 'routed-checkout' %}\n</body>"}</CodeBlock>
+          </div>
+          <div className="space-y-2">
+            <Label>snippets/routed-checkout.liquid</Label>
+            <CodeBlock>{`<script id="routed-checkout-config" type="application/json">
+  { "token": "...", "resolveUrl": "https://app.com/api/checkout-routes/resolve" }
+</script>
+<script src="{{ 'routed-checkout.js' | asset_url }}" defer></script>`}</CodeBlock>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function ClonePage() {
+  const pathname = usePathname();
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
   const [source, setSource] = useState("");
@@ -195,6 +408,37 @@ export default function ClonePage() {
   const [skuMap, setSkuMap] = useState(DEFAULT_SKU_MAP);
   const [variantMap, setVariantMap] = useState(DEFAULT_VARIANT_MAP);
   const [routeSaving, setRouteSaving] = useState(false);
+
+  const activeView: CloneView = pathname.endsWith("/shopify")
+    ? "shopify"
+    : pathname.endsWith("/export")
+      ? "export"
+      : pathname.endsWith("/routed-checkout")
+        ? "routed-checkout"
+        : "overview";
+
+  const pageMeta = {
+    overview: {
+      title: "Central de clone e checkout",
+      description:
+        "Escolha um recurso independente: clonar produtos, exportar catálogo ou configurar routed checkout.",
+    },
+    shopify: {
+      title: "Clone de loja Shopify",
+      description:
+        "Importe produtos de uma vitrine pública e aplique em uma loja conectada.",
+    },
+    export: {
+      title: "Exportar catálogo",
+      description:
+        "Gere JSON ou CSV a partir de uma origem Shopify pública para revisão e backup.",
+    },
+    "routed-checkout": {
+      title: "Routed checkout",
+      description:
+        "Roteie pedidos da vitrine para o checkout da dark store com mapas de SKU e variant.",
+    },
+  }[activeView];
 
   const selectedTarget = useMemo(
     () => stores.find((store) => store.id === targetStoreId),
@@ -404,18 +648,17 @@ export default function ClonePage() {
             </Badge>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Central de clone e checkout
+            {pageMeta.title}
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Três serviços separados para importar produtos, exportar catálogo e
-            rotear pedidos da vitrine para uma dark store sem confundir o cliente.
+            {pageMeta.description}
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
           {[
-            ["1", "Analisar", "Lê /products.json da loja de origem."],
-            ["2", "Exportar ou aplicar", "Gera arquivo ou cria produtos na loja conectada."],
-            ["3", "Rotear checkout", "Conecta variantes da vitrine com a dark store."],
+            ["1", "Clone", "Importa produtos de uma loja pública."],
+            ["2", "Exportação", "Gera JSON ou CSV para análise."],
+            ["3", "Checkout", "Liga vitrine e dark store."],
           ].map(([number, title, description]) => (
             <div
               key={number}
@@ -435,6 +678,9 @@ export default function ClonePage() {
         </div>
       </header>
 
+      {activeView === "overview" && <ServiceOverview />}
+
+      {activeView === "shopify" && (
       <section className="space-y-4" aria-labelledby="clone-shopify">
         <ServiceIntro
           icon={Copy}
@@ -644,7 +890,9 @@ export default function ClonePage() {
         </Card>
         </div>
       </section>
+      )}
 
+      {activeView === "export" && (
       <section className="space-y-4" aria-labelledby="catalog-export">
         <ServiceIntro
           icon={FileOutput}
@@ -756,7 +1004,9 @@ export default function ClonePage() {
           </CardContent>
         </Card>
       </section>
+      )}
 
+      {activeView === "routed-checkout" && (
       <section className="space-y-4" aria-labelledby="routed-checkout">
         <ServiceIntro
           icon={GitBranch}
@@ -768,6 +1018,8 @@ export default function ClonePage() {
             "Ative o token gerado no tema da vitrine.",
           ]}
         />
+
+        <RoutedCheckoutTutorial />
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="rounded-lg border-border/60">
@@ -933,6 +1185,7 @@ export default function ClonePage() {
         </Card>
         </div>
       </section>
+      )}
     </div>
   );
 }
