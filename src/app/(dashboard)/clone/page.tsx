@@ -654,16 +654,6 @@ export default function ClonePage() {
     [stores, targetStoreId]
   );
 
-  const routeSourceOptions = useMemo(
-    () => stores.filter((store) => store.id !== routeTargetStoreId),
-    [stores, routeTargetStoreId]
-  );
-
-  const routeTargetOptions = useMemo(
-    () => stores.filter((store) => store.id !== routeSourceStoreId),
-    [stores, routeSourceStoreId]
-  );
-
   const selectedRouteConfig = useMemo(
     () =>
       configs.find(
@@ -975,20 +965,22 @@ export default function ClonePage() {
 
   function handleRouteSourceChange(value: string | null) {
     const nextSource = value || "";
-    setRouteSourceStoreId(nextSource);
     if (nextSource && nextSource === routeTargetStoreId) {
-      const replacementTarget = stores.find((store) => store.id !== nextSource)?.id || "";
-      setRouteTargetStoreId(replacementTarget);
+      setRouteSourceStoreId(nextSource);
+      setRouteTargetStoreId(routeSourceStoreId);
+      return;
     }
+    setRouteSourceStoreId(nextSource);
   }
 
   function handleRouteTargetChange(value: string | null) {
     const nextTarget = value || "";
-    setRouteTargetStoreId(nextTarget);
     if (nextTarget && nextTarget === routeSourceStoreId) {
-      const replacementSource = stores.find((store) => store.id !== nextTarget)?.id || "";
-      setRouteSourceStoreId(replacementSource);
+      setRouteTargetStoreId(nextTarget);
+      setRouteSourceStoreId(routeTargetStoreId);
+      return;
     }
+    setRouteTargetStoreId(nextTarget);
   }
 
   return (
@@ -1438,7 +1430,7 @@ export default function ClonePage() {
                     <SelectValue placeholder="Origem" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {routeSourceOptions.map((store) => (
+                    {stores.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
                         <span className="block max-w-[260px] truncate">
                           {formatStoreLabel(store)}
@@ -1456,7 +1448,7 @@ export default function ClonePage() {
                     <SelectValue placeholder="Destino" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {routeTargetOptions.map((store) => (
+                    {stores.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
                         <span className="block max-w-[260px] truncate">
                           {formatStoreLabel(store)}
