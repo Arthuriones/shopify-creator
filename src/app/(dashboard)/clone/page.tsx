@@ -137,6 +137,18 @@ function parseJsonMap(value: string, label: string) {
   }
 }
 
+function safeJsonMap(value: string) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 function normalizeMatchKey(value: string) {
   return value
     .toLowerCase()
@@ -690,10 +702,12 @@ export default function ClonePage() {
   const [routeSaving, setRouteSaving] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
+  const [destinationCreating, setDestinationCreating] = useState(false);
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
   const [routeProductsError, setRouteProductsError] = useState("");
+  const [routeProductsRefreshKey, setRouteProductsRefreshKey] = useState(0);
   const [appOrigin, setAppOrigin] = useState("");
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
 
@@ -757,6 +771,16 @@ export default function ClonePage() {
   const targetVariantSamples = useMemo(
     () => suggestedRouteMaps.targetVariants.slice(0, 12),
     [suggestedRouteMaps.targetVariants]
+  );
+
+  const manualSourceVariants = useMemo(
+    () => suggestedRouteMaps.sourceVariants.slice(0, 40),
+    [suggestedRouteMaps.sourceVariants]
+  );
+
+  const currentVariantMap = useMemo(
+    () => safeJsonMap(variantMap),
+    [variantMap]
   );
 
   const routeMapKey = useMemo(
@@ -896,7 +920,7 @@ export default function ClonePage() {
     return () => {
       cancelled = true;
     };
-  }, [activeView, routeSourceStoreId, routeTargetStoreId]);
+  }, [activeView, routeProductsRefreshKey, routeSourceStoreId, routeTargetStoreId]);
 
   useEffect(() => {
     if (activeView !== "routed-checkout") return;
@@ -1059,6 +1083,47 @@ export default function ClonePage() {
     }
   }
 
+  async function handleCreateDestinationProducts() {
+    if (!routeSourceStoreId || !routeTargetStoreId) {
+      toast.error("Escolha vitrine e dark store.");
+      return;
+    }
+
+    if (routeSourceStoreId === routeTargetStoreId) {
+      toast.error("A dark store precisa ser diferente da vitrine.");
+      return;
+    }
+
+    setDestinationCreating(true);
+    try {
+      const res = await fetch("/api/checkout-routes/create-destination", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceStoreId: routeSourceStoreId,
+          targetStoreId: routeTargetStoreId,
+          limit: 50,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
+
+      setSkuMap(formatJsonMap(data.skuMap || {}));
+      setVariantMap(formatJsonMap(data.variantMap || {}));
+      setRouteProductsRefreshKey((key) => key + 1);
+      toast.success(
+        `${data.createdCount || 0} produto(s) criados e ${data.skippedCount || 0} reaproveitados na dark store.`
+      );
+      if (data.failedCount) {
+        toast.error(`${data.failedCount} produto(s) falharam ao criar destino.`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao criar destino.");
+    } finally {
+      setDestinationCreating(false);
+    }
+  }
+
   async function handleCreateRoute() {
     if (!routeSourceStoreId || !routeTargetStoreId || !routeName.trim()) {
       toast.error("Preencha nome, vitrine e dark store.");
@@ -1115,6 +1180,16 @@ export default function ClonePage() {
       return;
     }
     setRouteTargetStoreId(nextTarget);
+  }
+
+  function handleManualVariantLink(sourceVariantId: string, targetVariantId: string | null) {
+    const nextMap = safeJsonMap(variantMap);
+    if (!targetVariantId || targetVariantId === "__none__") {
+      delete nextMap[sourceVariantId];
+    } else {
+      nextMap[sourceVariantId] = targetVariantId;
+    }
+    setVariantMap(formatJsonMap(nextMap));
   }
 
   return (
@@ -1621,10 +1696,29 @@ export default function ClonePage() {
                     Mapas gerados com produtos reais
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    A vitrine e a dark store são lidas pela API da Shopify. SKUs iguais geram SKU map e Variant map automaticamente.
+                    A vitrine e a dark store são lidas pela API da Shopify. Se a dark store estiver vazia, crie os produtos de destino primeiro.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateDestinationProducts}
+                    disabled={
+                      destinationCreating ||
+                      !routeSourceStoreId ||
+                      !routeTargetStoreId ||
+                      routeSourceStoreId === routeTargetStoreId ||
+                      suggestedRouteMaps.sourceVariants.length === 0
+                    }
+                  >
+                    {destinationCreating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <PackageCheck className="h-3.5 w-3.5" />
+                    )}
+                    Criar destino na dark store
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1717,7 +1811,7 @@ export default function ClonePage() {
                 </div>
               ) : (
                 <div className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3 text-sm leading-6 text-muted-foreground">
-                  Ainda nao ha mapa real para copiar. Para gerar automaticamente, a vitrine e a dark store precisam ter variantes equivalentes. No estado atual, se a dark store retornar 0 variantes, nao existe GID de destino para preencher o mapa.
+                  Ainda nao ha mapa real para copiar. Para gerar automaticamente, a vitrine e a dark store precisam ter variantes equivalentes. Se a dark store estiver vazia, clique em Criar destino na dark store para copiar os produtos da vitrine e gerar os mapas.
                 </div>
               )}
 
@@ -1790,6 +1884,82 @@ export default function ClonePage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Linkar variantes manualmente
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      Escolha, para cada variante da vitrine, qual variante da dark store deve entrar no checkout. Cada escolha atualiza o Variant map automaticamente.
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="w-fit">
+                    {Object.keys(currentVariantMap).length} links manuais
+                  </Badge>
+                </div>
+
+                <div className="mt-4 max-h-[460px] overflow-auto rounded-lg border border-border/60 bg-card/70">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-card text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Variante da vitrine</th>
+                        <th className="px-3 py-2 font-medium">SKU</th>
+                        <th className="min-w-[320px] px-3 py-2 font-medium">Enviar para a dark store como</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {manualSourceVariants.length === 0 ? (
+                        <tr>
+                          <td className="px-3 py-4 text-muted-foreground" colSpan={3}>
+                            Nenhuma variante da vitrine carregada ainda.
+                          </td>
+                        </tr>
+                      ) : suggestedRouteMaps.targetVariants.length === 0 ? (
+                        <tr>
+                          <td className="px-3 py-4 text-muted-foreground" colSpan={3}>
+                            A dark store ainda nao retornou variantes. Cadastre/importe produtos nela para poder escolher os destinos.
+                          </td>
+                        </tr>
+                      ) : (
+                        manualSourceVariants.map((variant) => (
+                          <tr key={variant.id} className="border-t border-border/50">
+                            <td className="max-w-[280px] px-3 py-2">
+                              <p className="truncate font-medium text-foreground">{variant.label}</p>
+                              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{variant.id}</p>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-muted-foreground">
+                              {variant.sku || "-"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Select
+                                value={currentVariantMap[variant.id] || "__none__"}
+                                onValueChange={(value) => handleManualVariantLink(variant.id, value)}
+                              >
+                                <SelectTrigger className="h-10 w-full min-w-0 bg-background">
+                                  <SelectValue placeholder="Escolha a variante da dark store" />
+                                </SelectTrigger>
+                                <SelectContent align="start" className="max-h-80">
+                                  <SelectItem value="__none__">Sem link manual</SelectItem>
+                                  {suggestedRouteMaps.targetVariants.map((targetVariant) => (
+                                    <SelectItem key={targetVariant.id} value={targetVariant.id}>
+                                      <span className="block max-w-[520px] truncate">
+                                        {targetVariant.label}
+                                        {targetVariant.sku ? ` - SKU ${targetVariant.sku}` : ""}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
