@@ -163,6 +163,28 @@ function looksLikeGeneratedId(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+function looksLikeDomain(value: string) {
+  return /\.|myshopify\.com|shopify\.com/i.test(value);
+}
+
+function formatDomainLabel(value?: string | null) {
+  if (!value) return "";
+  const clean = value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^admin\.shopify\.com\/store\//i, "")
+    .replace(/^www\./i, "")
+    .split(/[/?#]/)[0]
+    .replace(/\.myshopify\.com$/i, "");
+
+  const base = clean.includes(".") ? clean.split(".")[0] : clean;
+  return base
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
   return products.flatMap((product) =>
     (product.variants?.nodes || []).map((variant) => {
@@ -230,8 +252,12 @@ function buildSuggestedMaps(
 
 function formatStoreLabel(store?: StoreOption) {
   if (!store) return "Selecione uma loja";
-  if (store.shop_domain) return store.shop_domain;
-  if (store.name && store.name !== store.id && !looksLikeGeneratedId(store.name)) return store.name;
+  const name = store.name?.trim();
+  if (name && name !== store.id && !looksLikeGeneratedId(name) && !looksLikeDomain(name)) {
+    return name;
+  }
+  const domainLabel = formatDomainLabel(store.shop_domain || name);
+  if (domainLabel) return domainLabel;
   return `Loja ${store.id.slice(0, 8)}`;
 }
 
@@ -641,7 +667,10 @@ function RoutedCheckoutTutorial({
         </CardContent>
       </Card>
 
-      <Card className="rounded-lg border-border/60 xl:col-span-2">
+      <Card
+        id="routed-script"
+        className="scroll-mt-6 rounded-lg border-border/60 xl:col-span-2"
+      >
         <CardHeader>
           <CardTitle className="text-lg">Código pronto para colar no tema</CardTitle>
           <CardDescription>
@@ -676,6 +705,7 @@ function RoutedCheckoutTutorial({
 
 export default function ClonePage() {
   const pathname = usePathname();
+  const [routedSection, setRoutedSection] = useState("");
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
   const [source, setSource] = useState("");
@@ -720,7 +750,36 @@ export default function ClonePage() {
       ? "export"
       : pathname.endsWith("/routed-checkout")
         ? "routed-checkout"
-        : "overview";
+      : "overview";
+
+  useEffect(() => {
+    const readRoutedSection = () => {
+      setRoutedSection(
+        new URLSearchParams(window.location.search).get("section") || ""
+      );
+    };
+
+    const handleSidebarSection = (event: Event) => {
+      setRoutedSection((event as CustomEvent<string>).detail || "");
+    };
+
+    readRoutedSection();
+    window.addEventListener("popstate", readRoutedSection);
+    window.addEventListener("routed-checkout-section", handleSidebarSection);
+    return () => {
+      window.removeEventListener("popstate", readRoutedSection);
+      window.removeEventListener("routed-checkout-section", handleSidebarSection);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (activeView !== "routed-checkout" || !routedSection) return;
+    const target = document.getElementById(`routed-${routedSection}`);
+    if (!target) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [activeView, routedSection]);
 
   const pageMeta = {
     overview: {
@@ -748,6 +807,21 @@ export default function ClonePage() {
   const selectedTarget = useMemo(
     () => stores.find((store) => store.id === targetStoreId),
     [stores, targetStoreId]
+  );
+
+  const selectedSourceStore = useMemo(
+    () => stores.find((store) => store.id === sourceStoreId),
+    [stores, sourceStoreId]
+  );
+
+  const selectedRouteSourceStore = useMemo(
+    () => stores.find((store) => store.id === routeSourceStoreId),
+    [stores, routeSourceStoreId]
+  );
+
+  const selectedRouteTargetStore = useMemo(
+    () => stores.find((store) => store.id === routeTargetStoreId),
+    [stores, routeTargetStoreId]
   );
 
   const selectedRouteConfig = useMemo(
@@ -1334,7 +1408,9 @@ export default function ClonePage() {
                   <Label>Destino conectado</Label>
                   <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
                     <SelectTrigger className="w-full min-w-0">
-                      <SelectValue placeholder="Selecione uma loja" />
+                      <SelectValue placeholder="Selecione uma loja">
+                        {formatStoreLabel(selectedTarget)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start">
                       {stores.map((store) => (
@@ -1390,7 +1466,9 @@ export default function ClonePage() {
                   <Label>Vitrine para mapear</Label>
                   <Select value={sourceStoreId} onValueChange={(value) => setSourceStoreId(value || "")}>
                     <SelectTrigger className="w-full min-w-0">
-                      <SelectValue placeholder="Loja vitrine" />
+                      <SelectValue placeholder="Loja vitrine">
+                        {formatStoreLabel(selectedSourceStore)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start">
                       {stores.map((store) => (
@@ -1502,7 +1580,10 @@ export default function ClonePage() {
           ]}
         />
 
-        <Card className="rounded-lg border-border/60">
+        <Card
+          id="routed-create-route"
+          className="scroll-mt-6 rounded-lg border-border/60"
+        >
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Download className="h-4 w-4 text-primary" />
@@ -1706,7 +1787,9 @@ export default function ClonePage() {
                 <Label>Vitrine</Label>
                 <Select value={routeSourceStoreId} onValueChange={handleRouteSourceChange}>
                   <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Origem" />
+                    <SelectValue placeholder="Origem">
+                      {formatStoreLabel(selectedRouteSourceStore)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     {stores.map((store) => (
@@ -1724,7 +1807,9 @@ export default function ClonePage() {
                 <Label>Dark store</Label>
                 <Select value={routeTargetStoreId} onValueChange={handleRouteTargetChange}>
                   <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Destino" />
+                    <SelectValue placeholder="Destino">
+                      {formatStoreLabel(selectedRouteTargetStore)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     {stores.map((store) => (
@@ -1759,7 +1844,10 @@ export default function ClonePage() {
               </div>
             )}
 
-            <div className="rounded-lg border border-border/60 bg-background/45 p-4">
+            <div
+              id="routed-create-destination"
+              className="scroll-mt-6 rounded-lg border border-border/60 bg-background/45 p-4"
+            >
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
@@ -1817,7 +1905,10 @@ export default function ClonePage() {
                 </div>
               </div>
 
-              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
+              <div
+                id="routed-neutralize"
+                className="mt-4 scroll-mt-6 rounded-lg border border-primary/25 bg-primary/8 p-4"
+              >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -2214,7 +2305,10 @@ export default function ClonePage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-border/60">
+        <Card
+          id="routed-active-routes"
+          className="scroll-mt-6 rounded-lg border-border/60"
+        >
           <CardHeader>
             <CardTitle className="text-lg">Rotas ativas</CardTitle>
             <CardDescription>

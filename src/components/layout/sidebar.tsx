@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { CSSProperties, ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,12 +15,10 @@ import {
   LogOut,
   Package,
   PackageCheck,
-  Route,
   Settings2,
   Sparkles,
   Store,
   MessageSquareText,
-  WandSparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -112,15 +111,16 @@ const navSections: NavSection[] = [
         icon: FileJson,
       },
       {
-        href: "/clone/routed-checkout",
+        href: "/clone/routed-checkout?section=create-route",
         label: "Routed checkout",
         description: "Vitrine para dark store",
         icon: GitBranch,
         children: [
-          { href: "/clone/routed-checkout", label: "Criar rota" },
-          { href: "/clone/routed-checkout", label: "Criar destino" },
-          { href: "/clone/routed-checkout", label: "Neutralizar produtos" },
-          { href: "/clone/routed-checkout", label: "Script do tema" },
+          { href: "/clone/routed-checkout?section=create-route", label: "Criar rota" },
+          { href: "/clone/routed-checkout?section=create-destination", label: "Criar destino" },
+          { href: "/clone/routed-checkout?section=neutralize", label: "Neutralizar produtos" },
+          { href: "/clone/routed-checkout?section=active-routes", label: "Rotas ativas" },
+          { href: "/clone/routed-checkout?section=script", label: "Script do tema" },
         ],
       },
     ],
@@ -134,18 +134,6 @@ const navSections: NavSection[] = [
         description: "Politicas, menus e paginas",
         icon: Settings2,
       },
-      {
-        href: "/clone/routed-checkout",
-        label: "Rotas ativas",
-        description: "Tokens e scripts",
-        icon: Route,
-      },
-      {
-        href: "/clone/routed-checkout",
-        label: "Neutralizacao IA",
-        description: "Produtos sem marca",
-        icon: WandSparkles,
-      },
     ],
   },
 ];
@@ -158,9 +146,55 @@ const mobileNavItems: NavItem[] = [
   navSections[3].items[0],
 ];
 
+function splitHref(href: string) {
+  const [path, query = ""] = href.split("?");
+  const params = new URLSearchParams(query);
+  return {
+    path,
+    section: params.get("section") || "",
+  };
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const [currentSection, setCurrentSection] = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    const readCurrentSection = () => {
+      setCurrentSection(
+        new URLSearchParams(window.location.search).get("section") || ""
+      );
+    };
+
+    readCurrentSection();
+    window.addEventListener("popstate", readCurrentSection);
+    return () => window.removeEventListener("popstate", readCurrentSection);
+  }, [pathname]);
+
+  function handleNavClick(href: string) {
+    const { section } = splitHref(href);
+    setCurrentSection(section);
+    window.dispatchEvent(
+      new CustomEvent("routed-checkout-section", { detail: section })
+    );
+  }
+
+  function isHrefActive(href: string) {
+    const target = splitHref(href);
+    if (pathname !== target.path && !pathname.startsWith(`${target.path}/`)) {
+      return false;
+    }
+    if (target.section) {
+      return currentSection === target.section;
+    }
+    return !currentSection;
+  }
+
+  function isItemExpanded(item: NavItem) {
+    const target = splitHref(item.href);
+    return pathname === target.path || pathname.startsWith(`${target.path}/`);
+  }
 
   async function handleLogout() {
     const supabase = createClient();
@@ -196,19 +230,21 @@ export function Sidebar() {
                 {section.label}
               </p>
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const hasActiveChild = item.children?.some(
-                  (child) => pathname === child.href || pathname.startsWith(`${child.href}/`)
-                );
+                const isActive = isHrefActive(item.href);
+                const isExpanded = item.children ? isItemExpanded(item) : false;
+                const hasActiveChild = item.children?.some((child) => isHrefActive(child.href));
                 return (
                   <div key={`${section.label}-${item.label}`} className="space-y-1">
                     <Link
                       href={item.href}
+                      onClick={() => handleNavClick(item.href)}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-lg px-3 py-3 text-[15px] font-semibold transition-all duration-200",
                         isActive
                           ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm shadow-primary/10"
-                          : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+                          : hasActiveChild || isExpanded
+                            ? "bg-sidebar-accent/30 text-sidebar-foreground hover:bg-sidebar-accent/45"
+                            : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
                       )}
                     >
                       {(isActive || hasActiveChild) && (
@@ -235,16 +271,27 @@ export function Sidebar() {
                         ) : null}
                       </span>
                     </Link>
-                    {item.children && isActive && (
-                      <div className="space-y-1 pl-10">
+                    {item.children && (isExpanded || hasActiveChild) && (
+                      <div className="space-y-1 pl-9">
                         {item.children.map((child, index) => (
+                          (() => {
+                            const childActive = isHrefActive(child.href);
+                            return (
                           <Link
                             key={`${child.label}-${index}`}
                             href={child.href}
-                            className="block rounded-md px-3 py-1.5 text-[13px] font-semibold text-sidebar-foreground/62 transition-colors hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+                            onClick={() => handleNavClick(child.href)}
+                            className={cn(
+                              "block rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                              childActive
+                                ? "bg-sidebar-accent/65 text-sidebar-foreground"
+                                : "text-sidebar-foreground/62 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+                            )}
                           >
                             {child.label}
                           </Link>
+                            );
+                          })()
                         ))}
                       </div>
                     )}
@@ -288,11 +335,12 @@ export function Sidebar() {
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-sidebar-border/70 bg-sidebar/95 px-1 py-1 backdrop-blur-md md:hidden">
         {mobileNavItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = isHrefActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => handleNavClick(item.href)}
               className={cn(
                 "flex min-w-[76px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
                 isActive
