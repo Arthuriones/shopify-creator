@@ -472,33 +472,33 @@ function RoutedCheckoutTutorial({
         </CardContent>
       </Card>
 
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <Card className="rounded-lg border-border/60">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Route className="h-4 w-4 text-primary" />
-            Tutorial: como o roteamento funciona
-          </CardTitle>
-          <CardDescription>
-            Fluxo prático inspirado no documento HeroCart anexado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-border/60 bg-background/45 p-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              Fluxo do pedido
-            </h3>
-            <ol className="mt-3 space-y-2">
-              {flow.map((item, index) => (
-                <li key={item} className="flex gap-3 text-sm text-muted-foreground">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-                    {index + 1}
-                  </span>
-                  <span className="leading-6">{item}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <Card className="rounded-lg border-border/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Route className="h-4 w-4 text-primary" />
+              Tutorial: como o roteamento funciona
+            </CardTitle>
+            <CardDescription>
+              Fluxo prático inspirado no documento HeroCart anexado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <h3 className="text-sm font-semibold text-foreground">
+                Fluxo do pedido
+              </h3>
+              <ol className="mt-3 space-y-2">
+                {flow.map((item, index) => (
+                  <li key={item} className="flex gap-3 text-sm text-muted-foreground">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
+                      {index + 1}
+                    </span>
+                    <span className="leading-6">{item}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
 
           <div className="grid gap-3 md:grid-cols-3">
             {[
