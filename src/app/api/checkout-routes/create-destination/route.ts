@@ -4,7 +4,10 @@ import {
   getProducts,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
-import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import {
+  neutralizeProductForDestination,
+  translateProductForDestination,
+} from "@/lib/ai/product-neutralizer";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -168,23 +171,57 @@ function toCreateProductInput(product: ConnectedProduct): DestinationProductInpu
 async function toDestinationProductInput({
   product,
   neutralize,
+  translate,
   supabase,
   userId,
   targetLanguage,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
+  translate: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any;
   userId: string;
   targetLanguage: string;
 }) {
   const input = toCreateProductInput(product);
-  if (!neutralize) {
+  if (!neutralize && !translate) {
     return {
       productForLookup: product,
       productInput: input,
       neutralizationWarnings: [] as string[],
+      translated: false,
+    };
+  }
+
+  if (translate && !neutralize) {
+    const translated = await translateProductForDestination({
+      title: product.title,
+      descriptionHtml: product.descriptionHtml,
+      tags: product.tags,
+      seo: product.seo,
+      targetLanguage,
+    });
+    const productForLookup: ConnectedProduct = {
+      ...product,
+      title: translated.title,
+      handle: slugify(translated.title) || product.handle,
+      descriptionHtml: translated.descriptionHtml,
+      tags: translated.tags,
+      seo: translated.seo,
+    };
+
+    return {
+      productForLookup,
+      productInput: {
+        ...input,
+        title: translated.title,
+        descriptionHtml: translated.descriptionHtml,
+        tags: translated.tags,
+        seo: translated.seo,
+      },
+      neutralizationWarnings: [] as string[],
+      translated: true,
     };
   }
 
@@ -223,6 +260,7 @@ async function toDestinationProductInput({
       seo: neutralized.seo,
     },
     neutralizationWarnings: neutralized.warnings,
+    translated: true,
   };
 }
 
@@ -261,8 +299,13 @@ export async function POST(request: NextRequest) {
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const neutralizeProducts = body.neutralizeProducts === true;
+  const translateProducts =
+    body.translateProducts === true || body.translateProduct === true;
   const requestedLimit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
-  const limit = neutralizeProducts ? Math.min(requestedLimit, 10) : requestedLimit;
+  const limit =
+    neutralizeProducts || translateProducts
+      ? Math.min(requestedLimit, 10)
+      : requestedLimit;
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
@@ -307,6 +350,7 @@ export async function POST(request: NextRequest) {
   const skipped: { sourceHandle: string; targetProductId?: string }[] = [];
   const failed: { sourceHandle: string; error: string }[] = [];
   const neutralized: { sourceHandle: string; title: string; warnings: string[] }[] = [];
+  const translated: { sourceHandle: string; title: string }[] = [];
   const skuMap: Record<string, string> = {};
   const variantMap: Record<string, string> = {};
 
@@ -315,6 +359,7 @@ export async function POST(request: NextRequest) {
       const destination = await toDestinationProductInput({
         product,
         neutralize: neutralizeProducts,
+        translate: translateProducts,
         supabase,
         userId,
         targetLanguage: targetStore.target_language || "pt-BR",
@@ -349,6 +394,11 @@ export async function POST(request: NextRequest) {
           title: destination.productInput.title,
           warnings: destination.neutralizationWarnings,
         });
+      } else if (translateProducts && destination.translated) {
+        translated.push({
+          sourceHandle: product.handle,
+          title: destination.productInput.title,
+        });
       }
     } catch (error) {
       failed.push({
@@ -364,7 +414,9 @@ export async function POST(request: NextRequest) {
     skippedCount: skipped.length,
     failedCount: failed.length,
     neutralizedCount: neutralized.length,
+    translatedCount: translated.length,
     neutralizeProducts,
+    translateProducts,
     limitApplied: limit,
     skuMap,
     variantMap,
@@ -372,5 +424,6 @@ export async function POST(request: NextRequest) {
     skipped,
     failed,
     neutralized,
+    translated,
   });
 }

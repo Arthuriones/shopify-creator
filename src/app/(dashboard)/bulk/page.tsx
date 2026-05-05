@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, PlayCircle, RefreshCw, Store } from "lucide-react";
+import { Languages, Loader2, PlayCircle, RefreshCw, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +54,7 @@ export default function BulkImportPage() {
   const [processing, setProcessing] = useState(false);
   const [jobs, setJobs] = useState<BulkJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
-  const [optimize, setOptimize] = useState(true);
+  const [optimize, setOptimize] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [perSourceLimit, setPerSourceLimit] = useState("1");
 
@@ -193,8 +193,8 @@ export default function BulkImportPage() {
           Importação em lote
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Cole links AliExpress, domínios Shopify ou URLs de produto. O backend importa,
-          otimiza e publica com histórico em jobs.
+          Cole links AliExpress, domínios Shopify ou URLs de produto. O backend importa
+          e publica com histórico em jobs; tradução por IA é opcional.
         </p>
       </header>
 
@@ -254,7 +254,8 @@ export default function BulkImportPage() {
                 onChange={(event) => setOptimize(event.target.checked)}
                 className="h-4 w-4 accent-primary"
               />
-              Otimizar com IA
+              <Languages className="h-4 w-4 text-primary" />
+              Traduzir produto
             </label>
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input

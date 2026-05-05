@@ -97,7 +97,7 @@ export async function processBulkImportJobs(input: {
   for (const job of pendingJobs) {
     const progress = job.progress || {};
     const source = String(progress.source || "");
-    const optimize = progress.optimize !== false;
+    const optimize = progress.optimize === true;
     const publishToStorefront = progress.publishToStorefront !== false;
     const perSourceLimit = Math.min(
       Math.max(Number(progress.perSourceLimit || 1), 1),
@@ -159,7 +159,7 @@ export async function processBulkImportJobs(input: {
           progress: {
             ...progress,
             source,
-            step: optimize ? "Otimizando e publicando" : "Publicando",
+            step: optimize ? "Traduzindo e publicando" : "Publicando",
             current: index + 1,
             total: imported.products.length,
             product: productSummary(product),

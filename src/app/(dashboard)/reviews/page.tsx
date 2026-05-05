@@ -1,13 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Camera,
+  CheckSquare,
   Copy,
   Download,
   Loader2,
   MessageSquareText,
+  RefreshCw,
+  Search,
   ShieldCheck,
   Sparkles,
   Star,
@@ -43,6 +46,8 @@ interface StoreOption {
 }
 
 interface GeneratedReview {
+  productId?: string;
+  productTitle?: string;
   customerName: string;
   rating: number;
   title: string;
@@ -51,6 +56,18 @@ interface GeneratedReview {
   disclosure: string;
   imagePrompt?: string;
   imageUrl?: string;
+}
+
+interface ProductOption {
+  id: string;
+  title: string;
+  handle: string;
+  status?: string;
+  descriptionHtml?: string | null;
+  tags?: string[];
+  seo?: { title?: string | null; description?: string | null } | null;
+  images?: { nodes?: { url?: string | null; altText?: string | null }[] };
+  variants?: { nodes?: { price?: string | null; sku?: string | null }[] };
 }
 
 const toneOptions = [
@@ -82,6 +99,8 @@ function downloadBlob(filename: string, content: string, type: string) {
 
 function reviewsToCsv(reviews: GeneratedReview[]) {
   const header = [
+    "Product",
+    "Product ID",
     "Name",
     "Rating",
     "Title",
@@ -93,6 +112,8 @@ function reviewsToCsv(reviews: GeneratedReview[]) {
   const escape = (value: unknown) =>
     `"${String(value ?? "").replace(/"/g, '""')}"`;
   const rows = reviews.map((review) => [
+    review.productTitle || "",
+    review.productId || "",
     review.customerName,
     review.rating,
     review.title,
@@ -104,9 +125,56 @@ function reviewsToCsv(reviews: GeneratedReview[]) {
   return [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
 }
 
+function looksLikeGeneratedId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function formatDomainLabel(value?: string | null) {
+  if (!value) return "";
+  const clean = value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^admin\.shopify\.com\/store\//i, "")
+    .replace(/^www\./i, "")
+    .split(/[/?#]/)[0]
+    .replace(/\.myshopify\.com$/i, "");
+
+  const base = clean.includes(".") ? clean.split(".")[0] : clean;
+  return base
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatStoreLabel(store?: StoreOption) {
+  if (!store) return "Selecione uma loja";
+  const name = store.name?.trim();
+  if (name && name !== store.id && !looksLikeGeneratedId(name) && !name.includes(".")) {
+    return name;
+  }
+  return formatDomainLabel(store.shop_domain || name) || `Loja ${store.id.slice(0, 8)}`;
+}
+
+function stripHtml(value?: string | null) {
+  return (value || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function ReviewsPage() {
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storeId, setStoreId] = useState("");
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productTitle, setProductTitle] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [count, setCount] = useState("4");
@@ -114,12 +182,34 @@ export default function ReviewsPage() {
   const [imageStyle, setImageStyle] = useState("unboxing");
   const [includeImages, setIncludeImages] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState("");
   const [reviews, setReviews] = useState<GeneratedReview[]>([]);
   const [disclosure, setDisclosure] = useState("");
 
   const selectedStore = useMemo(
     () => stores.find((store) => store.id === storeId),
     [storeId, stores]
+  );
+
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) return products;
+    return products.filter((product) => {
+      const haystack = [
+        product.title,
+        product.handle,
+        ...(product.tags || []),
+        ...(product.variants?.nodes || []).map((variant) => variant.sku || ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [productSearch, products]);
+
+  const selectedProducts = useMemo(
+    () => products.filter((product) => selectedProductIds.includes(product.id)),
+    [products, selectedProductIds]
   );
 
   useEffect(() => {
@@ -154,45 +244,132 @@ export default function ReviewsPage() {
     void loadStores();
   }, []);
 
+  const loadProducts = useCallback(async (selectedStoreId = storeId) => {
+    if (!selectedStoreId) return;
+
+    setProductsLoading(true);
+    setProductsError("");
+    try {
+      const res = await fetch(
+        `/api/shopify/products?storeId=${encodeURIComponent(selectedStoreId)}&first=250`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao carregar produtos.");
+      setProducts(data.products || []);
+      setSelectedProductIds([]);
+    } catch (error) {
+      setProducts([]);
+      setProductsError(
+        error instanceof Error ? error.message : "Falha ao carregar produtos."
+      );
+    } finally {
+      setProductsLoading(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    void loadProducts(storeId);
+  }, [loadProducts, storeId]);
+
   async function handleGenerate() {
     if (!storeId) {
       toast.error("Selecione uma loja.");
       return;
     }
-    if (!productTitle.trim()) {
-      toast.error("Informe o produto.");
+
+    const manualProduct: ProductOption[] = productTitle.trim()
+      ? [
+          {
+            id: "manual",
+            title: productTitle.trim(),
+            descriptionHtml: productDescription,
+            handle: "manual",
+          },
+        ]
+      : [];
+    const targets: ProductOption[] =
+      selectedProducts.length > 0 ? selectedProducts : manualProduct;
+
+    if (targets.length === 0) {
+      toast.error("Selecione produtos da loja ou informe um produto manual.");
       return;
     }
 
     setLoading(true);
     setReviews([]);
     setDisclosure("");
+    setGenerationProgress("");
 
     try {
-      const res = await fetch("/api/ai/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storeId,
-          productTitle,
-          productDescription,
-          count: Number(count),
-          tone,
-          imageStyle,
-          includeImages,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao gerar reviews.");
+      const allReviews: GeneratedReview[] = [];
+      let lastDisclosure = "";
 
-      setReviews(data.reviews || []);
-      setDisclosure(data.disclosure || "");
-      toast.success("Reviews sintéticos gerados.");
+      for (const [index, product] of targets.entries()) {
+        setGenerationProgress(
+          `Gerando ${index + 1}/${targets.length}: ${product.title}`
+        );
+        const description = [
+          stripHtml(product.descriptionHtml),
+          product.seo?.description || "",
+          product.tags?.length ? `Tags: ${product.tags.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        const res = await fetch("/api/ai/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId,
+            productTitle: product.title,
+            productDescription:
+              product.id === "manual" ? productDescription : description,
+            count: Number(count),
+            tone,
+            imageStyle,
+            includeImages,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao gerar reviews.");
+
+        lastDisclosure = data.disclosure || lastDisclosure;
+        const generated = (data.reviews || []).map((review: GeneratedReview) => ({
+          ...review,
+          productId: product.id,
+          productTitle: product.title,
+        }));
+        allReviews.push(...generated);
+        setReviews([...allReviews]);
+      }
+
+      setDisclosure(lastDisclosure);
+      toast.success(
+        `${allReviews.length} reviews sintéticos gerados para ${targets.length} produto(s).`
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao gerar reviews.");
     } finally {
       setLoading(false);
+      setGenerationProgress("");
     }
+  }
+
+  function toggleProduct(productId: string) {
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    );
+  }
+
+  function selectVisibleProducts() {
+    setSelectedProductIds((current) => {
+      const merged = new Set(current);
+      filteredProducts.forEach((product) => merged.add(product.id));
+      return Array.from(merged);
+    });
   }
 
   function copyJson() {
@@ -242,20 +419,22 @@ export default function ReviewsPage() {
               Configurar geração
             </CardTitle>
             <CardDescription>
-              Escolha a loja, produto, quantidade e estilo visual.
+              Escolha uma loja, marque produtos reais e gere reviews em lote.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Loja</Label>
               <Select value={storeId} onValueChange={(value) => setStoreId(value || "")}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma loja" />
+                <SelectTrigger className="w-full min-w-0">
+                  <SelectValue placeholder="Selecione uma loja">
+                    {formatStoreLabel(selectedStore)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
-                      {store.name} ({store.target_language || "pt-BR"})
+                      {formatStoreLabel(store)} ({store.target_language || "pt-BR"})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -267,22 +446,139 @@ export default function ReviewsPage() {
               ) : null}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border/60 bg-background/45 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Produtos reais da loja</Label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Selecione um ou vários produtos para gerar reviews em massa.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadProducts()}
+                  disabled={!storeId || productsLoading}
+                >
+                  {productsLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Atualizar
+                </Button>
+              </div>
+
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  placeholder="Buscar por título, handle, SKU ou tag"
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="rounded-md">
+                  {products.length} carregado(s)
+                </Badge>
+                <Badge variant="outline" className="rounded-md">
+                  {selectedProductIds.length} selecionado(s)
+                </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={selectVisibleProducts}
+                  disabled={filteredProducts.length === 0}
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Selecionar visíveis
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedProductIds([])}
+                  disabled={selectedProductIds.length === 0}
+                >
+                  Limpar
+                </Button>
+              </div>
+
+              {productsError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs leading-5 text-destructive">
+                  {productsError}
+                </div>
+              ) : null}
+
+              <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                {productsLoading ? (
+                  <div className="rounded-md border border-dashed border-border/70 p-4 text-center text-sm text-muted-foreground">
+                    Carregando produtos da Shopify...
+                  </div>
+                ) : filteredProducts.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border/70 p-4 text-center text-sm text-muted-foreground">
+                    Nenhum produto encontrado nessa loja.
+                  </div>
+                ) : (
+                  filteredProducts.map((product) => {
+                    const selected = selectedProductIds.includes(product.id);
+                    const image = product.images?.nodes?.[0]?.url;
+                    return (
+                      <label
+                        key={product.id}
+                        className={`flex cursor-pointer gap-3 rounded-lg border p-2.5 transition-colors ${
+                          selected
+                            ? "border-primary/45 bg-primary/10"
+                            : "border-border/60 bg-card/60 hover:bg-muted/35"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleProduct(product.id)}
+                          className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                        />
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                          {image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={image} alt="" className="h-full w-full object-cover" />
+                          ) : null}
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-foreground">
+                            {product.title}
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-muted-foreground">
+                            {product.status || "sem status"} · {product.variants?.nodes?.length || 0} variante(s)
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label>Produto</Label>
+              <Label>Produto manual</Label>
               <Input
                 value={productTitle}
                 onChange={(event) => setProductTitle(event.target.value)}
-                placeholder="Ex: Colar halo de luz com moissanite"
+                placeholder="Opcional, usado se nenhum produto real estiver selecionado"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Descrição ou benefícios</Label>
+              <Label>Descrição manual ou benefícios</Label>
               <Textarea
                 value={productDescription}
                 onChange={(event) => setProductDescription(event.target.value)}
                 rows={5}
-                placeholder="Material, uso, diferenciais, público..."
+                placeholder="Opcional para produto manual. Produtos reais usam título, descrição, SEO e tags da Shopify."
               />
             </div>
 
@@ -358,7 +654,11 @@ export default function ReviewsPage() {
 
             <Button
               onClick={handleGenerate}
-              disabled={loading || !storeId || !productTitle.trim()}
+              disabled={
+                loading ||
+                !storeId ||
+                (selectedProductIds.length === 0 && !productTitle.trim())
+              }
               className="w-full"
             >
               {loading ? (
@@ -368,8 +668,17 @@ export default function ReviewsPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {loading ? "Gerando..." : "Gerar reviews"}
+              {loading
+                ? "Gerando..."
+                : selectedProductIds.length > 0
+                  ? `Gerar em massa (${selectedProductIds.length})`
+                  : "Gerar review manual"}
             </Button>
+            {generationProgress ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                {generationProgress}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -379,7 +688,9 @@ export default function ReviewsPage() {
               <div>
                 <CardTitle className="text-lg">Reviews gerados</CardTitle>
                 <CardDescription>
-                  Copie, exporte ou use as URLs das imagens em seus mockups.
+                  {reviews.length > 0
+                    ? `${reviews.length} review(s) para ${new Set(reviews.map((review) => review.productId || review.productTitle)).size} produto(s).`
+                    : "Copie, exporte ou use as URLs das imagens em seus mockups."}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -452,6 +763,11 @@ export default function ReviewsPage() {
                         </div>
                       )}
                       <div className="space-y-3 p-4">
+                        {review.productTitle ? (
+                          <Badge variant="secondary" className="rounded-md">
+                            {review.productTitle}
+                          </Badge>
+                        ) : null}
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-foreground">

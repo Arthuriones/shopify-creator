@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   const sources: string[] = Array.isArray(body.sources)
     ? body.sources.map((source: unknown) => String(source).trim()).filter(Boolean)
     : [];
-  const optimize = body.optimize !== false;
+  const optimize = body.optimize === true || body.translateProduct === true;
   const publishToStorefront = body.publishToStorefront !== false;
   const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 50);
   const sourceType =

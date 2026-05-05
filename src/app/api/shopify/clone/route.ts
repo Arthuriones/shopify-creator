@@ -76,14 +76,15 @@ function toStoreContext(store: {
 async function buildCreateInputForTarget(
   product: PublicShopifyProduct,
   context: StoreContext | null,
-  publishToStorefront: boolean
+  publishToStorefront: boolean,
+  translateProduct: boolean
 ) {
   const input = {
     ...toShopifyCreateProductInput(product),
     publishToStorefront,
   };
 
-  if (!context || !process.env.GEMINI_API_KEY) return input;
+  if (!translateProduct || !context || !process.env.GEMINI_API_KEY) return input;
 
   const optimized = await optimizeProduct(
     {
@@ -266,6 +267,8 @@ export async function POST(request: NextRequest) {
     typeof body.sourceStoreId === "string" ? body.sourceStoreId : "";
   const limit = Math.min(Math.max(Number(body.limit || 50), 1), 250);
   const publishToStorefront = body.publishToStorefront !== false;
+  const translateProduct =
+    body.translateProduct === true || body.translateProducts === true;
   const duplicatePolicy: DuplicatePolicy =
     body.duplicatePolicy === "create" ? "create" : "skip";
   const createRoutingConfig = Boolean(body.createRoutingConfig);
@@ -368,7 +371,12 @@ export async function POST(request: NextRequest) {
 
         const result = await createProduct(
           targetCreds,
-          await buildCreateInputForTarget(product, targetContext, publishToStorefront)
+          await buildCreateInputForTarget(
+            product,
+            targetContext,
+            publishToStorefront,
+            translateProduct
+          )
         );
         const maps = buildVariantMaps(product, result?.syncedProduct);
         Object.assign(aggregateSkuMap, maps.skuMap);

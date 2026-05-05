@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { CSSProperties, ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -111,16 +110,16 @@ const navSections: NavSection[] = [
         icon: FileJson,
       },
       {
-        href: "/clone/routed-checkout?section=create-route",
+        href: "/clone/routed-checkout/create-route",
         label: "Routed checkout",
         description: "Vitrine para dark store",
         icon: GitBranch,
         children: [
-          { href: "/clone/routed-checkout?section=create-route", label: "Criar rota" },
-          { href: "/clone/routed-checkout?section=create-destination", label: "Criar destino" },
-          { href: "/clone/routed-checkout?section=neutralize", label: "Neutralizar produtos" },
-          { href: "/clone/routed-checkout?section=active-routes", label: "Rotas ativas" },
-          { href: "/clone/routed-checkout?section=script", label: "Script do tema" },
+          { href: "/clone/routed-checkout/create-route", label: "Criar rota" },
+          { href: "/clone/routed-checkout/create-destination", label: "Criar destino" },
+          { href: "/clone/routed-checkout/neutralize", label: "Neutralizar produtos" },
+          { href: "/clone/routed-checkout/active-routes", label: "Rotas ativas" },
+          { href: "/clone/routed-checkout/script", label: "Script do tema" },
         ],
       },
     ],
@@ -157,38 +156,14 @@ function splitHref(href: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [currentSection, setCurrentSection] = useState("");
   const router = useRouter();
-
-  useEffect(() => {
-    const readCurrentSection = () => {
-      setCurrentSection(
-        new URLSearchParams(window.location.search).get("section") || ""
-      );
-    };
-
-    readCurrentSection();
-    window.addEventListener("popstate", readCurrentSection);
-    return () => window.removeEventListener("popstate", readCurrentSection);
-  }, [pathname]);
-
-  function handleNavClick(href: string) {
-    const { section } = splitHref(href);
-    setCurrentSection(section);
-    window.dispatchEvent(
-      new CustomEvent("routed-checkout-section", { detail: section })
-    );
-  }
 
   function isHrefActive(href: string) {
     const target = splitHref(href);
     if (pathname !== target.path && !pathname.startsWith(`${target.path}/`)) {
       return false;
     }
-    if (target.section) {
-      return currentSection === target.section;
-    }
-    return !currentSection;
+    return true;
   }
 
   function isItemExpanded(item: NavItem) {
@@ -237,7 +212,6 @@ export function Sidebar() {
                   <div key={`${section.label}-${item.label}`} className="space-y-1">
                     <Link
                       href={item.href}
-                      onClick={() => handleNavClick(item.href)}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-lg px-3 py-3 text-[15px] font-semibold transition-all duration-200",
                         isActive
@@ -280,7 +254,6 @@ export function Sidebar() {
                           <Link
                             key={`${child.label}-${index}`}
                             href={child.href}
-                            onClick={() => handleNavClick(child.href)}
                             className={cn(
                               "block rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors",
                               childActive
@@ -340,7 +313,6 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => handleNavClick(item.href)}
               className={cn(
                 "flex min-w-[76px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
                 isActive

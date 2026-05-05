@@ -20,6 +20,14 @@ interface ProductNeutralizeInput {
   storageClient: any;
 }
 
+interface ProductTranslateInput {
+  title: string;
+  descriptionHtml?: string;
+  tags?: string[];
+  seo?: { title?: string; description?: string };
+  targetLanguage?: string;
+}
+
 export interface ProductNeutralizeResult {
   title: string;
   descriptionHtml: string;
@@ -27,6 +35,13 @@ export interface ProductNeutralizeResult {
   seo: { title: string; description: string };
   images: { src: string; altText: string }[];
   warnings: string[];
+}
+
+export interface ProductTranslateResult {
+  title: string;
+  descriptionHtml: string;
+  tags: string[];
+  seo: { title: string; description: string };
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
@@ -53,9 +68,9 @@ const KNOWN_BRANDS = [
   "zara",
 ];
 
-function ensureGeminiKey() {
+function ensureGeminiKey(action = "usar IA em produtos") {
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY nao esta configurada para neutralizar produtos.");
+    throw new Error(`GEMINI_API_KEY nao esta configurada para ${action}.`);
   }
 }
 
@@ -162,6 +177,68 @@ Responda apenas JSON valido:
   };
 }
 
+export async function translateProductForDestination(
+  input: ProductTranslateInput
+): Promise<ProductTranslateResult> {
+  ensureGeminiKey("traduzir produtos");
+  const language = input.targetLanguage || "pt-BR";
+  const prompt = `Voce e um especialista em catalogo de e-commerce.
+
+Traduza e adapte este produto para o idioma da loja destino, sem neutralizar marcas e sem mudar o produto.
+
+Produto original:
+Titulo: ${input.title}
+Descricao HTML: ${input.descriptionHtml || ""}
+Tags: ${(input.tags || []).join(", ")}
+SEO: ${JSON.stringify(input.seo || {})}
+Idioma final obrigatorio: ${language}
+
+Regras obrigatorias:
+- Traduza titulo, descricao, tags e SEO para "${language}".
+- Preserve marca, modelo, material, cor, variante, medidas e beneficios reais.
+- Nao remova logos, marcas ou identificadores; isto pertence ao recurso de neutralizacao.
+- Nao invente certificacoes, garantia, estoque, origem ou beneficios que nao existam.
+- Titulo com no maximo 70 caracteres.
+- Descricao em HTML limpo e vendavel.
+- Tags curtas e uteis para Shopify.
+
+Responda apenas JSON valido:
+{
+  "title": "...",
+  "descriptionHtml": "<p>...</p>",
+  "tags": ["..."],
+  "seo": { "title": "...", "description": "..." }
+}`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+  });
+  const parsed = parseJsonObject<{
+    title?: string;
+    descriptionHtml?: string;
+    tags?: string[];
+    seo?: { title?: string; description?: string };
+  }>(response.text || "");
+
+  const title = (parsed.title || input.title || "Produto").trim().slice(0, 70);
+  const descriptionHtml =
+    parsed.descriptionHtml || input.descriptionHtml || `<p>${title}</p>`;
+  const tags = Array.isArray(parsed.tags)
+    ? parsed.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 10)
+    : input.tags || [];
+
+  return {
+    title,
+    descriptionHtml,
+    tags,
+    seo: {
+      title: (parsed.seo?.title || title).slice(0, 70),
+      description: (parsed.seo?.description || title).slice(0, 155),
+    },
+  };
+}
+
 async function neutralizeImage(
   image: ProductImageInput,
   title: string,
@@ -248,7 +325,7 @@ Requirements:
 export async function neutralizeProductForDestination(
   input: ProductNeutralizeInput
 ): Promise<ProductNeutralizeResult> {
-  ensureGeminiKey();
+  ensureGeminiKey("neutralizar produtos");
   await ensureProductImagesBucket();
 
   const text = await neutralizeText(input);

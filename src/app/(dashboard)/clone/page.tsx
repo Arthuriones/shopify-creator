@@ -13,11 +13,13 @@ import {
   FileJson,
   FileOutput,
   GitBranch,
+  Languages,
   Loader2,
   LockKeyhole,
   PackageCheck,
   Route,
   ShieldCheck,
+  SlidersHorizontal,
   Store,
   Trash2,
   WandSparkles,
@@ -25,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -88,6 +91,13 @@ interface CloneRun {
 }
 
 type CloneView = "overview" | "shopify" | "export" | "routed-checkout";
+type CloneMode = "identical" | "translated" | "routed" | "complete" | "custom";
+type RoutedCheckoutView =
+  | "create-route"
+  | "create-destination"
+  | "neutralize"
+  | "active-routes"
+  | "script";
 
 interface ConnectedVariant {
   id: string;
@@ -705,16 +715,17 @@ function RoutedCheckoutTutorial({
 
 export default function ClonePage() {
   const pathname = usePathname();
-  const [routedSection, setRoutedSection] = useState("");
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
   const [source, setSource] = useState("");
   const [limit, setLimit] = useState("50");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
+  const [cloneMode, setCloneMode] = useState<CloneMode>("identical");
   const [publishToStorefront, setPublishToStorefront] = useState(true);
+  const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
-  const [createRoutingConfig, setCreateRoutingConfig] = useState(true);
+  const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState<"json" | "csv" | null>(null);
@@ -734,6 +745,8 @@ export default function ClonePage() {
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
   const [destinationCreating, setDestinationCreating] = useState(false);
+  const [translateDestinationProducts, setTranslateDestinationProducts] =
+    useState(false);
   const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
     useState(false);
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
@@ -748,38 +761,24 @@ export default function ClonePage() {
     ? "shopify"
     : pathname.endsWith("/export")
       ? "export"
-      : pathname.endsWith("/routed-checkout")
+      : pathname === "/clone/routed-checkout" || pathname.startsWith("/clone/routed-checkout/")
         ? "routed-checkout"
-      : "overview";
+        : "overview";
 
-  useEffect(() => {
-    const readRoutedSection = () => {
-      setRoutedSection(
-        new URLSearchParams(window.location.search).get("section") || ""
-      );
-    };
+  const routedView: RoutedCheckoutView = pathname.endsWith("/create-destination")
+    ? "create-destination"
+    : pathname.endsWith("/neutralize")
+      ? "neutralize"
+      : pathname.endsWith("/active-routes")
+        ? "active-routes"
+        : pathname.endsWith("/script")
+          ? "script"
+          : "create-route";
 
-    const handleSidebarSection = (event: Event) => {
-      setRoutedSection((event as CustomEvent<string>).detail || "");
-    };
-
-    readRoutedSection();
-    window.addEventListener("popstate", readRoutedSection);
-    window.addEventListener("routed-checkout-section", handleSidebarSection);
-    return () => {
-      window.removeEventListener("popstate", readRoutedSection);
-      window.removeEventListener("routed-checkout-section", handleSidebarSection);
-    };
-  }, [pathname]);
-
-  useEffect(() => {
-    if (activeView !== "routed-checkout" || !routedSection) return;
-    const target = document.getElementById(`routed-${routedSection}`);
-    if (!target) return;
-    requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, [activeView, routedSection]);
+  const showRoutedSetup =
+    routedView === "create-route" ||
+    routedView === "create-destination" ||
+    routedView === "neutralize";
 
   const pageMeta = {
     overview: {
@@ -1043,6 +1042,42 @@ export default function ClonePage() {
     setAutofilledMapKey(routeMapKey);
   }, [activeView, autofilledMapKey, editingRouteId, routeMapKey, suggestedRouteMaps]);
 
+  function handleCloneModeChange(value: string | null) {
+    const mode = (value || "identical") as CloneMode;
+    setCloneMode(mode);
+
+    if (mode === "identical") {
+      setPublishToStorefront(true);
+      setTranslateCloneProducts(false);
+      setCreateRoutingConfig(false);
+      setDuplicatePolicy("skip");
+      return;
+    }
+
+    if (mode === "translated") {
+      setPublishToStorefront(true);
+      setTranslateCloneProducts(true);
+      setCreateRoutingConfig(false);
+      setDuplicatePolicy("skip");
+      return;
+    }
+
+    if (mode === "routed") {
+      setPublishToStorefront(true);
+      setTranslateCloneProducts(false);
+      setCreateRoutingConfig(true);
+      setDuplicatePolicy("skip");
+      return;
+    }
+
+    if (mode === "complete") {
+      setPublishToStorefront(true);
+      setTranslateCloneProducts(true);
+      setCreateRoutingConfig(true);
+      setDuplicatePolicy("skip");
+    }
+  }
+
   async function runClone(action: "preview" | "export-json" | "export-csv" | "apply") {
     const payload = {
       source,
@@ -1051,6 +1086,7 @@ export default function ClonePage() {
       targetStoreId,
       limit: Number(limit || 50),
       publishToStorefront,
+      translateProducts: translateCloneProducts,
       duplicatePolicy,
       createRoutingConfig,
     };
@@ -1214,6 +1250,7 @@ export default function ClonePage() {
           targetStoreId: routeTargetStoreId,
           limit: 50,
           neutralizeProducts: neutralizeDestinationProducts,
+          translateProducts: translateDestinationProducts,
         }),
       });
       const data = await res.json();
@@ -1227,6 +1264,9 @@ export default function ClonePage() {
       );
       if (data.neutralizedCount) {
         toast.success(`${data.neutralizedCount} produto(s) neutralizados com IA.`);
+      }
+      if (data.translatedCount) {
+        toast.success(`${data.translatedCount} produto(s) traduzidos com IA.`);
       }
       if (data.failedCount) {
         toast.error(`${data.failedCount} produto(s) falharam ao criar destino.`);
@@ -1403,6 +1443,44 @@ export default function ClonePage() {
                 </div>
               </div>
 
+              <div className="rounded-lg border border-primary/20 bg-primary/8 p-4">
+                <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+                  <div className="space-y-2">
+                    <Label>Modo de clone</Label>
+                    <Select value={cloneMode} onValueChange={handleCloneModeChange}>
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="identical">Clonar idêntico</SelectItem>
+                        <SelectItem value="translated">Clonar + traduzir</SelectItem>
+                        <SelectItem value="routed">Clonar + checkout roteado</SelectItem>
+                        <SelectItem value="complete">Fluxo completo IA</SelectItem>
+                        <SelectItem value="custom">Personalizado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2 text-xs leading-5 text-muted-foreground md:grid-cols-2">
+                    <div className="rounded-md border border-border/60 bg-background/55 p-3">
+                      <div className="mb-1 flex items-center gap-2 font-semibold text-foreground">
+                        <Copy className="h-3.5 w-3.5 text-primary" />
+                        Básico
+                      </div>
+                      Clonar idêntico mantém título, descrição, imagens, tags e SEO
+                      como vieram da origem.
+                    </div>
+                    <div className="rounded-md border border-border/60 bg-background/55 p-3">
+                      <div className="mb-1 flex items-center gap-2 font-semibold text-foreground">
+                        <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                        Avançado
+                      </div>
+                      Os modos compostos ligam tradução e/ou geração automática de rota.
+                      Ao mudar uma opção manualmente, o fluxo vira personalizado.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Destino conectado</Label>
@@ -1429,7 +1507,13 @@ export default function ClonePage() {
 
                 <div className="space-y-2">
                   <Label>Duplicados</Label>
-                  <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value || "skip")}>
+                  <Select
+                    value={duplicatePolicy}
+                    onValueChange={(value) => {
+                      setDuplicatePolicy(value || "skip");
+                      setCloneMode("custom");
+                    }}
+                  >
                     <SelectTrigger className="w-full min-w-0">
                       <SelectValue />
                     </SelectTrigger>
@@ -1444,12 +1528,15 @@ export default function ClonePage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px]">
                 <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
                   <input
                     type="checkbox"
                     checked={publishToStorefront}
-                    onChange={(event) => setPublishToStorefront(event.target.checked)}
+                    onChange={(event) => {
+                      setPublishToStorefront(event.target.checked);
+                      setCloneMode("custom");
+                    }}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                   />
                   <span>
@@ -1458,6 +1545,28 @@ export default function ClonePage() {
                     </span>
                     <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                       Produtos entram disponíveis na Shopify de destino.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={translateCloneProducts}
+                    onChange={(event) => {
+                      setTranslateCloneProducts(event.target.checked);
+                      setCloneMode("custom");
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span>
+                    <span className="flex items-center gap-2 font-medium text-foreground">
+                      <Languages className="h-4 w-4 text-primary" />
+                      Traduzir produto
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      Desligado preserva o texto original. Ligado adapta titulo,
+                      descricao e SEO para o idioma da loja destino.
                     </span>
                   </span>
                 </label>
@@ -1489,7 +1598,10 @@ export default function ClonePage() {
                   <input
                     type="checkbox"
                     checked={createRoutingConfig}
-                    onChange={(event) => setCreateRoutingConfig(event.target.checked)}
+                    onChange={(event) => {
+                      setCreateRoutingConfig(event.target.checked);
+                      setCloneMode("custom");
+                    }}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                   />
                   <span>
@@ -1717,8 +1829,28 @@ export default function ClonePage() {
       <section className="space-y-4" aria-labelledby="routed-checkout">
         <ServiceIntro
           icon={GitBranch}
-          title="Serviço 3: routed checkout"
-          description="Use quando a vitrine deve vender para o cliente, mas o checkout final precisa ser montado na dark store. O script do tema lê o carrinho da vitrine e troca as variantes antes de enviar o cliente ao checkout."
+          title={
+            routedView === "create-route"
+              ? "Routed checkout: criar rota"
+              : routedView === "create-destination"
+                ? "Routed checkout: criar destino"
+                : routedView === "neutralize"
+                  ? "Routed checkout: neutralizar produtos"
+                  : routedView === "active-routes"
+                    ? "Routed checkout: rotas ativas"
+                    : "Routed checkout: script do tema"
+          }
+          description={
+            routedView === "create-route"
+              ? "Crie o mapeamento que diz qual produto da vitrine vira qual produto da dark store no checkout."
+              : routedView === "create-destination"
+                ? "Copie produtos da vitrine para a dark store e gere os mapas automaticamente."
+                : routedView === "neutralize"
+                  ? "Crie produtos de destino sem marca explícita em texto, SEO e imagens antes de enviar para a dark store."
+                  : routedView === "active-routes"
+                    ? "Gerencie tokens, edite mapas existentes e copie o código de instalação de cada rota."
+                    : "Copie o loader correto deste projeto e instale no tema da loja vitrine."
+          }
           steps={[
             "Escolha a loja vitrine e a dark store.",
             "Cole mapas de SKU ou variantes em JSON.",
@@ -1726,11 +1858,14 @@ export default function ClonePage() {
           ]}
         />
 
-        <RoutedCheckoutTutorial
-          installSnippet={installSnippet}
-          routeToken={installToken}
-        />
+        {routedView === "script" && (
+          <RoutedCheckoutTutorial
+            installSnippet={installSnippet}
+            routeToken={installToken}
+          />
+        )}
 
+        {routedView !== "script" && routedView !== "active-routes" && (
         <Card className="rounded-lg border-amber-300/70 bg-amber-50/80">
           <CardContent className="p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1760,8 +1895,11 @@ export default function ClonePage() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        {routedView !== "script" && (
+        <div className="grid gap-5">
+        {showRoutedSetup && (
         <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -1773,6 +1911,7 @@ export default function ClonePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            {routedView === "create-route" && (
             <div className="space-y-2">
               <Label htmlFor="route-name">Nome</Label>
               <Input
@@ -1781,8 +1920,9 @@ export default function ClonePage() {
                 onChange={(event) => setRouteName(event.target.value)}
               />
             </div>
+            )}
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className={cn("grid gap-4", routedView === "create-route" ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
               <div className="space-y-2">
                 <Label>Vitrine</Label>
                 <Select value={routeSourceStoreId} onValueChange={handleRouteSourceChange}>
@@ -1823,6 +1963,7 @@ export default function ClonePage() {
                 </Select>
               </div>
 
+              {routedView === "create-route" && (
               <div className="space-y-2">
               <Label>Modo</Label>
                 <Select value={routeMode} onValueChange={(value) => setRouteMode(value || "standard")}>
@@ -1836,6 +1977,7 @@ export default function ClonePage() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
             </div>
 
             {stores.length < 2 && (
@@ -1860,6 +2002,7 @@ export default function ClonePage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {routedView !== "create-route" && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1879,6 +2022,8 @@ export default function ClonePage() {
                     )}
                     Criar destino na dark store
                   </Button>
+                  )}
+                  {routedView === "create-route" && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1893,6 +2038,8 @@ export default function ClonePage() {
                     <WandSparkles className="h-3.5 w-3.5" />
                     Usar mapas reais
                   </Button>
+                  )}
+                  {routedView === "create-route" && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1902,9 +2049,40 @@ export default function ClonePage() {
                     <Copy className="h-3.5 w-3.5" />
                     Copiar script
                   </Button>
+                  )}
                 </div>
               </div>
 
+              {routedView !== "create-route" && (
+              <label className="mt-4 flex items-start gap-3 rounded-lg border border-border/70 bg-card/70 p-4 text-sm">
+                <input
+                  type="checkbox"
+                  checked={translateDestinationProducts}
+                  onChange={(event) =>
+                    setTranslateDestinationProducts(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                  disabled={destinationCreating}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 font-semibold text-foreground">
+                    <Languages className="h-4 w-4 text-primary" />
+                    Traduzir produto ao criar destino
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    Quando desligado, a dark store recebe titulo, descricao, tags e SEO
+                    iguais aos da vitrine. Quando ligado, a IA traduz esses textos
+                    para o idioma configurado na loja destino antes de criar o produto.
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    A traducao nao remove marcas nem altera imagens. Para apagar logos
+                    e identificadores, use a neutralizacao IA.
+                  </span>
+                </span>
+              </label>
+              )}
+
+              {routedView === "neutralize" && (
               <div
                 id="routed-neutralize"
                 className="mt-4 scroll-mt-6 rounded-lg border border-primary/25 bg-primary/8 p-4"
@@ -1946,6 +2124,7 @@ export default function ClonePage() {
                   </Button>
                 </div>
               </div>
+              )}
 
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <div className="rounded-lg border border-border/60 bg-card/60 p-3">
@@ -2229,6 +2408,7 @@ export default function ClonePage() {
               </div>
             </div>
 
+            {routedView === "create-route" && (
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -2277,7 +2457,9 @@ export default function ClonePage() {
                 </p>
               </div>
             </div>
+            )}
 
+            {routedView === "create-route" && (
             <div className="rounded-lg border border-primary/25 bg-primary/8 p-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -2287,7 +2469,9 @@ export default function ClonePage() {
                 </p>
               </div>
             </div>
+            )}
 
+            {routedView === "create-route" && (
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={handleCreateRoute}
@@ -2302,9 +2486,12 @@ export default function ClonePage() {
                 </Button>
               ) : null}
             </div>
+            )}
           </CardContent>
         </Card>
+        )}
 
+        {routedView === "active-routes" && (
         <Card
           id="routed-active-routes"
           className="scroll-mt-6 rounded-lg border-border/60"
@@ -2396,7 +2583,9 @@ export default function ClonePage() {
             )}
           </CardContent>
         </Card>
+        )}
         </div>
+        )}
       </section>
       )}
     </div>
