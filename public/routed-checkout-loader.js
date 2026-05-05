@@ -18,8 +18,43 @@
 
   function isCheckoutTarget(target) {
     if (!target || !target.closest) return false;
+    var checkoutElement = target.closest(
+      [
+        '[name="checkout"]',
+        '[id*="checkout"]',
+        '[class*="checkout"]',
+        '[data-checkout]',
+        '[data-testid*="checkout"]',
+        'a[href="/checkout"]',
+        'a[href*="/checkout"]',
+        'button[name="checkout"]',
+        'button[type="submit"]',
+        'input[name="checkout"]',
+        'input[type="submit"]'
+      ].join(",")
+    );
+
+    if (!checkoutElement) return false;
+
+    var href = checkoutElement.getAttribute && checkoutElement.getAttribute("href");
+    var action = checkoutElement.getAttribute && checkoutElement.getAttribute("formaction");
+    var text = (checkoutElement.textContent || checkoutElement.value || "").toLowerCase();
+
     return Boolean(
-      target.closest('[name="checkout"], #checkout, a[href="/checkout"], a[href*="/checkout"], button[name="checkout"]')
+      checkoutElement.getAttribute("name") === "checkout" ||
+        /checkout|finalizar|comprar|pagamento|fechar pedido/.test(text) ||
+        (href && /checkout|checkouts|cart/.test(href)) ||
+        (action && /checkout|checkouts|cart/.test(action))
+    );
+  }
+
+  function isCheckoutForm(form) {
+    if (!form || !form.matches) return false;
+    var action = form.getAttribute("action") || "";
+    return (
+      form.matches('form[action*="/cart"], form[action*="/checkout"], form[action*="/checkouts"]') ||
+      /\/cart|\/checkout|\/checkouts/.test(action) ||
+      Boolean(form.querySelector('[name="checkout"], [id*="checkout"], [class*="checkout"]'))
     );
   }
 
@@ -63,11 +98,13 @@
     return data.redirectUrl;
   }
 
-  async function routeCheckout(event) {
-    if (isRouting || !isCheckoutTarget(event.target)) return;
+  async function routeCheckout(event, targetOverride) {
+    var target = targetOverride || event.target;
+    if (isRouting || !isCheckoutTarget(target)) return;
 
     event.preventDefault();
     event.stopPropagation();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
     isRouting = true;
 
     try {
@@ -95,11 +132,10 @@
       function (event) {
         var submitter = event.submitter;
         var form = event.target;
-        var isCartForm = form && form.matches && form.matches('form[action*="/cart"]');
         if (submitter && isCheckoutTarget(submitter)) {
-          routeCheckout(event);
-        } else if (isCartForm && form.querySelector('[name="checkout"]')) {
-          routeCheckout(event);
+          routeCheckout(event, submitter);
+        } else if (isCheckoutForm(form)) {
+          routeCheckout(event, form.querySelector('[name="checkout"], [id*="checkout"], [class*="checkout"], button[type="submit"], input[type="submit"]') || form);
         }
       },
       true
