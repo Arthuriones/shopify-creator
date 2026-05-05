@@ -4,6 +4,7 @@ import {
   getProducts,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
+import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -29,6 +30,17 @@ interface ConnectedProduct {
   images?: { nodes?: { url: string; altText?: string | null }[] };
   options?: { name: string; values?: string[] }[];
   variants?: { nodes?: ConnectedVariant[] };
+}
+
+interface DestinationProductInput {
+  title: string;
+  descriptionHtml: string;
+  tags: string[];
+  images: { src: string; altText: string }[];
+  options?: string[];
+  variants: { price: string; compareAtPrice?: string; options?: string[] }[];
+  seo: { title: string; description: string };
+  publishToStorefront: boolean;
 }
 
 async function getAuthenticatedUserId() {
@@ -89,7 +101,17 @@ function buildVariantMaps(
   return { skuMap, variantMap };
 }
 
-function toCreateProductInput(product: ConnectedProduct) {
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
+
+function toCreateProductInput(product: ConnectedProduct): DestinationProductInput {
   const variants = product.variants?.nodes || [];
   const optionNames =
     product.options
@@ -130,6 +152,64 @@ function toCreateProductInput(product: ConnectedProduct) {
   };
 }
 
+async function toDestinationProductInput({
+  product,
+  neutralize,
+  supabase,
+  userId,
+}: {
+  product: ConnectedProduct;
+  neutralize: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any;
+  userId: string;
+}) {
+  const input = toCreateProductInput(product);
+  if (!neutralize) {
+    return {
+      productForLookup: product,
+      productInput: input,
+      neutralizationWarnings: [] as string[],
+    };
+  }
+
+  const neutralized = await neutralizeProductForDestination({
+    userId,
+    title: product.title,
+    descriptionHtml: product.descriptionHtml,
+    tags: product.tags,
+    seo: product.seo,
+    images: product.images?.nodes?.map((image) => ({
+      url: image.url,
+      altText: image.altText,
+    })),
+    maxImages: 3,
+    storageClient: supabase,
+  });
+
+  const productForLookup: ConnectedProduct = {
+    ...product,
+    title: neutralized.title,
+    handle: slugify(neutralized.title) || product.handle,
+    descriptionHtml: neutralized.descriptionHtml,
+    tags: neutralized.tags,
+    seo: neutralized.seo,
+  };
+
+  return {
+    productForLookup,
+    productInput: {
+      ...input,
+      title: neutralized.title,
+      descriptionHtml: neutralized.descriptionHtml,
+      tags: neutralized.tags,
+      images: neutralized.images,
+      seo: neutralized.seo,
+    },
+    neutralizationWarnings: neutralized.warnings,
+  };
+}
+
 async function findExistingProduct(
   creds: ShopifyCredentials,
   sourceProduct: ConnectedProduct
@@ -157,13 +237,16 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const supabase = await createClient();
 
   const body = await request.json().catch(() => ({}));
   const sourceStoreId =
     typeof body.sourceStoreId === "string" ? body.sourceStoreId : "";
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
-  const limit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
+  const neutralizeProducts = body.neutralizeProducts === true;
+  const requestedLimit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
+  const limit = neutralizeProducts ? Math.min(requestedLimit, 10) : requestedLimit;
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
@@ -207,12 +290,22 @@ export async function POST(request: NextRequest) {
   const created: { sourceHandle: string; targetProductId?: string }[] = [];
   const skipped: { sourceHandle: string; targetProductId?: string }[] = [];
   const failed: { sourceHandle: string; error: string }[] = [];
+  const neutralized: { sourceHandle: string; title: string; warnings: string[] }[] = [];
   const skuMap: Record<string, string> = {};
   const variantMap: Record<string, string> = {};
 
   for (const product of sourceProducts) {
     try {
-      const existing = await findExistingProduct(targetCreds, product);
+      const destination = await toDestinationProductInput({
+        product,
+        neutralize: neutralizeProducts,
+        supabase,
+        userId,
+      });
+      const existing = await findExistingProduct(
+        targetCreds,
+        destination.productForLookup
+      );
       if (existing?.id) {
         const maps = buildVariantMaps(product, existing);
         Object.assign(skuMap, maps.skuMap);
@@ -221,7 +314,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const result = await createProduct(targetCreds, toCreateProductInput(product));
+      const result = await createProduct(targetCreds, destination.productInput);
       const targetProduct = result?.syncedProduct as
         | { id?: string; variants?: { nodes?: ConnectedVariant[] } }
         | null
@@ -233,6 +326,13 @@ export async function POST(request: NextRequest) {
         sourceHandle: product.handle,
         targetProductId: targetProduct?.id,
       });
+      if (neutralizeProducts) {
+        neutralized.push({
+          sourceHandle: product.handle,
+          title: destination.productInput.title,
+          warnings: destination.neutralizationWarnings,
+        });
+      }
     } catch (error) {
       failed.push({
         sourceHandle: product.handle,
@@ -246,10 +346,14 @@ export async function POST(request: NextRequest) {
     createdCount: created.length,
     skippedCount: skipped.length,
     failedCount: failed.length,
+    neutralizedCount: neutralized.length,
+    neutralizeProducts,
+    limitApplied: limit,
     skuMap,
     variantMap,
     created,
     skipped,
     failed,
+    neutralized,
   });
 }

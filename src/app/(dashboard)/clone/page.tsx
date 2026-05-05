@@ -14,6 +14,7 @@ import {
   FileOutput,
   GitBranch,
   Loader2,
+  LockKeyhole,
   PackageCheck,
   Route,
   ShieldCheck,
@@ -703,6 +704,8 @@ export default function ClonePage() {
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
   const [destinationCreating, setDestinationCreating] = useState(false);
+  const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
+    useState(false);
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -781,6 +784,39 @@ export default function ClonePage() {
   const currentVariantMap = useMemo(
     () => safeJsonMap(variantMap),
     [variantMap]
+  );
+
+  const targetVariantById = useMemo(
+    () =>
+      new Map(
+        suggestedRouteMaps.targetVariants.map((variant) => [variant.id, variant])
+      ),
+    [suggestedRouteMaps.targetVariants]
+  );
+
+  const routeLinkRows = useMemo(
+    () =>
+      manualSourceVariants.map((sourceVariant) => {
+        const manualTargetId = currentVariantMap[sourceVariant.id];
+        const suggestedMatch = suggestedRouteMaps.matches.find(
+          (match) => match.source.id === sourceVariant.id
+        );
+        const targetVariant = manualTargetId
+          ? targetVariantById.get(manualTargetId)
+          : suggestedMatch?.target;
+        return {
+          source: sourceVariant,
+          target: targetVariant || null,
+          targetId: manualTargetId || suggestedMatch?.target.id || "__none__",
+          reason: manualTargetId ? "manual" : suggestedMatch?.reason || "sem-par",
+        };
+      }),
+    [
+      currentVariantMap,
+      manualSourceVariants,
+      suggestedRouteMaps.matches,
+      targetVariantById,
+    ]
   );
 
   const routeMapKey = useMemo(
@@ -1103,6 +1139,7 @@ export default function ClonePage() {
           sourceStoreId: routeSourceStoreId,
           targetStoreId: routeTargetStoreId,
           limit: 50,
+          neutralizeProducts: neutralizeDestinationProducts,
         }),
       });
       const data = await res.json();
@@ -1114,6 +1151,9 @@ export default function ClonePage() {
       toast.success(
         `${data.createdCount || 0} produto(s) criados e ${data.skippedCount || 0} reaproveitados na dark store.`
       );
+      if (data.neutralizedCount) {
+        toast.success(`${data.neutralizedCount} produto(s) neutralizados com IA.`);
+      }
       if (data.failedCount) {
         toast.error(`${data.failedCount} produto(s) falharam ao criar destino.`);
       }
@@ -1610,6 +1650,36 @@ export default function ClonePage() {
           routeToken={installToken}
         />
 
+        <Card className="rounded-lg border-amber-300/70 bg-amber-50/80">
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-200/70 text-amber-900">
+                  <LockKeyhole className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-heading text-base font-bold text-amber-950">
+                    Antes de testar: desative a password protection da dark store
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-amber-900">
+                    Se a loja destino estiver em “Opening soon” ou protegida por senha,
+                    a Shopify redireciona o carrinho roteado para <code>/password</code>.
+                    O cliente chega na dark store, mas nao consegue abrir o checkout.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-amber-300/70 bg-white/65 p-3 text-xs leading-5 text-amber-950 lg:w-[360px]">
+                <p className="font-semibold">Como evitar o erro</p>
+                <p className="mt-1">
+                  Na dark store, abra Online Store &gt; Preferences &gt; Password
+                  protection e remova a senha. Depois teste em janela anonima:
+                  se ainda aparecer “Opening soon”, o roteamento tambem vai parar ali.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="rounded-lg border-border/60">
           <CardHeader>
@@ -1693,10 +1763,12 @@ export default function ClonePage() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
-                    Mapas gerados com produtos reais
+                    Ligacao de produtos reais
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    A vitrine e a dark store são lidas pela API da Shopify. Se a dark store estiver vazia, crie os produtos de destino primeiro.
+                    A tela le as duas lojas pela API da Shopify e mostra exatamente
+                    qual produto da vitrine vira qual produto no checkout da dark store.
+                    Se a dark store estiver vazia, crie os produtos de destino primeiro.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1745,6 +1817,45 @@ export default function ClonePage() {
                 </div>
               </div>
 
+              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <WandSparkles className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Neutralizar produto ao criar destino
+                      </h3>
+                    </div>
+                    <p className="mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
+                      Quando ativo, o app usa Gemini para remover marcas do título,
+                      descrição, SEO e das imagens antes de criar o produto na dark
+                      store. Exemplo: “camisa Nike” vira “camisa esportiva”, e logos
+                      visíveis são apagados/recriados em uma imagem neutra.
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                      Por segurança de tempo, a neutralização processa até 10 produtos
+                      por execução e até 3 imagens por produto.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={neutralizeDestinationProducts ? "default" : "outline"}
+                    size="sm"
+                    aria-pressed={neutralizeDestinationProducts}
+                    onClick={() =>
+                      setNeutralizeDestinationProducts((enabled) => !enabled)
+                    }
+                    className="w-fit shrink-0"
+                    disabled={destinationCreating}
+                  >
+                    <WandSparkles className="h-3.5 w-3.5" />
+                    {neutralizeDestinationProducts
+                      ? "Neutralização ativa"
+                      : "Ativar neutralização"}
+                  </Button>
+                </div>
+              </div>
+
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <div className="rounded-lg border border-border/60 bg-card/60 p-3">
                   <p className="text-xs text-muted-foreground">Vitrine</p>
@@ -1782,27 +1893,59 @@ export default function ClonePage() {
                 </div>
               ) : null}
 
-              {suggestedRouteMaps.matches.length > 0 ? (
+              {routeLinkRows.length > 0 ? (
                 <div className="mt-4 max-h-56 overflow-auto rounded-lg border border-border/60">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-card text-muted-foreground">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Produto na vitrine</th>
-                        <th className="px-3 py-2 font-medium">SKU</th>
-                        <th className="px-3 py-2 font-medium">Variant dark store</th>
+                        <th className="px-3 py-2 font-medium">Cliente adiciona na vitrine</th>
+                        <th className="px-3 py-2 font-medium">Ligacao</th>
+                        <th className="px-3 py-2 font-medium">Checkout usa na dark store</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {suggestedRouteMaps.matches.slice(0, 40).map((match) => (
-                        <tr key={match.source.id} className="border-t border-border/50">
-                          <td className="max-w-[260px] truncate px-3 py-2 text-foreground">
-                            {match.source.label}
+                      {routeLinkRows.slice(0, 40).map((row) => (
+                        <tr key={row.source.id} className="border-t border-border/50">
+                          <td className="max-w-[300px] px-3 py-2">
+                            <p className="truncate font-medium text-foreground">
+                              {row.source.label}
+                            </p>
+                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                              {row.source.id}
+                            </p>
                           </td>
-                          <td className="px-3 py-2 font-mono text-muted-foreground">
-                            {match.source.sku || match.reason}
+                          <td className="px-3 py-2">
+                            <Badge
+                              variant={row.target ? "secondary" : "outline"}
+                              className="rounded-md"
+                            >
+                              {row.reason === "manual"
+                                ? "manual"
+                                : row.reason === "sku"
+                                  ? "por SKU"
+                                  : row.reason === "titulo"
+                                    ? "por titulo"
+                                    : "sem destino"}
+                            </Badge>
+                            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                              {row.source.sku || "sem SKU"}
+                            </p>
                           </td>
-                          <td className="max-w-[260px] truncate px-3 py-2 text-muted-foreground">
-                            {match.target.label}
+                          <td className="max-w-[300px] px-3 py-2">
+                            {row.target ? (
+                              <>
+                                <p className="truncate font-medium text-foreground">
+                                  {row.target.label}
+                                </p>
+                                <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                                  {row.target.id}
+                                </p>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                Nenhuma variante de destino escolhida.
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1891,10 +2034,12 @@ export default function ClonePage() {
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">
-                      Linkar variantes manualmente
+                      Ajustar ligacao item por item
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Escolha, para cada variante da vitrine, qual variante da dark store deve entrar no checkout. Cada escolha atualiza o Variant map automaticamente.
+                      Leia cada linha como “quando o cliente comprar isto na vitrine,
+                      envie este item da dark store para o checkout”. Cada escolha
+                      atualiza o Variant map automaticamente.
                     </p>
                   </div>
                   <Badge variant="secondary" className="w-fit">
@@ -1902,64 +2047,93 @@ export default function ClonePage() {
                   </Badge>
                 </div>
 
-                <div className="mt-4 max-h-[460px] overflow-auto rounded-lg border border-border/60 bg-card/70">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-card text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Variante da vitrine</th>
-                        <th className="px-3 py-2 font-medium">SKU</th>
-                        <th className="min-w-[320px] px-3 py-2 font-medium">Enviar para a dark store como</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {manualSourceVariants.length === 0 ? (
-                        <tr>
-                          <td className="px-3 py-4 text-muted-foreground" colSpan={3}>
-                            Nenhuma variante da vitrine carregada ainda.
-                          </td>
-                        </tr>
-                      ) : suggestedRouteMaps.targetVariants.length === 0 ? (
-                        <tr>
-                          <td className="px-3 py-4 text-muted-foreground" colSpan={3}>
-                            A dark store ainda nao retornou variantes. Cadastre/importe produtos nela para poder escolher os destinos.
-                          </td>
-                        </tr>
-                      ) : (
-                        manualSourceVariants.map((variant) => (
-                          <tr key={variant.id} className="border-t border-border/50">
-                            <td className="max-w-[280px] px-3 py-2">
-                              <p className="truncate font-medium text-foreground">{variant.label}</p>
-                              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{variant.id}</p>
-                            </td>
-                            <td className="px-3 py-2 font-mono text-muted-foreground">
-                              {variant.sku || "-"}
-                            </td>
-                            <td className="px-3 py-2">
-                              <Select
-                                value={currentVariantMap[variant.id] || "__none__"}
-                                onValueChange={(value) => handleManualVariantLink(variant.id, value)}
-                              >
-                                <SelectTrigger className="h-10 w-full min-w-0 bg-background">
-                                  <SelectValue placeholder="Escolha a variante da dark store" />
-                                </SelectTrigger>
-                                <SelectContent align="start" className="max-h-80">
-                                  <SelectItem value="__none__">Sem link manual</SelectItem>
-                                  {suggestedRouteMaps.targetVariants.map((targetVariant) => (
-                                    <SelectItem key={targetVariant.id} value={targetVariant.id}>
-                                      <span className="block max-w-[520px] truncate">
-                                        {targetVariant.label}
-                                        {targetVariant.sku ? ` - SKU ${targetVariant.sku}` : ""}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="mt-4 max-h-[520px] space-y-2 overflow-auto rounded-lg border border-border/60 bg-card/70 p-3">
+                  {manualSourceVariants.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
+                      Nenhuma variante da vitrine carregada ainda.
+                    </div>
+                  ) : suggestedRouteMaps.targetVariants.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm leading-6 text-muted-foreground">
+                      A dark store ainda nao retornou variantes. Cadastre produtos nela
+                      ou use Criar destino na dark store para gerar os produtos e depois
+                      escolher os destinos.
+                    </div>
+                  ) : (
+                    routeLinkRows.map((row) => (
+                      <div
+                        key={row.source.id}
+                        className="grid gap-3 rounded-lg border border-border/60 bg-background/60 p-3 lg:grid-cols-[minmax(0,1fr)_44px_minmax(320px,1fr)] lg:items-center"
+                      >
+                        <div className="min-w-0">
+                          <div className="mb-2 flex items-center gap-2">
+                            <Badge variant="outline" className="rounded-md">
+                              Vitrine
+                            </Badge>
+                            <span className="font-mono text-[11px] text-muted-foreground">
+                              {row.source.sku || "sem SKU"}
+                            </span>
+                          </div>
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {row.source.label}
+                          </p>
+                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                            {row.source.id}
+                          </p>
+                        </div>
+
+                        <div className="hidden h-9 w-9 items-center justify-center rounded-lg bg-primary/12 text-primary lg:flex">
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <Badge variant="secondary" className="rounded-md">
+                              Dark store
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">
+                              {row.reason === "manual"
+                                ? "definido manualmente"
+                                : row.reason === "sku"
+                                  ? "sugerido por SKU"
+                                  : row.reason === "titulo"
+                                    ? "sugerido por titulo"
+                                    : "sem destino"}
+                            </span>
+                          </div>
+                          <Select
+                            value={currentVariantMap[row.source.id] || row.targetId}
+                            onValueChange={(value) =>
+                              handleManualVariantLink(row.source.id, value)
+                            }
+                          >
+                            <SelectTrigger className="h-11 w-full min-w-0 bg-background">
+                              <SelectValue placeholder="Escolha a variante da dark store" />
+                            </SelectTrigger>
+                            <SelectContent align="start" className="max-h-80">
+                              <SelectItem value="__none__">Sem destino para checkout</SelectItem>
+                              {suggestedRouteMaps.targetVariants.map((targetVariant) => (
+                                <SelectItem key={targetVariant.id} value={targetVariant.id}>
+                                  <span className="block max-w-[560px] truncate">
+                                    {targetVariant.label}
+                                    {targetVariant.sku ? ` - SKU ${targetVariant.sku}` : ""}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {row.target ? (
+                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                              {row.target.id}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-[11px] text-destructive">
+                              Este produto ainda nao vai para checkout roteado.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

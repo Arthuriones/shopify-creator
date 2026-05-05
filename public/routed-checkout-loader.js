@@ -46,8 +46,8 @@
     return Boolean(
       checkoutElement.getAttribute("name") === "checkout" ||
         /checkout|finalizar|pagamento|fechar pedido/.test(text) ||
-        (href && /checkout|checkouts|cart/.test(href)) ||
-        (action && /checkout|checkouts|cart/.test(action))
+        (href && /checkout|checkouts/.test(href)) ||
+        (action && /checkout|checkouts/.test(action))
     );
   }
 
@@ -55,9 +55,13 @@
     if (!form || !form.matches) return false;
     var action = form.getAttribute("action") || "";
     return (
-      form.matches('form[action*="/cart"], form[action*="/checkout"], form[action*="/checkouts"]') ||
-      /\/cart|\/checkout|\/checkouts/.test(action) ||
-      Boolean(form.querySelector('[name="checkout"], [id*="checkout"], [class*="checkout"]'))
+      form.matches('form[action*="/checkout"], form[action*="/checkouts"]') ||
+      /\/checkout|\/checkouts/.test(action) ||
+      Boolean(
+        form.querySelector(
+          '[name="checkout"], [data-checkout], a[href*="/checkout"], button[name="checkout"], input[name="checkout"]'
+        )
+      )
     );
   }
 
@@ -139,7 +143,12 @@
         if (submitter && isCheckoutTarget(submitter)) {
           routeCheckout(event, submitter);
         } else if (isCheckoutForm(form)) {
-          routeCheckout(event, form.querySelector('[name="checkout"], [id*="checkout"], [class*="checkout"], button[type="submit"], input[type="submit"]') || form);
+          routeCheckout(
+            event,
+            form.querySelector(
+              '[name="checkout"], [data-checkout], a[href*="/checkout"], button[name="checkout"], input[name="checkout"]'
+            ) || form
+          );
         }
       },
       true
