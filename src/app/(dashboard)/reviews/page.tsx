@@ -212,6 +212,8 @@ export default function ReviewsPage() {
     [products, selectedProductIds]
   );
 
+  const primarySelectedProduct = selectedProducts[0];
+
   useEffect(() => {
     async function loadStores() {
       const supabase = createClient();
@@ -446,12 +448,102 @@ export default function ReviewsPage() {
               ) : null}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/8 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Label>Produto vinculado</Label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    O review será gerado usando dados reais da Shopify e exportado
+                    com ID e título do produto.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadProducts()}
+                  disabled={!storeId || productsLoading}
+                  className="shrink-0"
+                >
+                  {productsLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Atualizar
+                </Button>
+              </div>
+
+              <Select
+                value={selectedProductIds.length === 1 ? selectedProductIds[0] : ""}
+                onValueChange={(value) => {
+                  setSelectedProductIds(value ? [value] : []);
+                }}
+              >
+                <SelectTrigger className="w-full min-w-0 bg-background">
+                  <SelectValue
+                    placeholder={
+                      productsLoading
+                        ? "Carregando produtos..."
+                        : "Selecione um produto real da loja"
+                    }
+                  >
+                    {primarySelectedProduct?.title}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      <span className="block max-w-[340px] truncate">
+                        {product.title}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {primarySelectedProduct ? (
+                <div className="flex gap-3 rounded-lg border border-border/60 bg-background/65 p-2.5">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+                    {primarySelectedProduct.images?.nodes?.[0]?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={primarySelectedProduct.images.nodes[0].url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {primarySelectedProduct.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {primarySelectedProduct.status || "sem status"} ·{" "}
+                      {primarySelectedProduct.variants?.nodes?.length || 0} variante(s)
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {stripHtml(primarySelectedProduct.descriptionHtml) ||
+                        primarySelectedProduct.seo?.description ||
+                        "Sem descrição cadastrada."}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {productsError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs leading-5 text-destructive">
+                  {productsError}
+                </div>
+              ) : null}
+            </div>
+
             <div className="space-y-3 rounded-lg border border-border/60 bg-background/45 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <Label>Produtos reais da loja</Label>
+                  <Label>Seleção em massa</Label>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Selecione um ou vários produtos para gerar reviews em massa.
+                    Use quando quiser gerar reviews para vários produtos ao mesmo tempo.
                   </p>
                 </div>
                 <Button
@@ -508,12 +600,6 @@ export default function ReviewsPage() {
                 </Button>
               </div>
 
-              {productsError ? (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs leading-5 text-destructive">
-                  {productsError}
-                </div>
-              ) : null}
-
               <div className="max-h-72 space-y-2 overflow-auto pr-1">
                 {productsLoading ? (
                   <div className="rounded-md border border-dashed border-border/70 p-4 text-center text-sm text-muted-foreground">
@@ -563,24 +649,37 @@ export default function ReviewsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Produto manual</Label>
-              <Input
-                value={productTitle}
-                onChange={(event) => setProductTitle(event.target.value)}
-                placeholder="Opcional, usado se nenhum produto real estiver selecionado"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Descrição manual ou benefícios</Label>
-              <Textarea
-                value={productDescription}
-                onChange={(event) => setProductDescription(event.target.value)}
-                rows={5}
-                placeholder="Opcional para produto manual. Produtos reais usam título, descrição, SEO e tags da Shopify."
-              />
-            </div>
+            <details className="rounded-lg border border-border/60 bg-background/35 p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                Produto manual opcional
+              </summary>
+              <div className="mt-3 space-y-3">
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Use apenas para mockup solto. Para reviews vinculados, selecione
+                  um produto real acima.
+                </p>
+                <div className="space-y-2">
+                  <Label>Nome do produto manual</Label>
+                  <Input
+                    value={productTitle}
+                    onChange={(event) => {
+                      setProductTitle(event.target.value);
+                      if (event.target.value.trim()) setSelectedProductIds([]);
+                    }}
+                    placeholder="Ex: Colar halo de luz com moissanite"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descrição manual ou benefícios</Label>
+                  <Textarea
+                    value={productDescription}
+                    onChange={(event) => setProductDescription(event.target.value)}
+                    rows={4}
+                    placeholder="Material, uso, diferenciais, público..."
+                  />
+                </div>
+              </div>
+            </details>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
