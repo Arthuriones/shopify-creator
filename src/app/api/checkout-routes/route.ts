@@ -72,6 +72,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (sourceStoreId === targetStoreId) {
+    return NextResponse.json(
+      { error: "A vitrine e a dark store precisam ser lojas diferentes." },
+      { status: 400 }
+    );
+  }
+
   const ownsStores = await userOwnsStores([sourceStoreId, targetStoreId], user.id);
   if (!ownsStores) {
     return NextResponse.json(
@@ -109,4 +116,108 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ config: data });
+}
+
+export async function PATCH(request: NextRequest) {
+  const { supabase, user } = await getUserAndClient();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const id = typeof body.id === "string" ? body.id : "";
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const sourceStoreId =
+    typeof body.sourceStoreId === "string" ? body.sourceStoreId : "";
+  const targetStoreId =
+    typeof body.targetStoreId === "string" ? body.targetStoreId : "";
+  const mode =
+    body.mode === "enterprise" || body.mode === "enterprise_static"
+      ? body.mode
+      : "standard";
+
+  if (!id || !name || !sourceStoreId || !targetStoreId) {
+    return NextResponse.json(
+      { error: "Id, nome, loja vitrine e dark store sao obrigatorios." },
+      { status: 400 }
+    );
+  }
+
+  if (sourceStoreId === targetStoreId) {
+    return NextResponse.json(
+      { error: "A vitrine e a dark store precisam ser lojas diferentes." },
+      { status: 400 }
+    );
+  }
+
+  const ownsStores = await userOwnsStores([sourceStoreId, targetStoreId], user.id);
+  if (!ownsStores) {
+    return NextResponse.json(
+      { error: "Uma das lojas selecionadas nao pertence ao usuario." },
+      { status: 403 }
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("routed_checkout_configs")
+    .update({
+      source_store_id: sourceStoreId,
+      target_store_id: targetStoreId,
+      name,
+      mode,
+      enabled: body.enabled !== false,
+      sku_map: body.skuMap && typeof body.skuMap === "object" ? body.skuMap : {},
+      variant_map:
+        body.variantMap && typeof body.variantMap === "object"
+          ? body.variantMap
+          : {},
+      settings:
+        body.settings && typeof body.settings === "object" ? body.settings : {},
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json(
+      { error: "Nao foi possivel atualizar o checkout roteado." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ config: data });
+}
+
+export async function DELETE(request: NextRequest) {
+  const { supabase, user } = await getUserAndClient();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const id = typeof body.id === "string" ? body.id : "";
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Id da rota e obrigatorio." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("routed_checkout_configs")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Nao foi possivel excluir a rota." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }

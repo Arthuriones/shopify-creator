@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Code2,
   Copy,
+  Edit3,
   Download,
   FileJson,
   FileOutput,
@@ -17,6 +18,7 @@ import {
   Route,
   ShieldCheck,
   Store,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -108,13 +110,9 @@ interface FlatVariant extends ConnectedVariant {
   label: string;
 }
 
-const DEFAULT_SKU_MAP = `{
-  "SKU-DA-VITRINE": "gid://shopify/ProductVariant/1234567890"
-}`;
+const DEFAULT_SKU_MAP = "{}";
 
-const DEFAULT_VARIANT_MAP = `{
-  "gid://shopify/ProductVariant/111": "gid://shopify/ProductVariant/222"
-}`;
+const DEFAULT_VARIANT_MAP = "{}";
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -222,6 +220,10 @@ function formatStoreLabel(store?: StoreOption) {
   if (store.shop_domain) return store.shop_domain;
   if (store.name && store.name !== store.id && !looksLikeGeneratedId(store.name)) return store.name;
   return `Loja ${store.id.slice(0, 8)}`;
+}
+
+function formatJsonMap(map: Record<string, string>) {
+  return JSON.stringify(map || {}, null, 2);
 }
 
 function ServiceIntro({
@@ -369,6 +371,47 @@ function RoutedCheckoutTutorial({
     },
   ];
 
+  const mapTerms = [
+    {
+      title: "SKU",
+      detail:
+        "É o código interno/comercial da variante. Você encontra no admin da Shopify em Products > produto > Variant > Inventory/SKU. Se a vitrine e a dark store usam o mesmo SKU, o mapa pode ser gerado sozinho.",
+    },
+    {
+      title: "Variant GID",
+      detail:
+        "É o identificador global da variante na API Admin da Shopify, no formato gid://shopify/ProductVariant/123. Esta tela lê esse valor pela API e mostra nas tabelas de variantes.",
+    },
+    {
+      title: "SKU map",
+      detail:
+        "Chave = SKU da vitrine. Valor = Variant GID da dark store. É o jeito mais simples quando os SKUs da vitrine estão preenchidos.",
+    },
+    {
+      title: "Variant map",
+      detail:
+        "Chave = Variant GID da vitrine. Valor = Variant GID da dark store. Use quando não houver SKU confiável ou quando quiser mapear item por item.",
+    },
+  ];
+
+  const modeGuide = [
+    {
+      title: "standard",
+      detail:
+        "Modo simples de teste. Usa os mapas e envia para a dark store escolhida, sem regras avançadas.",
+    },
+    {
+      title: "enterprise",
+      detail:
+        "Reservado para cenários com várias vitrines/dark stores e regras por campanha, país, estoque ou fonte. Hoje usa a mesma resolução por mapas.",
+    },
+    {
+      title: "enterprise_static",
+      detail:
+        "Recomendado para este fluxo. Mantém uma vitrine ligada a uma dark store fixa e previsível.",
+    },
+  ];
+
   const flow = [
     "Cliente adiciona produtos na loja vitrine.",
     "O script intercepta o clique ou envio do checkout.",
@@ -472,6 +515,44 @@ function RoutedCheckoutTutorial({
         </CardContent>
       </Card>
 
+      <Card className="rounded-lg border-border/60">
+        <CardHeader>
+          <CardTitle className="text-lg">SKU, GID e modos</CardTitle>
+          <CardDescription>
+            Esses nomes aparecem porque o checkout precisa saber exatamente qual variante da dark store deve substituir cada item da vitrine.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-4">
+          {mapTerms.map((item) => (
+            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <p className="font-heading text-sm font-bold text-foreground">
+                {item.title}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+          <div className="rounded-lg border border-primary/25 bg-primary/8 p-4 lg:col-span-4">
+            <p className="font-heading text-sm font-bold text-foreground">
+              Diferença dos modos
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {modeGuide.map((item) => (
+                <div key={item.title} className="rounded-lg border border-border/60 bg-card/80 p-3">
+                  <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
+                    {item.title}
+                  </code>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    {item.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="rounded-lg border-border/60">
           <CardHeader>
@@ -501,17 +582,13 @@ function RoutedCheckoutTutorial({
             </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            {[
-              ["standard", "Checkout na mesma loja, sem roteamento."],
-              ["enterprise", "Roteamento avançado para cenários com múltiplas lojas."],
-              ["enterprise_static", "Roteamento fixo para uma dark store específica."],
-            ].map(([mode, description]) => (
-              <div key={mode} className="rounded-lg border border-border/60 bg-background/45 p-3">
+            {modeGuide.map((item) => (
+              <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-3">
                 <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
-                  {mode}
+                  {item.title}
                 </code>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {description}
+                  {item.detail}
                 </p>
               </div>
             ))}
@@ -611,6 +688,8 @@ export default function ClonePage() {
   const [skuMap, setSkuMap] = useState(DEFAULT_SKU_MAP);
   const [variantMap, setVariantMap] = useState(DEFAULT_VARIANT_MAP);
   const [routeSaving, setRouteSaving] = useState(false);
+  const [editingRouteId, setEditingRouteId] = useState("");
+  const [deletingRouteId, setDeletingRouteId] = useState("");
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -668,6 +747,16 @@ export default function ClonePage() {
   const suggestedRouteMaps = useMemo(
     () => buildSuggestedMaps(sourceProducts, targetProducts),
     [sourceProducts, targetProducts]
+  );
+
+  const sourceVariantSamples = useMemo(
+    () => suggestedRouteMaps.sourceVariants.slice(0, 12),
+    [suggestedRouteMaps.sourceVariants]
+  );
+
+  const targetVariantSamples = useMemo(
+    () => suggestedRouteMaps.targetVariants.slice(0, 12),
+    [suggestedRouteMaps.targetVariants]
   );
 
   const routeMapKey = useMemo(
@@ -812,12 +901,13 @@ export default function ClonePage() {
   useEffect(() => {
     if (activeView !== "routed-checkout") return;
     if (!routeMapKey || routeMapKey === autofilledMapKey) return;
+    if (editingRouteId) return;
     if (suggestedRouteMaps.matches.length === 0) return;
 
-    setSkuMap(JSON.stringify(suggestedRouteMaps.skuMap, null, 2));
-    setVariantMap(JSON.stringify(suggestedRouteMaps.variantMap, null, 2));
+    setSkuMap(formatJsonMap(suggestedRouteMaps.skuMap));
+    setVariantMap(formatJsonMap(suggestedRouteMaps.variantMap));
     setAutofilledMapKey(routeMapKey);
-  }, [activeView, autofilledMapKey, routeMapKey, suggestedRouteMaps]);
+  }, [activeView, autofilledMapKey, editingRouteId, routeMapKey, suggestedRouteMaps]);
 
   async function runClone(action: "preview" | "export-json" | "export-csv" | "apply") {
     const payload = {
@@ -927,6 +1017,48 @@ export default function ClonePage() {
     }
   }
 
+  function resetRouteForm() {
+    setEditingRouteId("");
+    setRouteName("Vitrine para dark store");
+    setRouteMode("enterprise_static");
+    setSkuMap(DEFAULT_SKU_MAP);
+    setVariantMap(DEFAULT_VARIANT_MAP);
+  }
+
+  function loadRouteForEditing(config: CheckoutConfig) {
+    setEditingRouteId(config.id);
+    setRouteName(config.name);
+    setRouteSourceStoreId(config.source_store_id);
+    setRouteTargetStoreId(config.target_store_id);
+    setRouteMode(config.mode || "enterprise_static");
+    setSkuMap(formatJsonMap(config.sku_map || {}));
+    setVariantMap(formatJsonMap(config.variant_map || {}));
+    toast.success("Rota carregada para edicao.");
+  }
+
+  async function handleDeleteRoute(config: CheckoutConfig) {
+    const confirmed = window.confirm(`Excluir a rota "${config.name}"?`);
+    if (!confirmed) return;
+
+    setDeletingRouteId(config.id);
+    try {
+      const res = await fetch("/api/checkout-routes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: config.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao excluir rota.");
+      if (editingRouteId === config.id) resetRouteForm();
+      toast.success("Rota excluida.");
+      await loadConfigs();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao excluir rota.");
+    } finally {
+      setDeletingRouteId("");
+    }
+  }
+
   async function handleCreateRoute() {
     if (!routeSourceStoreId || !routeTargetStoreId || !routeName.trim()) {
       toast.error("Preencha nome, vitrine e dark store.");
@@ -941,9 +1073,10 @@ export default function ClonePage() {
     setRouteSaving(true);
     try {
       const res = await fetch("/api/checkout-routes", {
-        method: "POST",
+        method: editingRouteId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingRouteId || undefined,
           name: routeName,
           sourceStoreId: routeSourceStoreId,
           targetStoreId: routeTargetStoreId,
@@ -954,7 +1087,8 @@ export default function ClonePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha ao salvar rota.");
-      toast.success("Checkout roteado criado.");
+      toast.success(editingRouteId ? "Checkout roteado atualizado." : "Checkout roteado criado.");
+      setEditingRouteId(data.config?.id || editingRouteId);
       await loadConfigs();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar rota.");
@@ -1460,15 +1594,15 @@ export default function ClonePage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Modo</Label>
+              <Label>Modo</Label>
                 <Select value={routeMode} onValueChange={(value) => setRouteMode(value || "standard")}>
                   <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    <SelectItem value="standard">standard</SelectItem>
-                    <SelectItem value="enterprise">enterprise</SelectItem>
-                    <SelectItem value="enterprise_static">enterprise_static</SelectItem>
+                    <SelectItem value="standard">standard - teste simples</SelectItem>
+                    <SelectItem value="enterprise">enterprise - regras futuras</SelectItem>
+                    <SelectItem value="enterprise_static">enterprise_static - dark store fixa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1495,8 +1629,8 @@ export default function ClonePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      setSkuMap(JSON.stringify(suggestedRouteMaps.skuMap, null, 2));
-                      setVariantMap(JSON.stringify(suggestedRouteMaps.variantMap, null, 2));
+                      setSkuMap(formatJsonMap(suggestedRouteMaps.skuMap));
+                      setVariantMap(formatJsonMap(suggestedRouteMaps.variantMap));
                       setAutofilledMapKey(routeMapKey);
                       toast.success("Mapas reais aplicados nos campos.");
                     }}
@@ -1581,7 +1715,83 @@ export default function ClonePage() {
                     </tbody>
                   </table>
                 </div>
-              ) : null}
+              ) : (
+                <div className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3 text-sm leading-6 text-muted-foreground">
+                  Ainda nao ha mapa real para copiar. Para gerar automaticamente, a vitrine e a dark store precisam ter variantes equivalentes. No estado atual, se a dark store retornar 0 variantes, nao existe GID de destino para preencher o mapa.
+                </div>
+              )}
+
+              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Variantes da vitrine</h3>
+                    <Badge variant="outline">{sourceVariantSamples.length} visiveis</Badge>
+                  </div>
+                  <div className="mt-3 max-h-52 overflow-auto rounded-md border border-border/50">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-card text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Produto</th>
+                          <th className="px-3 py-2 font-medium">SKU</th>
+                          <th className="px-3 py-2 font-medium">GID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sourceVariantSamples.length === 0 ? (
+                          <tr>
+                            <td className="px-3 py-3 text-muted-foreground" colSpan={3}>
+                              Nenhuma variante lida na vitrine.
+                            </td>
+                          </tr>
+                        ) : (
+                          sourceVariantSamples.map((variant) => (
+                            <tr key={variant.id} className="border-t border-border/50">
+                              <td className="max-w-[190px] truncate px-3 py-2 text-foreground">{variant.label}</td>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{variant.sku || "-"}</td>
+                              <td className="max-w-[210px] truncate px-3 py-2 font-mono text-muted-foreground">{variant.id}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Variantes da dark store</h3>
+                    <Badge variant="outline">{targetVariantSamples.length} visiveis</Badge>
+                  </div>
+                  <div className="mt-3 max-h-52 overflow-auto rounded-md border border-border/50">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-card text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Produto</th>
+                          <th className="px-3 py-2 font-medium">SKU</th>
+                          <th className="px-3 py-2 font-medium">GID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {targetVariantSamples.length === 0 ? (
+                          <tr>
+                            <td className="px-3 py-3 text-muted-foreground" colSpan={3}>
+                              Nenhuma variante lida na dark store.
+                            </td>
+                          </tr>
+                        ) : (
+                          targetVariantSamples.map((variant) => (
+                            <tr key={variant.id} className="border-t border-border/50">
+                              <td className="max-w-[190px] truncate px-3 py-2 text-foreground">{variant.label}</td>
+                              <td className="px-3 py-2 font-mono text-muted-foreground">{variant.sku || "-"}</td>
+                              <td className="max-w-[210px] truncate px-3 py-2 font-mono text-muted-foreground">{variant.id}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1643,13 +1853,20 @@ export default function ClonePage() {
               </div>
             </div>
 
-            <Button
-              onClick={handleCreateRoute}
-              disabled={routeSaving || stores.length < 2 || routeSourceStoreId === routeTargetStoreId}
-            >
-              {routeSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Route className="h-4 w-4" />}
-              Criar rota
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleCreateRoute}
+                disabled={routeSaving || stores.length < 2 || routeSourceStoreId === routeTargetStoreId}
+              >
+                {routeSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Route className="h-4 w-4" />}
+                {editingRouteId ? "Salvar alteracoes" : "Criar rota"}
+              </Button>
+              {editingRouteId ? (
+                <Button variant="outline" onClick={resetRouteForm} disabled={routeSaving}>
+                  Cancelar edicao
+                </Button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 
@@ -1678,6 +1895,11 @@ export default function ClonePage() {
                         <p className="mt-1 text-xs text-muted-foreground">
                           {config.mode} · {config.enabled ? "ativo" : "pausado"}
                         </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatStoreLabel(stores.find((store) => store.id === config.source_store_id))}
+                          {" -> "}
+                          {formatStoreLabel(stores.find((store) => store.id === config.target_store_id))}
+                        </p>
                       </div>
                       <Badge variant={config.enabled ? "secondary" : "outline"} className="rounded-md">
                         {Object.keys(config.sku_map || {}).length + Object.keys(config.variant_map || {}).length} mapas
@@ -1690,24 +1912,46 @@ export default function ClonePage() {
                       </span>
                       <span className="break-all">{config.public_token}</span>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() =>
-                        copyToClipboard(
-                          `<script
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          copyToClipboard(
+                            `<script
   src="${appOrigin || "https://seu-app.com"}/routed-checkout-loader.js"
   data-token="${config.public_token}"
   async>
 </script>`,
-                          "script da rota"
-                        )
-                      }
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copiar código do tema
-                    </Button>
+                            "script da rota"
+                          )
+                        }
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copiar código
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => loadRouteForEditing(config)}
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteRoute(config)}
+                        disabled={deletingRouteId === config.id}
+                      >
+                        {deletingRouteId === config.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Excluir
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
