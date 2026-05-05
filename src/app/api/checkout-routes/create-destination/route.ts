@@ -54,12 +54,25 @@ async function getAuthenticatedUserId() {
 
 async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
-  const { data: store } = await supabase
+  const { data: store, error } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret")
+    .select("shop_domain, client_id, client_secret, target_language")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();
+
+  if (error) {
+    const { data: fallbackStore } = await supabase
+      .from("stores")
+      .select("shop_domain, client_id, client_secret")
+      .eq("id", storeId)
+      .eq("user_id", userId)
+      .single();
+
+    return fallbackStore
+      ? { ...fallbackStore, target_language: "pt-BR" }
+      : null;
+  }
 
   return store;
 }
@@ -157,12 +170,14 @@ async function toDestinationProductInput({
   neutralize,
   supabase,
   userId,
+  targetLanguage,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any;
   userId: string;
+  targetLanguage: string;
 }) {
   const input = toCreateProductInput(product);
   if (!neutralize) {
@@ -185,6 +200,7 @@ async function toDestinationProductInput({
     })),
     maxImages: 3,
     storageClient: supabase,
+    targetLanguage,
   });
 
   const productForLookup: ConnectedProduct = {
@@ -301,6 +317,7 @@ export async function POST(request: NextRequest) {
         neutralize: neutralizeProducts,
         supabase,
         userId,
+        targetLanguage: targetStore.target_language || "pt-BR",
       });
       const existing = await findExistingProduct(
         targetCreds,

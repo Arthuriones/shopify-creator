@@ -18,6 +18,7 @@ import {
   Settings2,
   Sparkles,
   Store,
+  MessageSquareText,
   WandSparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -80,6 +81,12 @@ const navSections: NavSection[] = [
         label: "Otimizador IA",
         description: "Texto, SEO e imagem",
         icon: Sparkles,
+      },
+      {
+        href: "/reviews",
+        label: "Gerador de reviews",
+        description: "UGC sintetico com IA",
+        icon: MessageSquareText,
       },
     ],
   },

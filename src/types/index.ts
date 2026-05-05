@@ -12,6 +12,7 @@ export interface Store {
   store_description: string | null;
   logo_path: string | null;
   currency_code: string;
+  target_language: string;
   auto_convert_prices: boolean;
   currency_rate: number;
   price_markup_percent: number;
@@ -25,6 +26,7 @@ export interface StoreContext {
   targetAudience: string;
   brandVoice: string;
   storeDescription: string;
+  targetLanguage: string;
 }
 
 export interface StoreAsset {

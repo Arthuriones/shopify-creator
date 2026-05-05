@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createProduct, getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
+import { optimizeProduct } from "@/lib/gemini/client";
 import {
   type PublicShopifyProduct,
   fetchPublicShopifyProducts,
@@ -7,6 +8,7 @@ import {
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
 import { createClient } from "@/lib/supabase/server";
+import type { StoreContext } from "@/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -31,14 +33,110 @@ async function getAuthenticatedUserId() {
 
 async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
-  const { data: store } = await supabase
+  const { data: store, error } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret")
+    .select("name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description, target_language")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();
 
+  if (error) {
+    const { data: fallbackStore } = await supabase
+      .from("stores")
+      .select("name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description")
+      .eq("id", storeId)
+      .eq("user_id", userId)
+      .single();
+
+    return fallbackStore ? { ...fallbackStore, target_language: "pt-BR" } : null;
+  }
+
   return store;
+}
+
+function toStoreContext(store: {
+  name?: string | null;
+  niche?: string | null;
+  target_audience?: string | null;
+  brand_voice?: string | null;
+  store_description?: string | null;
+  target_language?: string | null;
+}): StoreContext | null {
+  if (!store.niche) return null;
+  return {
+    name: store.name || "Loja",
+    niche: store.niche,
+    targetAudience: store.target_audience || "",
+    brandVoice: store.brand_voice || "",
+    storeDescription: store.store_description || "",
+    targetLanguage: store.target_language || "pt-BR",
+  };
+}
+
+async function buildCreateInputForTarget(
+  product: PublicShopifyProduct,
+  context: StoreContext | null,
+  publishToStorefront: boolean
+) {
+  const input = {
+    ...toShopifyCreateProductInput(product),
+    publishToStorefront,
+  };
+
+  if (!context || !process.env.GEMINI_API_KEY) return input;
+
+  const optimized = await optimizeProduct(
+    {
+      title: product.title,
+      original_url: product.sourceUrl,
+      description: product.descriptionHtml,
+      price: Number(product.variants[0]?.price || 0),
+      originalPrice: Number(
+        product.variants[0]?.compareAtPrice || product.variants[0]?.price || 0
+      ),
+      images: product.images.map((image) => image.src),
+      specs: {
+        vendor: product.vendor || "",
+        productType: product.productType || "",
+      },
+      rating: 0,
+      orders: 0,
+      variantOptions: product.options.map((option) => ({
+        name: option,
+        values: [
+          ...new Set(
+            product.variants
+              .flatMap((variant) => variant.optionValues)
+              .filter(Boolean)
+          ),
+        ].map((name) => ({ name })),
+      })),
+      variants: product.variants.map((variant) => ({
+        sku: variant.sku || String(variant.id),
+        properties: Object.fromEntries(
+          product.options.map((option, index) => [
+            option,
+            variant.optionValues[index] || "",
+          ])
+        ),
+        price: Number(variant.price || 0),
+        originalPrice: Number(variant.compareAtPrice || variant.price || 0),
+        stock: 0,
+      })),
+    },
+    context
+  );
+
+  return {
+    ...input,
+    title: optimized.title,
+    descriptionHtml: optimized.description,
+    tags: optimized.tags,
+    seo: {
+      title: optimized.seoTitle,
+      description: optimized.seoDescription,
+    },
+  };
 }
 
 function variantSignature(optionValues: string[]) {
@@ -245,6 +343,7 @@ export async function POST(request: NextRequest) {
       clientId: targetStore.client_id,
       clientSecret: targetStore.client_secret,
     };
+    const targetContext = toStoreContext(targetStore);
     const created: { sourceHandle: string; result: unknown }[] = [];
     const skipped: { sourceHandle: string; existingProductId: string }[] = [];
     const failed: { sourceHandle: string; error: string }[] = [];
@@ -267,10 +366,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const result = await createProduct(targetCreds, {
-          ...toShopifyCreateProductInput(product),
-          publishToStorefront,
-        });
+        const result = await createProduct(
+          targetCreds,
+          await buildCreateInputForTarget(product, targetContext, publishToStorefront)
+        );
         const maps = buildVariantMaps(product, result?.syncedProduct);
         Object.assign(aggregateSkuMap, maps.skuMap);
         Object.assign(aggregateVariantMap, maps.variantMap);

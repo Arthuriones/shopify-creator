@@ -13,11 +13,16 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
+function targetLanguage(context?: StoreContext) {
+  return context?.targetLanguage || "pt-BR";
+}
+
 export async function optimizeProduct(
   product: AliExpressProduct,
   context: StoreContext
 ): Promise<OptimizationResult> {
-  const prompt = `Você é um copywriter especialista em e-commerce brasileiro, focado em lojas Shopify de dropshipping que vendem para o público brasileiro.
+  const language = targetLanguage(context);
+  const prompt = `Você é um copywriter especialista em e-commerce para lojas Shopify.
 
 Sua tarefa: transformar este produto importado do AliExpress em um produto profissional para vender no Brasil.
 
@@ -26,6 +31,7 @@ Nicho: "${context.niche}"
 Público-alvo: "${context.targetAudience || "Não especificado"}"
 Voz da marca: "${context.brandVoice || "Profissional e confiante"}"
 Sobre a loja: "${context.storeDescription || "Não especificado"}"
+Idioma final obrigatório: "${language}"
 
 Produto original:
 - Título: ${product.title}
@@ -36,7 +42,7 @@ Produto original:
 - Especificações: ${JSON.stringify(product.specs)}
 
 REGRAS OBRIGATÓRIAS:
-1. TUDO em português brasileiro (pt-BR)
+1. TUDO no idioma final obrigatório "${language}". Não misture idiomas.
 2. Título: máximo 70 caracteres, com palavra-chave principal, sem chinês/caracteres estranhos, sem "AliExpress"
 3. Descrição: HTML formatado e profissional com:
    - Headline chamativa com benefício principal
@@ -66,13 +72,15 @@ Responda APENAS em JSON válido neste formato:
 export async function generateStorePolicies(
   context: StoreContext
 ): Promise<StorePolicy[]> {
-  const prompt = `Gere políticas profissionais e completas para a loja Shopify brasileira "${context.name}" no nicho "${context.niche}".
+  const language = targetLanguage(context);
+  const prompt = `Gere políticas profissionais e completas para a loja Shopify "${context.name}" no nicho "${context.niche}".
 
 Público-alvo: "${context.targetAudience || "Não especificado"}"
 Voz da marca: "${context.brandVoice || "Profissional e confiante"}"
 Sobre a loja: "${context.storeDescription || "Não especificado"}"
+Idioma final obrigatório: "${language}"
 
-Gere 4 políticas em português brasileiro:
+Gere 4 políticas no idioma final obrigatório:
 1. Política de Reembolso
 2. Política de Privacidade
 3. Termos de Serviço
@@ -93,6 +101,7 @@ Cada política deve:
 - Estar formatada em HTML limpo
 - Ser completa mas objetiva
 - Usar linguagem acessível
+- Estar 100% no idioma final obrigatório "${language}"
 
 Responda APENAS em JSON válido:
 [
@@ -111,6 +120,7 @@ export async function suggestThemeImprovements(
   context: StoreContext,
   currentTheme: string
 ): Promise<string> {
+  const language = targetLanguage(context);
   const prompt = `Você é um especialista em design e conversão de lojas Shopify brasileiras.
 
 Loja: "${context.name}"
@@ -119,6 +129,7 @@ Público-alvo: "${context.targetAudience || "Não especificado"}"
 Voz da marca: "${context.brandVoice || "Profissional e confiante"}"
 Sobre a loja: "${context.storeDescription || "Não especificado"}"
 Tema atual: "${currentTheme}"
+Idioma da resposta: "${language}"
 
 Contexto: a loja usa um tema brasileiro otimizado com:
 - Botão "Comprar Agora" verde (#16c789) direto pro checkout
@@ -140,7 +151,7 @@ Sugira melhorias ESPECÍFICAS e PRÁTICAS para aumentar conversão. Inclua:
 5. Cores e tipografia que funcionam no nicho "${context.niche}"
 
 Seja direto e prático. Cada sugestão deve ser acionável.
-Responda em português brasileiro, formatado em Markdown.`;
+Responda no idioma "${language}", formatado em Markdown.`;
 
   const result = await model.generateContent(prompt);
   return result.response.text();
@@ -151,6 +162,7 @@ export async function generateStoreSetup(
 ): Promise<StoreSetup> {
   const storeName = context.name;
   const niche = context.niche;
+  const language = targetLanguage(context);
   const prompt = `Você é um especialista em configuração de lojas Shopify brasileiras de dropshipping usando o tema Vessel.
 
 Gere a configuração COMPLETA da loja "${storeName}" no nicho "${niche}".
@@ -158,6 +170,7 @@ Gere a configuração COMPLETA da loja "${storeName}" no nicho "${niche}".
 Público-alvo: "${context.targetAudience || "Não especificado"}"
 Voz da marca: "${context.brandVoice || "Profissional e confiante"}"
 Sobre a loja: "${context.storeDescription || "Não especificado"}"
+Idioma final obrigatório para políticas, páginas, menus, FAQ e copyright: "${language}"
 
 CONTEXTO DO TEMA VESSEL:
 - Header usa menu com handle "main-menu"
@@ -202,7 +215,7 @@ GERE:
 5. **Copyright**: "2025 ${storeName} - Todos os Direitos Reservados"
 
 REGRAS:
-- TUDO em português brasileiro (pt-BR)
+- TUDO no idioma final obrigatório "${language}"
 - Tom profissional, transmitir confiança
 - HTML limpo sem CSS inline excessivo, usar tags semânticas (h2, h3, p, ul, li)
 - NÃO mencionar China, AliExpress, importação, dropshipping
@@ -259,7 +272,7 @@ export async function generateImageEditPrompt(
   context?: StoreContext
 ): Promise<string> {
   const brandContext = context
-    ? `\nContexto da marca: Loja "${context.name}" no nicho "${context.niche}". ${context.brandVoice ? `Estilo: ${context.brandVoice}.` : ""} ${context.storeDescription || ""}`
+    ? `\nContexto da marca: Loja "${context.name}" no nicho "${context.niche}". Idioma da loja: ${targetLanguage(context)}. ${context.brandVoice ? `Estilo: ${context.brandVoice}.` : ""} ${context.storeDescription || ""}`
     : "";
 
   const prompt = `Você é um especialista em descrição de imagens para e-commerce.

@@ -33,6 +33,7 @@ interface StoreCredentials {
   target_audience: string | null;
   brand_voice: string | null;
   store_description: string | null;
+  target_language?: string | null;
 }
 
 function toStoreContext(store: StoreCredentials): StoreContext | null {
@@ -44,6 +45,7 @@ function toStoreContext(store: StoreCredentials): StoreContext | null {
     targetAudience: store.target_audience || "",
     brandVoice: store.brand_voice || "",
     storeDescription: store.store_description || "",
+    targetLanguage: store.target_language || "pt-BR",
   };
 }
 
@@ -108,20 +110,35 @@ export async function processBulkImportJobs(input: {
         progress: { ...progress, source, step: "Carregando loja" },
       });
 
-      const { data: store } = await supabase
+      const { data: store, error: storeWithLanguageError } = await supabase
         .from("stores")
         .select(
-          "id, user_id, name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description"
+          "id, user_id, name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description, target_language"
         )
         .eq("id", job.store_id)
         .eq("user_id", job.user_id)
         .single();
 
-      if (!store) {
+      let resolvedStore = store;
+      if (storeWithLanguageError) {
+        const { data: fallbackStore } = await supabase
+          .from("stores")
+          .select(
+            "id, user_id, name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description"
+          )
+          .eq("id", job.store_id)
+          .eq("user_id", job.user_id)
+          .single();
+        resolvedStore = fallbackStore
+          ? { ...fallbackStore, target_language: "pt-BR" }
+          : null;
+      }
+
+      if (!resolvedStore) {
         throw new Error("Loja de destino nao encontrada.");
       }
 
-      const storeCredentials = store as StoreCredentials;
+      const storeCredentials = resolvedStore as StoreCredentials;
       const context = toStoreContext(storeCredentials);
 
       await updateJob(job.id, {

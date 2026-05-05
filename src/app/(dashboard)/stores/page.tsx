@@ -56,6 +56,7 @@ interface ConnectedStore {
   brand_voice: string | null;
   store_description: string | null;
   logo_path: string | null;
+  target_language: string;
   currency_code: string;
   auto_convert_prices: boolean;
   currency_rate: number;
@@ -86,6 +87,15 @@ const CURRENCY_OPTIONS = [
   { value: "BRL", label: "BRL - Real brasileiro" },
   { value: "EUR", label: "EUR - Euro" },
   { value: "GBP", label: "GBP - Libra esterlina" },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: "pt-BR", label: "Português do Brasil" },
+  { value: "en-US", label: "English" },
+  { value: "es-ES", label: "Español" },
+  { value: "fr-FR", label: "Français" },
+  { value: "de-DE", label: "Deutsch" },
+  { value: "it-IT", label: "Italiano" },
 ];
 
 function StoreSkeleton() {
@@ -133,17 +143,18 @@ async function ensureStorageBuckets() {
 function normalizeStorePricingDefaults(
   store: Omit<
     ConnectedStore,
-    "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
+    "target_language" | "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
   > &
     Partial<
       Pick<
         ConnectedStore,
-        "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
+        "target_language" | "currency_code" | "auto_convert_prices" | "currency_rate" | "price_markup_percent"
       >
     >
 ): ConnectedStore {
   return {
     ...store,
+    target_language: store.target_language || "pt-BR",
     currency_code: store.currency_code || "USD",
     auto_convert_prices: Boolean(store.auto_convert_prices),
     currency_rate: Number(store.currency_rate) > 0 ? Number(store.currency_rate) : 1,
@@ -169,6 +180,7 @@ export default function StoresPage() {
   const [profileVoice, setProfileVoice] = useState("");
   const [profileCustomVoice, setProfileCustomVoice] = useState("");
   const [profileDescription, setProfileDescription] = useState("");
+  const [profileTargetLanguage, setProfileTargetLanguage] = useState("pt-BR");
   const [profileCurrencyCode, setProfileCurrencyCode] = useState("USD");
   const [profileAutoConvertPrices, setProfileAutoConvertPrices] = useState(false);
   const [profileCurrencyRate, setProfileCurrencyRate] = useState("1");
@@ -231,7 +243,7 @@ export default function StoresPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
+      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, target_language, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -310,7 +322,7 @@ export default function StoresPage() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
+      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, target_language, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -357,6 +369,7 @@ export default function StoresPage() {
       setProfileCustomVoice("");
     }
     setProfileDescription(store.store_description || "");
+    setProfileTargetLanguage(store.target_language || "pt-BR");
     setProfileCurrencyCode(store.currency_code || "USD");
     setProfileAutoConvertPrices(Boolean(store.auto_convert_prices));
     setProfileCurrencyRate(
@@ -685,22 +698,37 @@ export default function StoresPage() {
 
       const brandVoice = profileVoice === "custom" ? profileCustomVoice : profileVoice;
 
+      const profilePayload = {
+        niche: profileNiche.trim(),
+        target_audience: profileAudience.trim() || null,
+        brand_voice: brandVoice || null,
+        store_description: profileDescription.trim() || null,
+        logo_path: logoPath,
+        target_language: profileTargetLanguage,
+        currency_code: profileCurrencyCode,
+        auto_convert_prices: profileAutoConvertPrices,
+        currency_rate: parsedCurrencyRate,
+        price_markup_percent: parsedMarkupPercent,
+      };
+
       const { error } = await supabase
         .from("stores")
-        .update({
-          niche: profileNiche.trim(),
-          target_audience: profileAudience.trim() || null,
-          brand_voice: brandVoice || null,
-          store_description: profileDescription.trim() || null,
-          logo_path: logoPath,
-          currency_code: profileCurrencyCode,
-          auto_convert_prices: profileAutoConvertPrices,
-          currency_rate: parsedCurrencyRate,
-          price_markup_percent: parsedMarkupPercent,
-        })
+        .update(profilePayload)
         .eq("id", editingStore.id);
 
-      if (error) throw new Error(error.message);
+      if (error && /target_language/i.test(error.message)) {
+        const fallbackPayload: Partial<typeof profilePayload> = { ...profilePayload };
+        delete fallbackPayload.target_language;
+        const { error: fallbackError } = await supabase
+          .from("stores")
+          .update(fallbackPayload)
+          .eq("id", editingStore.id);
+
+        if (fallbackError) throw new Error(fallbackError.message);
+        toast.warning("Perfil salvo, mas aplique a migration 010 para salvar o idioma da loja.");
+      } else if (error) {
+        throw new Error(error.message);
+      }
 
       await loadStores();
       await loadStoreAssets(editingStore.id);
@@ -1171,6 +1199,11 @@ export default function StoresPage() {
                     <Badge variant="outline" className="w-fit text-[11px] border-border/30">
                       {store.currency_code || "USD"}
                     </Badge>
+                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
+                      {LANGUAGE_OPTIONS.find((option) => option.value === store.target_language)?.label ||
+                        store.target_language ||
+                        "Português do Brasil"}
+                    </Badge>
                     {store.auto_convert_prices && (
                       <Badge
                         className="w-fit text-[10px] font-medium"
@@ -1483,6 +1516,31 @@ export default function StoresPage() {
               />
               <p className="text-[11px] text-muted-foreground/50">
                 Quanto mais contexto, melhor a IA gera textos e descrições
+              </p>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
+              <Label className="text-[13px] text-muted-foreground">
+                Idioma principal da loja
+              </Label>
+              <Select
+                value={profileTargetLanguage}
+                onValueChange={(value) => setProfileTargetLanguage(value ?? "pt-BR")}
+              >
+                <SelectTrigger className="h-10 bg-background/60 border-border/50 text-sm">
+                  <SelectValue placeholder="Selecione o idioma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGE_OPTIONS.map((language) => (
+                    <SelectItem key={language.value} value={language.value}>
+                      {language.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] leading-5 text-muted-foreground/80">
+                Produtos otimizados, descrições, SEO, políticas, páginas e menus
+                serão gerados nesse idioma para esta loja.
               </p>
             </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileText, Palette, Upload } from "lucide-react";
+import { FileText, Loader2, PackageSearch, Palette, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { StorePolicy } from "@/types";
@@ -30,6 +31,15 @@ interface StoreOption {
   name: string;
   shop_domain: string;
   niche: string | null;
+  target_language?: string | null;
+}
+
+interface OptimizedProductResult {
+  title: string;
+  description: string;
+  tags: string[];
+  seoTitle: string;
+  seoDescription: string;
 }
 
 function PolicySkeleton() {
@@ -58,18 +68,37 @@ export default function OptimizerPage() {
   const [loadingPolicies, setLoadingPolicies] = useState(false);
   const [publishingPolicies, setPublishingPolicies] = useState(false);
   const [loadingTheme, setLoadingTheme] = useState(false);
+  const [productTitle, setProductTitle] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productSpecs, setProductSpecs] = useState("");
+  const [optimizingProduct, setOptimizingProduct] = useState(false);
+  const [optimizedProduct, setOptimizedProduct] =
+    useState<OptimizedProductResult | null>(null);
 
   useEffect(() => {
     async function loadStores() {
       const supabase = createClient();
       const { data } = await supabase
         .from("stores")
-        .select("id, name, shop_domain, niche")
+        .select("id, name, shop_domain, niche, target_language")
         .order("created_at", { ascending: false });
       if (data) {
         setStores(data);
         if (data.length === 1) {
           setSelectedStore(data[0].id);
+        }
+        return;
+      }
+
+      const fallback = await supabase
+        .from("stores")
+        .select("id, name, shop_domain, niche")
+        .order("created_at", { ascending: false });
+      if (fallback.data) {
+        setStores(fallback.data.map((store) => ({ ...store, target_language: "pt-BR" })));
+        if (fallback.data.length === 1) {
+          setSelectedStore(fallback.data[0].id);
         }
       }
     }
@@ -184,6 +213,62 @@ export default function OptimizerPage() {
     }
   }
 
+  async function handleOptimizeProduct() {
+    if (!selectedStore) {
+      toast.error("Selecione uma loja");
+      return;
+    }
+    if (!productTitle.trim()) {
+      toast.error("Informe o titulo do produto");
+      return;
+    }
+
+    setOptimizingProduct(true);
+    setOptimizedProduct(null);
+
+    try {
+      const specs = Object.fromEntries(
+        productSpecs
+          .split("\n")
+          .map((line) => line.split(":"))
+          .filter(([key, value]) => key?.trim() && value?.trim())
+          .map(([key, ...value]) => [key.trim(), value.join(":").trim()])
+      );
+
+      const res = await fetch("/api/ai/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: selectedStore,
+          product: {
+            title: productTitle,
+            description: productDescription,
+            price: Number(productPrice.replace(",", ".")) || 0,
+            originalPrice: Number(productPrice.replace(",", ".")) || 0,
+            images: [],
+            specs,
+            rating: 0,
+            orders: 0,
+            variantOptions: [],
+            variants: [],
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao otimizar produto");
+
+      setOptimizedProduct(data.result);
+      toast.success("Produto otimizado no idioma da loja.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao otimizar produto");
+    } finally {
+      setOptimizingProduct(false);
+    }
+  }
+
+  const selectedStoreData = stores.find((s) => s.id === selectedStore);
+
   return (
     <div className="space-y-8">
       <div>
@@ -197,7 +282,7 @@ export default function OptimizerPage() {
           className="mt-1 text-base text-muted-foreground"
           style={{ letterSpacing: "-0.01em" }}
         >
-          Gere politicas e otimize o tema da sua loja com IA
+          Otimize produtos, politicas e orientacoes de tema usando o idioma configurado em cada loja
         </p>
       </div>
 
@@ -223,6 +308,30 @@ export default function OptimizerPage() {
           </Select>
         </div>
       )}
+
+      {selectedStoreData ? (
+        <Card className="border-primary/25 bg-primary/8">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Loja em uso: {selectedStoreData.name}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Tudo que a IA gerar nesta tela sai no idioma{" "}
+                <span className="font-semibold text-foreground">
+                  {selectedStoreData.target_language || "pt-BR"}
+                </span>
+                . Para trocar, edite o perfil da loja em Lojas conectadas.
+              </p>
+            </div>
+            <Link href="/stores">
+              <Button variant="outline" size="sm">
+                Editar perfil
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="border-border/50">
         <CardHeader>
@@ -281,8 +390,12 @@ export default function OptimizerPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="policies">
+      <Tabs defaultValue="product">
         <TabsList className="bg-card border border-border/50">
+          <TabsTrigger value="product" className="text-[13px]">
+            <PackageSearch className="mr-2 h-3.5 w-3.5" />
+            Produto
+          </TabsTrigger>
           <TabsTrigger value="policies" className="text-[13px]">
             <FileText className="mr-2 h-3.5 w-3.5" />
             Politicas
@@ -292,6 +405,134 @@ export default function OptimizerPage() {
             Tema
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="product" className="space-y-4 animate-fade-in">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,520px)_1fr]">
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Otimizar produto
+                </CardTitle>
+                <CardDescription>
+                  Cole um produto bruto ou rascunho. A IA devolve titulo, descricao,
+                  tags e SEO no idioma da loja selecionada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Titulo original</Label>
+                  <Input
+                    value={productTitle}
+                    onChange={(event) => setProductTitle(event.target.value)}
+                    placeholder="Ex: Nike running shirt dry fit"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Descricao ou informacoes do fornecedor</Label>
+                  <Textarea
+                    value={productDescription}
+                    onChange={(event) => setProductDescription(event.target.value)}
+                    rows={6}
+                    placeholder="Cole descricao, beneficios, materiais, medidas..."
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Preco base</Label>
+                    <Input
+                      value={productPrice}
+                      onChange={(event) => setProductPrice(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="Ex: 49.90"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Especificacoes</Label>
+                    <Textarea
+                      value={productSpecs}
+                      onChange={(event) => setProductSpecs(event.target.value)}
+                      rows={3}
+                      placeholder={"Material: algodao\nCor: preto\nTamanho: P-M-G"}
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleOptimizeProduct}
+                  disabled={optimizingProduct || !selectedStore || !productTitle.trim()}
+                >
+                  {optimizingProduct ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Otimizar no idioma da loja
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-lg">Resultado pronto</CardTitle>
+                <CardDescription>
+                  Use este conteudo para cadastro manual, catalogo ou revisao antes de publicar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {optimizedProduct ? (
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Titulo</Label>
+                      <div className="mt-2 rounded-lg border border-border/60 bg-background/55 p-3 text-sm font-semibold">
+                        {optimizedProduct.title}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Descricao HTML</Label>
+                      <div
+                        className="mt-2 max-h-64 overflow-auto rounded-lg border border-border/60 bg-background/55 p-3 text-sm leading-6"
+                        dangerouslySetInnerHTML={{ __html: optimizedProduct.description }}
+                      />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <Label>Tags</Label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {optimizedProduct.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-md border border-border/60 bg-background/55 px-2 py-1 text-xs"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <Label>SEO title</Label>
+                          <p className="mt-1 rounded-md border border-border/60 bg-background/55 p-2 text-xs">
+                            {optimizedProduct.seoTitle}
+                          </p>
+                        </div>
+                        <div>
+                          <Label>SEO description</Label>
+                          <p className="mt-1 rounded-md border border-border/60 bg-background/55 p-2 text-xs leading-5">
+                            {optimizedProduct.seoDescription}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
+                    O resultado aparece aqui depois da otimizacao.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
         <TabsContent value="policies" className="space-y-4 animate-fade-in">
           <div className="flex gap-3">

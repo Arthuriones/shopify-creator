@@ -22,17 +22,29 @@ export async function POST(req: NextRequest) {
     // Optional: Get store context to tailor the description
     let storeContext = "";
     if (storeId) {
-      const { data: store } = await supabase
+      const { data: store, error: storeError } = await supabase
         .from("stores")
-        .select("niche, target_audience, brand_voice")
+        .select("niche, target_audience, brand_voice, target_language")
         .eq("id", storeId)
         .single();
+      let resolvedStore = store;
+      if (storeError) {
+        const { data: fallbackStore } = await supabase
+          .from("stores")
+          .select("niche, target_audience, brand_voice")
+          .eq("id", storeId)
+          .single();
+        resolvedStore = fallbackStore
+          ? { ...fallbackStore, target_language: "pt-BR" }
+          : null;
+      }
       
-      if (store) {
+      if (resolvedStore) {
         storeContext = `
-A loja atua no nicho de: ${store?.niche || "Geral"}.
-Público-alvo: ${store?.target_audience || "Geral"}.
-Tom de voz da marca: ${store?.brand_voice || "Elegante e persuasivo"}.
+A loja atua no nicho de: ${resolvedStore?.niche || "Geral"}.
+Público-alvo: ${resolvedStore?.target_audience || "Geral"}.
+Tom de voz da marca: ${resolvedStore?.brand_voice || "Elegante e persuasivo"}.
+Idioma final obrigatório: ${resolvedStore?.target_language || "pt-BR"}.
 `;
       }
     }
@@ -65,6 +77,7 @@ Crie uma descrição no seguinte formato (retorne APENAS o HTML da descrição, 
 </ul>
 
 INSTRUÇÕES:
+- Escreva 100% no idioma final obrigatório da loja quando informado.
 - Adapte os adjetivos e o texto para se encaixar com o nicho e tom de voz da loja.
 - Substitua todos os colchetes pelo conteúdo adequado e criativo baseado no produto real.
 - O texto DEVE ter exatamente 3 parágrafos narrativos elegantes e depois a lista de características.

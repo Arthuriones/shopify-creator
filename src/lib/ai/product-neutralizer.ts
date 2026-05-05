@@ -15,6 +15,7 @@ interface ProductNeutralizeInput {
   seo?: { title?: string; description?: string };
   images?: ProductImageInput[];
   maxImages?: number;
+  targetLanguage?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   storageClient: any;
 }
@@ -102,6 +103,7 @@ async function ensureProductImagesBucket() {
 }
 
 async function neutralizeText(input: ProductNeutralizeInput) {
+  const language = input.targetLanguage || "pt-BR";
   const prompt = `Voce e um especialista em catalogo de e-commerce.
 
 Transforme este produto em uma versao neutra, sem marca registrada, sem logo e sem qualquer identificador de marca.
@@ -111,13 +113,14 @@ Titulo: ${input.title}
 Descricao HTML: ${input.descriptionHtml || ""}
 Tags: ${(input.tags || []).join(", ")}
 SEO: ${JSON.stringify(input.seo || {})}
+Idioma final obrigatório: ${language}
 
 Regras obrigatorias:
 - Remova nomes como Nike, Adidas, Apple, Gucci, Louis Vuitton e qualquer marca reconhecivel.
 - Se o titulo for "camisa nike", retorne algo como "camisa" ou "camiseta esportiva", preservando o tipo do produto.
 - Nao invente uma nova marca.
 - Preserve material, cor, publico, uso e detalhes comerciais quando forem seguros.
-- Tudo em portugues brasileiro.
+- Tudo no idioma final obrigatório "${language}".
 - Titulo com no maximo 70 caracteres.
 - Descricao em HTML limpo, objetiva e vendavel.
 - Tags genericas, sem marcas.
@@ -185,6 +188,7 @@ async function neutralizeImage(
             text: `Neutralize this e-commerce product image.
 
 Product: "${title}"
+Target language for any internal reasoning: "${input.targetLanguage || "pt-BR"}"
 
 Requirements:
 - Remove every visible brand logo, trademark, badge, wordmark, monogram, watermark, store name, and identifying text.
