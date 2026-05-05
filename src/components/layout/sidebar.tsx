@@ -53,7 +53,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[304px] flex-col border-r border-sidebar-border bg-sidebar shadow-2xl shadow-black/20 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-[304px] flex-col border-r border-sidebar-border bg-sidebar/95 shadow-xl shadow-primary/10 md:flex">
         <div className="border-b border-sidebar-border px-6 pb-5 pt-6">
           <div
             className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg shadow-primary/25"
@@ -85,7 +85,7 @@ export function Sidebar() {
                   className={cn(
                     "group relative flex items-center gap-3 rounded-lg px-4 py-3.5 text-[16px] font-semibold transition-all duration-200",
                     isActive
-                      ? "bg-sidebar-accent text-sidebar-foreground shadow-sm shadow-black/20"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm shadow-primary/10"
                       : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
                   )}
                 >

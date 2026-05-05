@@ -148,6 +148,10 @@ function normalizeMatchKey(value: string) {
     .trim();
 }
 
+function looksLikeGeneratedId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
   return products.flatMap((product) =>
     (product.variants?.nodes || []).map((variant) => {
@@ -216,7 +220,7 @@ function buildSuggestedMaps(
 function formatStoreLabel(store?: StoreOption) {
   if (!store) return "Selecione uma loja";
   if (store.shop_domain) return store.shop_domain;
-  if (store.name && store.name !== store.id) return store.name;
+  if (store.name && store.name !== store.id && !looksLikeGeneratedId(store.name)) return store.name;
   return `Loja ${store.id.slice(0, 8)}`;
 }
 
@@ -387,7 +391,7 @@ function RoutedCheckoutTutorial({
     {
       title: "Usar o token da rota",
       detail:
-        "O atributo data-token deve ser o token da rota ativa criada nesta tela. Sem token, o loader não roda.",
+        "O atributo data-token recebe o token público da rota. Ele é gerado automaticamente quando você cria a rota e identifica qual mapeamento este script deve usar.",
     },
     {
       title: "Ajustar o carrinho nativo",
@@ -396,12 +400,35 @@ function RoutedCheckoutTutorial({
     },
   ];
 
+  const tokenGuide = [
+    {
+      title: "O que é",
+      detail:
+        "É um identificador público da configuração de roteamento. Ele não é a senha da Shopify e não dá acesso ao admin; ele só aponta para uma rota ativa deste app.",
+    },
+    {
+      title: "Como gera",
+      detail:
+        "Escolha vitrine, dark store, modo e mapas. Depois clique em Criar rota. O app salva a rota e cria o token automaticamente.",
+    },
+    {
+      title: "Onde pega",
+      detail:
+        "Depois de criar a rota, esta tela preenche o código pronto. Você também pode copiar pela lista de Rotas ativas quando houver uma rota habilitada.",
+    },
+    {
+      title: "Onde coloca",
+      detail:
+        "Cole no atributo data-token do script dentro de layout/theme.liquid, na loja vitrine, imediatamente antes de </body>.",
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <Card className="rounded-lg border-primary/30 bg-primary/8">
         <CardHeader>
           <CardTitle className="text-xl">
-            Em português direto: o que este recurso faz?
+            O que este recurso faz?
           </CardTitle>
           <CardDescription>
             Ele deixa uma loja vender como vitrine, mas manda o cliente pagar em outra loja. O cliente vê a vitrine normal; só no clique de checkout o carrinho é recriado na dark store com os produtos equivalentes.
@@ -421,7 +448,31 @@ function RoutedCheckoutTutorial({
         </CardContent>
       </Card>
 
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Card className="rounded-lg border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Token da rota
+          </CardTitle>
+          <CardDescription>
+            É o valor que liga o script instalado na vitrine à rota salva neste painel.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          {tokenGuide.map((item) => (
+            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <p className="font-heading text-sm font-bold text-foreground">
+                {item.title}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Card className="rounded-lg border-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -603,6 +654,16 @@ export default function ClonePage() {
     [stores, targetStoreId]
   );
 
+  const routeSourceOptions = useMemo(
+    () => stores.filter((store) => store.id !== routeTargetStoreId),
+    [stores, routeTargetStoreId]
+  );
+
+  const routeTargetOptions = useMemo(
+    () => stores.filter((store) => store.id !== routeSourceStoreId),
+    [stores, routeSourceStoreId]
+  );
+
   const selectedRouteConfig = useMemo(
     () =>
       configs.find(
@@ -610,7 +671,7 @@ export default function ClonePage() {
           config.source_store_id === routeSourceStoreId &&
           config.target_store_id === routeTargetStoreId &&
           config.enabled
-      ) || configs.find((config) => config.enabled) || null,
+      ) || null,
     [configs, routeSourceStoreId, routeTargetStoreId]
   );
 
@@ -663,8 +724,6 @@ export default function ClonePage() {
       }
       if (loadedStores[1]) {
         setRouteTargetStoreId(loadedStores[1].id);
-      } else if (loadedStores[0]) {
-        setRouteTargetStoreId(loadedStores[0].id);
       }
       setStoresLoading(false);
     }
@@ -704,6 +763,13 @@ export default function ClonePage() {
 
   useEffect(() => {
     if (activeView !== "routed-checkout" || !routeSourceStoreId || !routeTargetStoreId) {
+      return;
+    }
+
+    if (routeSourceStoreId === routeTargetStoreId) {
+      setRouteProductsError("Escolha lojas diferentes: a vitrine e a dark store não podem ser a mesma loja.");
+      setSourceProducts([]);
+      setTargetProducts([]);
       return;
     }
 
@@ -877,6 +943,11 @@ export default function ClonePage() {
       return;
     }
 
+    if (routeSourceStoreId === routeTargetStoreId) {
+      toast.error("A vitrine e a dark store precisam ser lojas diferentes.");
+      return;
+    }
+
     setRouteSaving(true);
     try {
       const res = await fetch("/api/checkout-routes", {
@@ -899,6 +970,24 @@ export default function ClonePage() {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar rota.");
     } finally {
       setRouteSaving(false);
+    }
+  }
+
+  function handleRouteSourceChange(value: string | null) {
+    const nextSource = value || "";
+    setRouteSourceStoreId(nextSource);
+    if (nextSource && nextSource === routeTargetStoreId) {
+      const replacementTarget = stores.find((store) => store.id !== nextSource)?.id || "";
+      setRouteTargetStoreId(replacementTarget);
+    }
+  }
+
+  function handleRouteTargetChange(value: string | null) {
+    const nextTarget = value || "";
+    setRouteTargetStoreId(nextTarget);
+    if (nextTarget && nextTarget === routeSourceStoreId) {
+      const replacementSource = stores.find((store) => store.id !== nextTarget)?.id || "";
+      setRouteSourceStoreId(replacementSource);
     }
   }
 
@@ -1344,12 +1433,12 @@ export default function ClonePage() {
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="space-y-2">
                 <Label>Vitrine</Label>
-                <Select value={routeSourceStoreId} onValueChange={(value) => setRouteSourceStoreId(value || "")}>
+                <Select value={routeSourceStoreId} onValueChange={handleRouteSourceChange}>
                   <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Origem" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {stores.map((store) => (
+                    {routeSourceOptions.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
                         <span className="block max-w-[260px] truncate">
                           {formatStoreLabel(store)}
@@ -1362,12 +1451,12 @@ export default function ClonePage() {
 
               <div className="space-y-2">
                 <Label>Dark store</Label>
-                <Select value={routeTargetStoreId} onValueChange={(value) => setRouteTargetStoreId(value || "")}>
+                <Select value={routeTargetStoreId} onValueChange={handleRouteTargetChange}>
                   <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Destino" />
                   </SelectTrigger>
                   <SelectContent align="start">
-                    {stores.map((store) => (
+                    {routeTargetOptions.map((store) => (
                       <SelectItem key={store.id} value={store.id}>
                         <span className="block max-w-[260px] truncate">
                           {formatStoreLabel(store)}
@@ -1392,6 +1481,12 @@ export default function ClonePage() {
                 </Select>
               </div>
             </div>
+
+            {stores.length < 2 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm leading-6 text-destructive">
+                Conecte pelo menos duas lojas para criar uma rota: uma vitrine e uma dark store.
+              </div>
+            )}
 
             <div className="rounded-lg border border-border/60 bg-background/45 p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1556,7 +1651,10 @@ export default function ClonePage() {
               </div>
             </div>
 
-            <Button onClick={handleCreateRoute} disabled={routeSaving}>
+            <Button
+              onClick={handleCreateRoute}
+              disabled={routeSaving || stores.length < 2 || routeSourceStoreId === routeTargetStoreId}
+            >
               {routeSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Route className="h-4 w-4" />}
               Criar rota
             </Button>
