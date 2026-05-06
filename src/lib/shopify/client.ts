@@ -498,6 +498,192 @@ async function applyInitialInventoryQuantities(
   return warnings;
 }
 
+export async function syncProductCollections(
+  creds: ShopifyCredentials,
+  input: {
+    collections: { handle: string; title: string }[];
+    assignments: { collectionHandle: string; productIds: string[] }[];
+  }
+) {
+  type ShopifyUserError = { field?: string[]; message: string };
+
+  function formatErrors(errors: ShopifyUserError[] | undefined) {
+    return (errors || [])
+      .map((error) =>
+        error.field?.length
+          ? `${error.field.join(".")}: ${error.message}`
+          : error.message
+      )
+      .join(" | ");
+  }
+
+  async function findCollectionByHandle(handle: string) {
+    const query = `
+      query findCollection($query: String!) {
+        collections(first: 1, query: $query) {
+          nodes {
+            id
+            title
+            handle
+          }
+        }
+      }
+    `;
+    const data = await shopifyGraphQL(creds, query, {
+      query: `handle:${handle}`,
+    });
+    return data?.collections?.nodes?.[0] as
+      | { id: string; title: string; handle: string }
+      | undefined;
+  }
+
+  async function createCollection(collection: { handle: string; title: string }) {
+    const mutation = `
+      mutation collectionCreate($input: CollectionInput!) {
+        collectionCreate(input: $input) {
+          collection {
+            id
+            title
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const result = await shopifyGraphQL(creds, mutation, {
+      input: {
+        title: collection.title,
+        handle: collection.handle,
+      },
+    });
+    const errors = result?.collectionCreate?.userErrors as
+      | ShopifyUserError[]
+      | undefined;
+    if (errors?.length) {
+      throw new Error(formatErrors(errors) || "Falha ao criar colecao.");
+    }
+    return result?.collectionCreate?.collection as
+      | { id: string; title: string; handle: string }
+      | undefined;
+  }
+
+  async function ensureCollection(collection: { handle: string; title: string }) {
+    const existing = await findCollectionByHandle(collection.handle);
+    if (existing?.id) return existing;
+    return createCollection(collection);
+  }
+
+  function isAlreadyInCollectionError(message: string) {
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes("already") ||
+      normalized.includes("ja esta") ||
+      normalized.includes("já está")
+    );
+  }
+
+  async function runAddProducts(collectionId: string, productIds: string[]) {
+    const mutation = `
+      mutation collectionAddProducts($id: ID!, $productIds: [ID!]!) {
+        collectionAddProducts(id: $id, productIds: $productIds) {
+          collection {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const result = await shopifyGraphQL(creds, mutation, {
+      id: collectionId,
+      productIds: [...new Set(productIds)].filter(Boolean),
+    });
+    const errors = result?.collectionAddProducts?.userErrors as
+      | ShopifyUserError[]
+      | undefined;
+    return errors || [];
+  }
+
+  async function addProducts(collectionId: string, productIds: string[]) {
+    const uniqueProductIds = [...new Set(productIds)].filter(Boolean);
+    const errors = await runAddProducts(collectionId, uniqueProductIds);
+    if (!errors.length) return "";
+
+    if (uniqueProductIds.length === 1) {
+      const blockingErrors = errors.filter(
+        (error) => !isAlreadyInCollectionError(error.message)
+      );
+      return formatErrors(blockingErrors);
+    }
+
+    const warnings: string[] = [];
+    for (const productId of uniqueProductIds) {
+      const singleErrors = await runAddProducts(collectionId, [productId]);
+      const blockingErrors = singleErrors.filter(
+        (error) => !isAlreadyInCollectionError(error.message)
+      );
+      const warning = formatErrors(blockingErrors);
+      if (warning) warnings.push(warning);
+    }
+    return warnings.join(" | ");
+  }
+
+  const collectionByHandle = new Map(
+    input.collections
+      .filter((collection) => collection.handle && collection.title)
+      .map((collection) => [collection.handle, collection])
+  );
+  const warnings: string[] = [];
+  const synced: { handle: string; productCount: number }[] = [];
+
+  for (const assignment of input.assignments) {
+    const productIds = [...new Set(assignment.productIds)].filter(Boolean);
+    if (productIds.length === 0) continue;
+
+    const sourceCollection =
+      collectionByHandle.get(assignment.collectionHandle) || {
+        handle: assignment.collectionHandle,
+        title: assignment.collectionHandle.replace(/[-_]+/g, " "),
+      };
+
+    try {
+      const collection = await ensureCollection(sourceCollection);
+      if (!collection?.id) {
+        warnings.push(`Colecao ${sourceCollection.title} nao retornou ID.`);
+        continue;
+      }
+      const publication = await publishProductToStorefront(creds, collection.id);
+      if (!publication.ok && publication.reason) {
+        warnings.push(
+          `${sourceCollection.title}: colecao criada, mas nao publicada no Online Store (${publication.reason})`
+        );
+      }
+      const addWarning = await addProducts(collection.id, productIds);
+      if (addWarning) {
+        warnings.push(`${sourceCollection.title}: ${addWarning}`);
+      } else {
+        synced.push({
+          handle: sourceCollection.handle,
+          productCount: productIds.length,
+        });
+      }
+    } catch (error) {
+      warnings.push(
+        `${sourceCollection.title}: ${
+          error instanceof Error ? error.message : "falha ao sincronizar"
+        }`
+      );
+    }
+  }
+
+  return { synced, warnings };
+}
+
 export async function createProduct(
   creds: ShopifyCredentials,
   input: {

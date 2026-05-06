@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { getPublicAppUrl } from "@/lib/public-url";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -170,6 +171,10 @@ export default function StoresPage() {
   const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const publicAppUrl =
+    typeof window !== "undefined"
+      ? getPublicAppUrl(window.location.origin)
+      : getPublicAppUrl();
   const [showTutorial, setShowTutorial] = useState(false);
 
   // Profile editing
@@ -761,19 +766,13 @@ export default function StoresPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-in">
+      <header className="flex items-center justify-between border-b border-border/60 pb-5">
         <div>
-          <h2
-            className="text-3xl font-semibold text-foreground"
-            style={{ letterSpacing: "-0.03em" }}
-          >
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Lojas
-          </h2>
-          <p
-            className="mt-1 text-base text-muted-foreground"
-            style={{ letterSpacing: "-0.01em" }}
-          >
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
             Conecte e configure suas lojas Shopify
           </p>
         </div>
@@ -846,18 +845,14 @@ export default function StoresPage() {
                     <strong className="text-foreground/90">URLs de redirecionamento</strong>, cole exatamente:
                   </p>
                   <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    {typeof window !== "undefined"
-                      ? `${window.location.origin}/api/shopify/auth`
-                      : "https://SEU-DOMINIO/api/shopify/auth"}
+                    {`${publicAppUrl}/api/shopify/auth`}
                   </p>
                   <p>
                     <strong className="text-foreground/90">4.</strong> Em{" "}
                     <strong className="text-foreground/90">URL do app</strong>, cole apenas o dominio (sem o /api/shopify/auth):
                   </p>
                   <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    {typeof window !== "undefined"
-                      ? window.location.origin
-                      : "https://SEU-DOMINIO"}
+                    {publicAppUrl}
                   </p>
                   <p>
                     Marque <strong className="text-foreground/90">Usar fluxo de instalacao legado</strong> e clica em <strong className="text-foreground/90">Lancar</strong> a versao no topo da pagina.
@@ -958,7 +953,7 @@ export default function StoresPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </header>
 
       {!loadingStores && stores.length > 0 && (
         <Card className="border-border/50">

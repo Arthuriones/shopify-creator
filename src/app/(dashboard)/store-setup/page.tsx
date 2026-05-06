@@ -164,21 +164,15 @@ export default function StoreSetupPage() {
   )?.shop_domain;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2
-          className="text-3xl font-semibold text-foreground"
-          style={{ letterSpacing: "-0.03em" }}
-        >
+    <div className="space-y-6 animate-fade-in">
+      <header className="border-b border-border/60 pb-5">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           Setup da Loja
-        </h2>
-        <p
-          className="mt-1 text-base text-muted-foreground"
-          style={{ letterSpacing: "-0.01em" }}
-        >
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Gere politicas, menus, paginas e rodape com um clique
         </p>
-      </div>
+      </header>
 
       {/* Config */}
       <Card className="border-border/50">

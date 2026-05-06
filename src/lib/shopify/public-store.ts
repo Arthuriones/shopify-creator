@@ -21,6 +21,7 @@ export interface PublicShopifyProduct {
   images: { src: string; altText: string }[];
   variants: PublicShopifyVariant[];
   sourceUrl: string;
+  collectionHandles?: string[];
 }
 
 export interface PublicShopifyCollection {
@@ -279,6 +280,70 @@ export async function fetchPublicShopifyCollections(
   } catch {
     return { domain, collections: [] };
   }
+}
+
+async function fetchCollectionProductHandles(
+  domain: string,
+  collectionHandle: string
+) {
+  const handles = new Set<string>();
+
+  for (let page = 1; page <= 20; page += 1) {
+    try {
+      const res = await fetch(
+        `https://${domain}/collections/${collectionHandle}/products.json?limit=250&page=${page}`,
+        {
+          headers: {
+            accept: "application/json",
+            "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!res.ok) break;
+      const data = (await res.json()) as { products?: ProductsJsonProduct[] };
+      const pageProducts = Array.isArray(data.products) ? data.products : [];
+      if (pageProducts.length === 0) break;
+      pageProducts.forEach((product) => {
+        if (product.handle) handles.add(product.handle);
+      });
+      if (pageProducts.length < 250) break;
+    } catch {
+      break;
+    }
+  }
+
+  return handles;
+}
+
+export async function attachCollectionsToProducts(
+  source: string,
+  products: PublicShopifyProduct[],
+  collections?: PublicShopifyCollection[]
+) {
+  const domain = normalizePublicShopifyDomain(source);
+  if (!domain || products.length === 0) return products;
+
+  const sourceCollections =
+    collections || (await fetchPublicShopifyCollections(source)).collections;
+  if (sourceCollections.length === 0) return products;
+
+  const productsByHandle = new Map(
+    products.map((product) => [product.handle, new Set<string>()])
+  );
+
+  for (const collection of sourceCollections.slice(0, 50)) {
+    const handles = await fetchCollectionProductHandles(domain, collection.handle);
+    handles.forEach((handle) => {
+      productsByHandle.get(handle)?.add(collection.handle);
+    });
+  }
+
+  return products.map((product) => ({
+    ...product,
+    collectionHandles: Array.from(productsByHandle.get(product.handle) || []),
+  }));
 }
 
 export async function fetchPublicShopifyProduct(

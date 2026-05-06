@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createProduct, getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
+import {
+  createProduct,
+  getProducts,
+  syncProductCollections,
+  type ShopifyCredentials,
+} from "@/lib/shopify/client";
 import { optimizeProduct } from "@/lib/gemini/client";
 import {
+  attachCollectionsToProducts,
   type PublicShopifyProduct,
   fetchPublicShopifyCollections,
   fetchPublicShopifyProduct,
@@ -307,6 +313,29 @@ export async function POST(request: NextRequest) {
         .map((handle: unknown) => String(handle).trim())
         .filter(Boolean)
     : [];
+  const sourceCollections = Array.isArray(body.collections)
+    ? body.collections
+        .map((collection: unknown) => {
+          if (!collection || typeof collection !== "object") return null;
+          const item = collection as { handle?: unknown; title?: unknown };
+          const handle = String(item.handle || "").trim();
+          const title = String(item.title || handle).trim();
+          return handle ? { handle, title } : null;
+        })
+        .filter(
+          (collection: { handle: string; title: string } | null): collection is {
+            handle: string;
+            title: string;
+          } => Boolean(collection)
+        )
+    : [];
+  const productCollections =
+    body.productCollections &&
+    typeof body.productCollections === "object" &&
+    !Array.isArray(body.productCollections)
+      ? (body.productCollections as Record<string, unknown>)
+      : {};
+  const applyCollections = body.applyCollections !== false;
   const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
   const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
   const inventoryQuantity =
@@ -353,10 +382,23 @@ export async function POST(request: NextRequest) {
       domain = result.domain;
       products = result.products;
     }
-    const collectionsResult =
-      action === "preview" || action === "export-json"
-        ? await fetchPublicShopifyCollections(source)
-        : { collections: [] };
+    const shouldReadCollections =
+      action === "preview" ||
+      action === "export-json" ||
+      (action === "apply" &&
+        applyCollections &&
+        sourceCollections.length === 0 &&
+        Object.keys(productCollections).length === 0);
+    const collectionsResult = shouldReadCollections
+      ? await fetchPublicShopifyCollections(source)
+      : { collections: [] };
+    if (collectionsResult.collections.length > 0) {
+      products = await attachCollectionsToProducts(
+        source,
+        products,
+        collectionsResult.collections
+      );
+    }
 
     if (action === "export-csv") {
       if (shouldRecordRun) {
@@ -426,6 +468,29 @@ export async function POST(request: NextRequest) {
     const failed: { sourceHandle: string; error: string }[] = [];
     const aggregateSkuMap: Record<string, string> = {};
     const aggregateVariantMap: Record<string, string> = {};
+    const collectionProductIds = new Map<string, Set<string>>();
+    const collectionsForSync =
+      sourceCollections.length > 0
+        ? sourceCollections
+        : collectionsResult.collections.map((collection) => ({
+            handle: collection.handle,
+            title: collection.title,
+          }));
+
+    function assignProductToCollections(product: PublicShopifyProduct, productId?: string) {
+      if (!applyCollections || !productId) return;
+      const explicitCollections = productCollections[product.handle];
+      const collectionHandles = Array.isArray(explicitCollections)
+        ? explicitCollections.map((handle) => String(handle).trim()).filter(Boolean)
+        : product.collectionHandles || [];
+
+      for (const collectionHandle of collectionHandles) {
+        if (!collectionProductIds.has(collectionHandle)) {
+          collectionProductIds.set(collectionHandle, new Set<string>());
+        }
+        collectionProductIds.get(collectionHandle)?.add(productId);
+      }
+    }
 
     for (const product of products) {
       if (request.signal.aborted) {
@@ -442,6 +507,7 @@ export async function POST(request: NextRequest) {
             const maps = buildVariantMaps(product, existing);
             Object.assign(aggregateSkuMap, maps.skuMap);
             Object.assign(aggregateVariantMap, maps.variantMap);
+            assignProductToCollections(product, existing.id);
             continue;
           }
         }
@@ -459,6 +525,7 @@ export async function POST(request: NextRequest) {
         const maps = buildVariantMaps(product, result?.syncedProduct);
         Object.assign(aggregateSkuMap, maps.skuMap);
         Object.assign(aggregateVariantMap, maps.variantMap);
+        assignProductToCollections(product, result?.syncedProduct?.id);
         created.push({ sourceHandle: product.handle, result });
       } catch (error) {
         failed.push({
@@ -474,6 +541,18 @@ export async function POST(request: NextRequest) {
     let routingConfig:
       | { id?: string; public_token?: string }
       | null = null;
+    const collectionSync =
+      collectionProductIds.size > 0
+        ? await syncProductCollections(targetCreds, {
+            collections: collectionsForSync,
+            assignments: Array.from(collectionProductIds.entries()).map(
+              ([collectionHandle, productIds]) => ({
+                collectionHandle,
+                productIds: Array.from(productIds),
+              })
+            ),
+          })
+        : null;
 
     if (createRoutingConfig && sourceStoreId && targetStoreId) {
       routingConfig = await insertRoutingConfig({
@@ -500,8 +579,9 @@ export async function POST(request: NextRequest) {
           failedCount: failed.length,
           skuMapCount: Object.keys(aggregateSkuMap).length,
           variantMapCount: Object.keys(aggregateVariantMap).length,
-          routingConfig,
-        },
+        routingConfig,
+        collectionSync,
+      },
         error:
           failed.length === products.length
             ? "Todos os produtos falharam ao clonar."
@@ -519,6 +599,7 @@ export async function POST(request: NextRequest) {
       variantMapCount: Object.keys(aggregateVariantMap).length,
       skuMap: aggregateSkuMap,
       variantMap: aggregateVariantMap,
+      collectionSync,
       routingConfig,
       created,
       skipped,

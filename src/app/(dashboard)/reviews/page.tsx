@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import { getPublicAppUrl } from "@/lib/public-url";
 
 interface StoreOption {
   id: string;
@@ -214,11 +215,11 @@ export default function ReviewsPage() {
   );
 
   const primarySelectedProduct = selectedProducts[0];
-  const appBaseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "");
+  const appBaseUrl = getPublicAppUrl(
+    typeof window !== "undefined" ? window.location.origin : undefined
+  );
   const widgetScript = `<script
-  src="${appBaseUrl.replace(/\/$/, "")}/reviews-widget-loader.js"
+  src="${appBaseUrl}/reviews-widget-loader.js"
   async>
 </script>`;
 
@@ -392,17 +393,9 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div className="space-y-7 animate-fade-in">
-      <header className="grid gap-4 border-b border-border/60 pb-6 xl:grid-cols-[1fr_420px] xl:items-end">
+    <div className="space-y-6 animate-fade-in">
+      <header className="border-b border-border/60 pb-5">
         <div>
-          <div className="mb-3 flex flex-wrap gap-2">
-            <Badge variant="secondary" className="rounded-md">
-              reviews sinteticos
-            </Badge>
-            <Badge variant="outline" className="rounded-md">
-              fotos IA
-            </Badge>
-          </div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Gerador de Reviews
           </h1>
@@ -411,17 +404,13 @@ export default function ReviewsPage() {
             O conteúdo sai no idioma configurado da loja e vem com disclosure de IA.
           </p>
         </div>
-        <Card className="rounded-lg border-amber-300/70 bg-amber-50/80">
-          <CardContent className="p-4">
-            <div className="flex gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-900" />
-              <p className="text-xs leading-5 text-amber-950">
-                Use como conteúdo sintético ou material de demonstração. Não publique
-                como avaliação real de cliente sem indicar que foi gerado por IA.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mt-3 flex max-w-4xl gap-3 rounded-md border border-amber-300/70 bg-amber-50/80 px-3 py-2">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-900" />
+          <p className="text-xs leading-5 text-amber-950">
+            Use como conteúdo sintético ou material de demonstração. Não publique
+            como avaliação real de cliente sem indicar que foi gerado por IA.
+          </p>
+        </div>
       </header>
 
       <div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">

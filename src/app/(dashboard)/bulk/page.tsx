@@ -194,12 +194,12 @@ export default function BulkImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 py-8 animate-fade-in">
-      <header>
+    <div className="space-y-6 animate-fade-in">
+      <header className="border-b border-border/60 pb-5">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           Importação em lote
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Cole links AliExpress, domínios Shopify ou URLs de produto. O backend importa
           e publica com histórico em jobs; tradução por IA é opcional.
         </p>

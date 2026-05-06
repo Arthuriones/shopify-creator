@@ -6,9 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Boxes,
-  Copy,
   Download,
-  FileJson,
   LayoutDashboard,
   LogOut,
   Package,
@@ -36,7 +34,7 @@ interface NavSection {
 
 const navSections: NavSection[] = [
   {
-    label: "Inicio",
+    label: "Geral",
     items: [
       {
         href: "/dashboard",
@@ -46,7 +44,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "Lojas e setup",
+    label: "Shopify",
     items: [
       {
         href: "/stores",
@@ -58,6 +56,31 @@ const navSections: NavSection[] = [
         label: "Setup da loja",
         icon: Settings2,
       },
+      {
+        href: "/products/catalog",
+        label: "Catálogo Shopify",
+        icon: Boxes,
+      },
+      {
+        href: "/clone/shopify",
+        label: "Clonar loja",
+        icon: Download,
+        children: [
+          { href: "/clone/shopify/individual", label: "Produto individual" },
+          { href: "/clone/shopify/bulk", label: "Importação em massa" },
+          { href: "/clone/export", label: "Exportar catálogo" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "AliExpress",
+    items: [
+      {
+        href: "/bulk",
+        label: "Importar URLs",
+        icon: PackageCheck,
+      },
     ],
   },
   {
@@ -68,46 +91,17 @@ const navSections: NavSection[] = [
         label: "Produtos gerados",
         icon: Package,
       },
-      {
-        href: "/products/catalog",
-        label: "Catalogo Shopify",
-        icon: Boxes,
-      },
     ],
   },
   {
-    label: "Importacao e clone",
-    items: [
-      {
-        href: "/bulk",
-        label: "Importacao em lote",
-        icon: PackageCheck,
-      },
-      {
-        href: "/clone",
-        label: "Central de clone",
-        icon: Copy,
-      },
-      {
-        href: "/clone/shopify",
-        label: "Clonar loja Shopify",
-        icon: Download,
-      },
-      {
-        href: "/clone/export",
-        label: "Exportar catalogo",
-        icon: FileJson,
-      },
-    ],
-  },
-  {
-    label: "Checkout roteado",
+    label: "Routed checkout",
     items: [
       {
         href: "/clone/routed-checkout",
-        label: "Visao do fluxo",
+        label: "Routed checkout",
         icon: Workflow,
         children: [
+          { href: "/clone/routed-checkout", label: "Visão do fluxo" },
           { href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
           { href: "/clone/routed-checkout/create-route", label: "2. Vincular produtos" },
           { href: "/clone/routed-checkout/script", label: "3. Instalar script" },
@@ -122,12 +116,12 @@ const navSections: NavSection[] = [
     items: [
       {
         href: "/optimizer",
-        label: "Otimizador IA",
+        label: "Otimizador",
         icon: Sparkles,
       },
       {
         href: "/reviews",
-        label: "Gerador de reviews",
+        label: "Reviews IA",
         icon: MessageSquareText,
       },
     ],
@@ -137,9 +131,9 @@ const navSections: NavSection[] = [
 const mobileNavItems: NavItem[] = [
   navSections[0].items[0],
   navSections[1].items[0],
-  navSections[2].items[0],
-  navSections[3].items[1],
+  navSections[1].items[3],
   navSections[4].items[0],
+  navSections[5].items[1],
 ];
 
 function splitHref(href: string) {
@@ -179,17 +173,17 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[264px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="border-b border-sidebar-border px-4 py-4">
+      <aside className="sticky top-0 hidden h-screen w-[244px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
+        <div className="border-b border-sidebar-border px-3 py-3">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-sm shadow-primary/20"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md shadow-sm shadow-primary/20"
               style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
             >
               <Package className="h-4 w-4" style={{ color: "oklch(0.13 0.02 155)" }} />
             </div>
             <span
-              className="truncate font-heading text-lg font-bold text-sidebar-foreground"
+              className="truncate font-heading text-[16px] font-bold text-sidebar-foreground"
               style={{ letterSpacing: "-0.01em" }}
             >
               Shopify Creator
@@ -197,10 +191,13 @@ export function Sidebar() {
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
-          <div className="space-y-3">
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+          <div className="space-y-4">
             {navSections.map((section) => (
               <div key={section.label} className="space-y-1">
+                <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-sidebar-foreground/42">
+                  {section.label}
+                </div>
                 {section.items.map((item) => {
                   const isActive = isHrefActive(item.href, true);
                   const isExpanded = item.children ? isItemExpanded(item) : false;
@@ -212,7 +209,7 @@ export function Sidebar() {
                       <Link
                         href={item.href}
                         className={cn(
-                          "group relative flex h-10 items-center gap-3 rounded-md px-3 text-[14px] font-semibold transition-colors",
+                          "group relative flex h-9 items-center gap-2.5 rounded-md px-3 text-[13px] font-semibold transition-colors",
                           isActive
                             ? "bg-sidebar-accent text-sidebar-accent-foreground"
                             : hasActiveChild || isExpanded
@@ -237,7 +234,7 @@ export function Sidebar() {
                         <span className="min-w-0 truncate">{item.label}</span>
                       </Link>
                       {item.children && (isExpanded || hasActiveChild) && (
-                        <div className="space-y-1 border-l border-sidebar-border/80 pb-1 pl-4 pt-1 ml-5">
+                        <div className="ml-5 space-y-1 border-l border-sidebar-border/80 pb-1 pl-3 pt-1">
                           {item.children.map((child, index) => {
                             const childActive = isHrefActive(child.href, true);
                             return (

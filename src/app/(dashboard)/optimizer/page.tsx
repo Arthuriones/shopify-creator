@@ -270,21 +270,15 @@ export default function OptimizerPage() {
   const selectedStoreData = stores.find((s) => s.id === selectedStore);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2
-          className="text-3xl font-semibold text-foreground"
-          style={{ letterSpacing: "-0.03em" }}
-        >
+    <div className="space-y-6 animate-fade-in">
+      <header className="border-b border-border/60 pb-5">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           Otimizador de Loja
-        </h2>
-        <p
-          className="mt-1 text-base text-muted-foreground"
-          style={{ letterSpacing: "-0.01em" }}
-        >
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Otimize produtos, politicas e orientacoes de tema usando o idioma configurado em cada loja
         </p>
-      </div>
+      </header>
 
       {stores.length > 0 && (
         <div className="w-72 space-y-2">

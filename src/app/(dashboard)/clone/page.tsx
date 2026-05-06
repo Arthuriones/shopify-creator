@@ -54,6 +54,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { getPublicAppUrl } from "@/lib/public-url";
 
 interface StoreOption {
   id: string;
@@ -68,6 +69,7 @@ interface PreviewProduct {
   images: { src: string }[];
   variants: { id: number; sku: string | null; price: string }[];
   sourceUrl: string;
+  collectionHandles?: string[];
 }
 
 interface SourceCollection {
@@ -339,9 +341,10 @@ function ServiceIntro({
   steps: string[];
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+    <div className="rounded-lg border border-border/60 bg-card/70 p-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/12 text-primary">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
@@ -353,19 +356,20 @@ function ServiceIntro({
           </p>
         </div>
       </div>
-      <ol className="mt-4 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
+        <ol className="flex flex-wrap gap-2 text-sm text-muted-foreground">
         {steps.map((step, index) => (
           <li
             key={step}
-            className="flex min-w-0 items-start gap-2 rounded-lg border border-border/50 bg-background/45 p-3"
+              className="flex min-w-0 items-center gap-2 rounded-md border border-border/50 bg-background/45 px-3 py-2"
           >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
               {index + 1}
             </span>
-            <span className="leading-5">{step}</span>
+              <span className="leading-5">{step}</span>
           </li>
         ))}
       </ol>
+      </div>
     </div>
   );
 }
@@ -455,30 +459,31 @@ function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <Badge variant="secondary" className="rounded-md">
-            {content.eyebrow}
-          </Badge>
-          <h2 className="mt-3 font-heading text-2xl font-bold tracking-tight text-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="rounded-md">
+              {content.eyebrow}
+            </Badge>
+            {content.checklist.map((item, index) => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/45 px-2 py-1 text-xs text-muted-foreground"
+              >
+                <span className="font-semibold text-primary">{index + 1}</span>
+                {item}
+              </span>
+            ))}
+          </div>
+          <h2 className="mt-3 font-heading text-xl font-bold tracking-tight text-foreground">
             {content.title}
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
             {content.description}
           </p>
         </div>
-        <div className="grid gap-2 text-xs leading-5 text-muted-foreground sm:grid-cols-3 xl:w-[520px]">
-          {content.checklist.map((item, index) => (
-            <div key={item} className="rounded-lg border border-border/60 bg-background/50 p-3">
-              <span className="mb-2 flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-[11px] font-bold text-primary">
-                {index + 1}
-              </span>
-              {item}
-            </div>
-          ))}
-        </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
         {steps.map((step) => {
           const active = routedView === step.view;
           return (
@@ -869,13 +874,13 @@ export default function ClonePage() {
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
   const [routeProductsError, setRouteProductsError] = useState("");
   const [routeProductsRefreshKey, setRouteProductsRefreshKey] = useState(0);
-  const [appOrigin, setAppOrigin] = useState("");
+  const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
 
   const cloneAbortRef = useRef<AbortController | null>(null);
   const destinationAbortRef = useRef<AbortController | null>(null);
 
-  const activeView: CloneView = pathname.endsWith("/shopify")
+  const activeView: CloneView = pathname === "/clone/shopify" || pathname.startsWith("/clone/shopify/")
     ? "shopify"
     : pathname.endsWith("/export")
       ? "export"
@@ -897,6 +902,35 @@ export default function ClonePage() {
     routedView === "create-route" ||
     routedView === "create-destination" ||
     routedView === "neutralize";
+  const routedImportMode: ImportMode | null = pathname.endsWith("/individual")
+    ? "single"
+    : pathname.endsWith("/bulk")
+      ? "bulk"
+      : null;
+  const isImportSubpage = Boolean(routedImportMode);
+  const importPageCopy =
+    routedImportMode === "single"
+      ? {
+          label: "Produto individual",
+          title: "Importar produto individual",
+          description:
+            "Cole uma URL de produto Shopify, revise o item encontrado e publique somente esse produto na loja conectada.",
+          sourceLabel: "URL do produto",
+          sourcePlaceholder: "https://loja.com/products/produto",
+          actionLabel: "Abrir importação individual",
+          icon: PackageCheck,
+        }
+      : {
+          label: "Importação em massa",
+          title: "Importar produtos em massa",
+          description:
+            "Analise uma loja Shopify pública, selecione os produtos desejados, preserve coleções e importe em lotes com progresso.",
+          sourceLabel: "Loja de origem",
+          sourcePlaceholder: "exemplo.myshopify.com ou dominio.com",
+          actionLabel: "Abrir importação em massa",
+          icon: Download,
+        };
+  const ImportPageIcon = importPageCopy.icon;
 
   const pageMeta = {
     overview: {
@@ -1023,15 +1057,27 @@ export default function ClonePage() {
   );
 
   const installToken = selectedRouteConfig?.public_token || "";
-  const installSnippet = `<script
-  src="${appOrigin || "https://seu-app.com"}/routed-checkout-loader.js"
-  data-token="${installToken || "COLE_O_TOKEN_DA_ROTA"}"
+  function buildRoutedInstallSnippet(token: string) {
+    return `<script
+  src="${appOrigin}/routed-checkout-loader.js"
+  data-token="${token}"
   async>
 </script>`;
+  }
+
+  const installSnippet = buildRoutedInstallSnippet(
+    installToken || "COLE_O_TOKEN_DA_ROTA"
+  );
 
   useEffect(() => {
-    setAppOrigin(window.location.origin);
+    setAppOrigin(getPublicAppUrl(window.location.origin));
   }, []);
+
+  useEffect(() => {
+    if (!routedImportMode) return;
+    setImportMode(routedImportMode);
+    setImportModalOpen(true);
+  }, [routedImportMode]);
 
   useEffect(() => {
     async function loadStores() {
@@ -1323,22 +1369,29 @@ export default function ClonePage() {
             ? preview.length
             : 0;
       let resolvedSourceDomain = sourceDomain;
+      let previewForRun = previewKey === currentPreviewKey ? preview : [];
+      let sourceCollectionsForRun = sourceCollections;
       let selectedHandlesForRun =
         importMode === "bulk" && previewKey === currentPreviewKey
           ? selectedProductHandles
           : [];
 
-      if (importMode === "bulk" && total === 0) {
+      if (
+        (importMode === "bulk" && total === 0) ||
+        (importMode === "single" && previewKey !== currentPreviewKey)
+      ) {
         const previewData = await runClone("preview", controller.signal, {
           limit: requestedLimit,
           recordRun: false,
         });
         const loadedProducts = previewData.products || [];
-        total = loadedProducts.length;
+        total = importMode === "single" ? 1 : loadedProducts.length;
         resolvedSourceDomain = previewData.sourceDomain || "";
+        previewForRun = loadedProducts;
+        sourceCollectionsForRun = (previewData.collections || []) as SourceCollection[];
         setPreview(loadedProducts);
         setSourceDomain(resolvedSourceDomain);
-        setSourceCollections((previewData.collections || []) as SourceCollection[]);
+        setSourceCollections(sourceCollectionsForRun);
         selectedHandlesForRun = loadedProducts.map(
           (product: PreviewProduct) => product.handle
         );
@@ -1389,6 +1442,15 @@ export default function ClonePage() {
           (page - 1) * CLONE_BATCH_SIZE,
           page * CLONE_BATCH_SIZE
         );
+        const productCollectionBatch = Object.fromEntries(
+          previewForRun
+            .filter((product) =>
+              handleBatch.length > 0
+                ? handleBatch.includes(product.handle)
+                : product.collectionHandles?.length
+            )
+            .map((product) => [product.handle, product.collectionHandles || []])
+        );
         const data = await runClone("apply", controller.signal, {
           importMode,
           ...(handleBatch.length > 0
@@ -1398,6 +1460,11 @@ export default function ClonePage() {
                 pageSize: CLONE_BATCH_SIZE,
                 limit: CLONE_BATCH_SIZE,
               }),
+          collections: sourceCollectionsForRun.map((collection) => ({
+            handle: collection.handle,
+            title: collection.title,
+          })),
+          productCollections: productCollectionBatch,
           createRoutingConfig: false,
           recordRun: false,
         });
@@ -1485,12 +1552,6 @@ export default function ClonePage() {
       if (cloneAbortRef.current === controller) cloneAbortRef.current = null;
       setApplyLoading(false);
     }
-  }
-
-  function openImportModal(mode: ImportMode) {
-    setImportMode(mode);
-    setImportModalOpen(true);
-    setApplyProgress(null);
   }
 
   function toggleProductHandle(handle: string, checked: boolean) {
@@ -1683,46 +1744,14 @@ export default function ClonePage() {
   }
 
   return (
-    <div className="space-y-7 animate-fade-in">
-      <header className="flex flex-col gap-4 border-b border-border/60 pb-6 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="mb-3 flex items-center gap-2">
-            <Badge variant="secondary" className="rounded-md">
-              multi-fonte
-            </Badge>
-            <Badge variant="outline" className="rounded-md">
-              routed checkout
-            </Badge>
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            {pageMeta.title}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {pageMeta.description}
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
-          {[
-            ["1", "Clone", "Importa produtos de uma loja pública."],
-            ["2", "Exportação", "Gera JSON ou CSV para análise."],
-            ["3", "Checkout", "Liga vitrine e dark store."],
-          ].map(([number, title, description]) => (
-            <div
-              key={number}
-              className="rounded-lg border border-border/60 bg-card/70 p-3"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
-                  {number}
-                </span>
-                {title}
-              </div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {description}
-              </p>
-            </div>
-          ))}
-        </div>
+    <div className="space-y-5 animate-fade-in">
+      <header className="border-b border-border/60 pb-5">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          {pageMeta.title}
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          {pageMeta.description}
+        </p>
       </header>
 
       {activeView === "overview" && <ServiceOverview />}
@@ -1740,34 +1769,42 @@ export default function ClonePage() {
           ]}
         />
 
+        {!isImportSubpage && (
         <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => openImportModal("single")}
-            className="rounded-lg border border-border/60 bg-card p-4 text-left transition-colors hover:border-primary/45 hover:bg-card/80"
+          <Link
+            href="/clone/shopify/individual"
+            className="group rounded-lg border border-primary/35 bg-primary/10 p-4 text-left shadow-sm transition-colors hover:border-primary/65 hover:bg-primary/15"
           >
-            <Badge variant="secondary" className="rounded-md">individual</Badge>
+            <span className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
+              <PackageCheck className="h-4 w-4" />
+              Importar individual
+            </span>
             <h2 className="mt-3 text-lg font-semibold text-foreground">
               Importar produto individual
             </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Use uma URL de produto Shopify específica, configure destino e publique só aquele item.
             </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => openImportModal("bulk")}
-            className="rounded-lg border border-border/60 bg-card p-4 text-left transition-colors hover:border-primary/45 hover:bg-card/80"
+            <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
+          </Link>
+          <Link
+            href="/clone/shopify/bulk"
+            className="group rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/55 hover:bg-card/80"
           >
-            <Badge variant="outline" className="rounded-md">massa</Badge>
+            <span className="inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-sm font-bold text-foreground">
+              <Download className="h-4 w-4 text-primary" />
+              Importar em massa
+            </span>
             <h2 className="mt-3 text-lg font-semibold text-foreground">
               Importar em massa
             </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
               Leia a loja, selecione produtos, veja coleções encontradas e importe em lotes com progresso.
             </p>
-          </button>
+            <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
+          </Link>
         </div>
+        )}
 
         <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
           <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-5xl">
@@ -2074,6 +2111,75 @@ export default function ClonePage() {
           </DialogContent>
         </Dialog>
 
+        {isImportSubpage ? (
+          <Card className="rounded-lg border-border/60">
+            <CardHeader className="space-y-3">
+              <Badge variant="secondary" className="w-fit rounded-md">
+                {importPageCopy.label}
+              </Badge>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl">
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <ImportPageIcon className="h-5 w-5 text-primary" />
+                    {importPageCopy.title}
+                  </CardTitle>
+                  <CardDescription className="mt-2 text-sm leading-6">
+                    {importPageCopy.description}
+                  </CardDescription>
+                </div>
+                <Button onClick={() => setImportModalOpen(true)} className="w-full sm:w-auto">
+                  <Store className="h-4 w-4" />
+                  {importPageCopy.actionLabel}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="rounded-lg border border-border/60 bg-background/50 p-4">
+                <Label htmlFor="subpage-source">{importPageCopy.sourceLabel}</Label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="subpage-source"
+                    value={source}
+                    onChange={(event) => setSource(event.target.value)}
+                    placeholder={importPageCopy.sourcePlaceholder}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handlePreview}
+                    disabled={previewLoading || !source.trim()}
+                    className="sm:w-auto"
+                  >
+                    {previewLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <WandSparkles className="h-4 w-4" />
+                    )}
+                    Analisar
+                  </Button>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  O botão principal abre todas as opções: loja destino,
+                  tradução, publicação, estoque, coleções e seleção de produtos.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Resumo da prévia
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {preview.length > 0
+                    ? `${preview.length} produto(s) carregado(s) de ${sourceDomain || "origem analisada"}.`
+                    : "Nenhum produto carregado ainda."}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {sourceCollections.length > 0
+                    ? `${sourceCollections.length} coleção(ões) reconhecida(s) para aplicar no destino.`
+                    : "Coleções aparecem depois da análise quando a loja de origem permite leitura pública."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="rounded-lg border-border/60">
             <CardHeader>
@@ -2454,6 +2560,7 @@ export default function ClonePage() {
           </CardContent>
         </Card>
         </div>
+        )}
       </section>
       )}
 
@@ -3331,7 +3438,9 @@ export default function ClonePage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {configs.map((config) => (
+                {configs.map((config) => {
+                  const routeSnippet = buildRoutedInstallSnippet(config.public_token);
+                  return (
                   <div
                     key={config.id}
                     className="rounded-lg border border-border/60 bg-background/45 p-4"
@@ -3359,24 +3468,34 @@ export default function ClonePage() {
                       </span>
                       <span className="break-all">{config.public_token}</span>
                     </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Label className="text-xs font-semibold text-foreground">
+                          Código completo para colar na vitrine
+                        </Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            copyToClipboard(routeSnippet, "script da rota")
+                          }
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copiar script
+                        </Button>
+                      </div>
+                      <Textarea
+                        readOnly
+                        value={routeSnippet}
+                        className="min-h-32 resize-y font-mono text-xs leading-6"
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Cole este bloco inteiro em <code>layout/theme.liquid</code>,
+                        imediatamente antes de <code>&lt;/body&gt;</code>, na loja vitrine.
+                      </p>
+                    </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          copyToClipboard(
-                            `<script
-  src="${appOrigin || "https://seu-app.com"}/routed-checkout-loader.js"
-  data-token="${config.public_token}"
-  async>
-</script>`,
-                            "script da rota"
-                          )
-                        }
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                        Copiar código
-                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -3400,7 +3519,8 @@ export default function ClonePage() {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
