@@ -377,8 +377,70 @@ export async function createProduct(
     publishToStorefront?: boolean;
   }
 ) {
+  type ShopifyUserError = { field?: string[]; message: string };
+
+  function assertNoUserErrors(
+    errors: ShopifyUserError[] | undefined,
+    context: string
+  ) {
+    if (!errors || errors.length === 0) return;
+    throw new Error(
+      `${context}: ${errors
+        .map((error) =>
+          error.field?.length
+            ? `${error.field.join(".")}: ${error.message}`
+            : error.message
+        )
+        .join(" | ")}`
+    );
+  }
+
+  function normalizePrice(value: string | number | null | undefined) {
+    if (typeof value === "number") {
+      const numeric = value > 999 && Number.isInteger(value) ? value / 100 : value;
+      return Number.isFinite(numeric) ? numeric.toFixed(2) : "0.00";
+    }
+
+    const raw = String(value ?? "")
+      .trim()
+      .replace(/[^\d,.-]/g, "");
+    const normalized =
+      raw.includes(",") && !raw.includes(".")
+        ? raw.replace(/\./g, "").replace(",", ".")
+        : raw.replace(/,/g, "");
+    const numeric = Number(normalized || 0);
+    return Number.isFinite(numeric) ? numeric.toFixed(2) : "0.00";
+  }
+
+  function buildProductOptions() {
+    if (!hasMultipleVariants || !input.options?.length) return undefined;
+    return input.options.map((optionName, optionIndex) => {
+      const values = [
+        ...new Set(
+          normalizedVariants
+            .map((variant) => variant.options?.[optionIndex])
+            .filter((value): value is string => Boolean(value?.trim()))
+        ),
+      ];
+      return {
+        name: optionName,
+        values: (values.length ? values : ["Default"]).map((name) => ({ name })),
+      };
+    });
+  }
+
   const shouldPublishToStorefront = input.publishToStorefront !== false;
-  const hasMultipleVariants = input.variants.length > 1 && input.options?.length;
+  const normalizedVariants = (
+    input.variants.length > 0 ? input.variants : [{ price: "0.00" }]
+  ).map((variant) => ({
+    ...variant,
+    price: normalizePrice(variant.price),
+    compareAtPrice: variant.compareAtPrice
+      ? normalizePrice(variant.compareAtPrice)
+      : undefined,
+  }));
+  const hasMultipleVariants =
+    normalizedVariants.length > 1 && Boolean(input.options?.length);
 
   // Passo 1: Criar produto com opções se houver variantes
   const createQuery = `
@@ -403,6 +465,10 @@ export async function createProduct(
     seo: input.seo,
     status: shouldPublishToStorefront ? "ACTIVE" : "DRAFT",
   };
+  const productOptions = buildProductOptions();
+  if (productOptions) {
+    productInput.productOptions = productOptions;
+  }
 
   const createResult = await shopifyGraphQL(creds, createQuery, {
     input: productInput,
@@ -410,19 +476,25 @@ export async function createProduct(
 
   const product = createResult.productCreate?.product;
   const userErrors = createResult.productCreate?.userErrors;
-  if (userErrors?.length > 0) {
-    return createResult;
-  }
+  assertNoUserErrors(userErrors, "Falha ao criar produto na Shopify");
   if (!product?.id) {
     throw new Error("Produto criado mas sem ID retornado");
   }
 
   // Passo 2: Configurar variantes
-  const defaultVariantId = product.variants?.nodes?.[0]?.id;
+  let defaultVariantId = product.variants?.nodes?.[0]?.id;
+  if (!defaultVariantId) {
+    const refreshedProduct = await getProductById(creds, product.id).catch(() => null);
+    defaultVariantId = refreshedProduct?.variants?.nodes?.[0]?.id;
+  }
 
   if (hasMultipleVariants) {
     // Atualizar a primeira variante default e criar as adicionais
-    const variantsToCreate = input.variants.slice(1).map((v) => ({
+    if (!defaultVariantId) {
+      throw new Error("Produto criado, mas a Shopify nao retornou a variante para aplicar o preco.");
+    }
+
+    const variantsToCreate = normalizedVariants.slice(1).map((v) => ({
       price: v.price,
       ...(v.compareAtPrice ? { compareAtPrice: v.compareAtPrice } : {}),
       optionValues: (v.options || []).map((val, i) => ({
@@ -432,7 +504,7 @@ export async function createProduct(
     }));
 
     // Atualizar variante default com opções da primeira variante
-    const firstVariant = input.variants[0];
+    const firstVariant = normalizedVariants[0];
     const bulkInput = [
       {
         id: defaultVariantId,
@@ -453,10 +525,14 @@ export async function createProduct(
         }
       }
     `;
-    await shopifyGraphQL(creds, bulkQuery, {
+    const updateResult = await shopifyGraphQL(creds, bulkQuery, {
       productId: product.id,
       variants: bulkInput,
     });
+    assertNoUserErrors(
+      updateResult?.productVariantsBulkUpdate?.userErrors,
+      "Falha ao aplicar preco da primeira variante"
+    );
 
     // Criar variantes adicionais
     if (variantsToCreate.length > 0) {
@@ -468,14 +544,22 @@ export async function createProduct(
           }
         }
       `;
-      await shopifyGraphQL(creds, createVariantsQuery, {
+      const createVariantsResult = await shopifyGraphQL(creds, createVariantsQuery, {
         productId: product.id,
         variants: variantsToCreate,
       });
+      assertNoUserErrors(
+        createVariantsResult?.productVariantsBulkCreate?.userErrors,
+        "Falha ao criar variantes com preco"
+      );
     }
-  } else if (defaultVariantId && input.variants.length > 0) {
+  } else if (normalizedVariants.length > 0) {
+    if (!defaultVariantId) {
+      throw new Error("Produto criado, mas a Shopify nao retornou a variante para aplicar o preco.");
+    }
+
     // Produto simples — só atualizar preço da variante default
-    const variant = input.variants[0];
+    const variant = normalizedVariants[0];
     const variantQuery = `
       mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -484,7 +568,7 @@ export async function createProduct(
         }
       }
     `;
-    await shopifyGraphQL(creds, variantQuery, {
+    const variantResult = await shopifyGraphQL(creds, variantQuery, {
       productId: product.id,
       variants: [{
         id: defaultVariantId,
@@ -492,6 +576,10 @@ export async function createProduct(
         ...(variant.compareAtPrice ? { compareAtPrice: variant.compareAtPrice } : {}),
       }],
     });
+    assertNoUserErrors(
+      variantResult?.productVariantsBulkUpdate?.userErrors,
+      "Falha ao aplicar preco do produto"
+    );
   }
 
   // Passo 3: Adicionar imagens via productCreateMedia
