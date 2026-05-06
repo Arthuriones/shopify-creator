@@ -125,6 +125,9 @@ const DEFAULT_SKU_MAP = "{}";
 
 const DEFAULT_VARIANT_MAP = "{}";
 
+const DEFAULT_CLONE_LIMIT = 250;
+const MAX_CLONE_LIMIT = 1000;
+
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -134,6 +137,12 @@ function downloadBlob(filename: string, blob: Blob) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+function parseCloneLimit(value: string) {
+  const numeric = Number(value || DEFAULT_CLONE_LIMIT);
+  if (!Number.isFinite(numeric)) return DEFAULT_CLONE_LIMIT;
+  return Math.min(Math.max(Math.floor(numeric), 1), MAX_CLONE_LIMIT);
 }
 
 function parseJsonMap(value: string, label: string) {
@@ -773,7 +782,7 @@ export default function ClonePage() {
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
   const [source, setSource] = useState("");
-  const [limit, setLimit] = useState("50");
+  const [limit, setLimit] = useState(String(DEFAULT_CLONE_LIMIT));
   const [targetStoreId, setTargetStoreId] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [cloneMode, setCloneMode] = useState<CloneMode>("identical");
@@ -1139,7 +1148,7 @@ export default function ClonePage() {
       action,
       sourceStoreId,
       targetStoreId,
-      limit: Number(limit || 50),
+      limit: parseCloneLimit(limit),
       publishToStorefront,
       translateProducts: translateCloneProducts,
       duplicatePolicy,
@@ -1221,7 +1230,9 @@ export default function ClonePage() {
     setApplyLoading(true);
     try {
       const data = await runClone("apply");
-      toast.success(`${data.createdCount || 0} produtos aplicados em ${selectedTarget?.name || "Shopify"}.`);
+      toast.success(
+        `${data.createdCount || 0} criados, ${data.skippedCount || 0} pulados e ${data.failedCount || 0} falharam de ${data.attempted || 0} produto(s).`
+      );
       if (data.failedCount) {
         toast.error(`${data.failedCount} produtos falharam.`);
       }
@@ -1491,9 +1502,12 @@ export default function ClonePage() {
                     value={limit}
                     onChange={(event) => setLimit(event.target.value)}
                     inputMode="numeric"
+                    min={1}
+                    max={MAX_CLONE_LIMIT}
+                    type="number"
                   />
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Máximo por execução.
+                    Até {MAX_CLONE_LIMIT} por execução. Padrão: {DEFAULT_CLONE_LIMIT}.
                   </p>
                 </div>
               </div>
@@ -1697,8 +1711,13 @@ export default function ClonePage() {
                 preço e quantidade de variantes.
               </EmptyState>
             ) : (
-              <div className="max-h-[430px] space-y-2 overflow-auto pr-1">
-                {preview.slice(0, 30).map((product) => (
+              <div className="space-y-3">
+                <div className="rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  Mostrando {preview.length} produto(s) carregado(s). Se a loja
+                  tiver mais produtos, aumente o limite e analise novamente.
+                </div>
+                <div className="max-h-[560px] space-y-2 overflow-auto pr-1">
+                {preview.map((product) => (
                   <a
                     key={product.id}
                     href={product.sourceUrl}
@@ -1726,6 +1745,7 @@ export default function ClonePage() {
                     </div>
                   </a>
                 ))}
+                </div>
               </div>
             )}
           </CardContent>
@@ -1781,9 +1801,12 @@ export default function ClonePage() {
                   value={limit}
                   onChange={(event) => setLimit(event.target.value)}
                   inputMode="numeric"
+                  min={1}
+                  max={MAX_CLONE_LIMIT}
+                  type="number"
                 />
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Quantidade máxima.
+                  Quantidade máxima lida da loja. Até {MAX_CLONE_LIMIT}.
                 </p>
               </div>
             </div>

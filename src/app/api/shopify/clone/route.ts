@@ -265,7 +265,11 @@ export async function POST(request: NextRequest) {
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const sourceStoreId =
     typeof body.sourceStoreId === "string" ? body.sourceStoreId : "";
-  const limit = Math.min(Math.max(Number(body.limit || 50), 1), 250);
+  const requestedLimit = Number(body.limit || 250);
+  const limit = Math.min(
+    Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 250, 1),
+    1000
+  );
   const publishToStorefront = body.publishToStorefront !== false;
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
