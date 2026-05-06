@@ -25,7 +25,6 @@ import { useRouter } from "next/navigation";
 interface NavItem {
   href: string;
   label: string;
-  description?: string;
   icon: ComponentType<{ className?: string; style?: CSSProperties }>;
   children?: { href: string; label: string }[];
 }
@@ -42,7 +41,6 @@ const navSections: NavSection[] = [
       {
         href: "/dashboard",
         label: "Visao geral",
-        description: "Resumo das operacoes",
         icon: LayoutDashboard,
       },
     ],
@@ -53,13 +51,11 @@ const navSections: NavSection[] = [
       {
         href: "/stores",
         label: "Lojas conectadas",
-        description: "Credenciais e conexoes Shopify",
         icon: Store,
       },
       {
         href: "/store-setup",
         label: "Setup da loja",
-        description: "Politicas, menus e paginas",
         icon: Settings2,
       },
     ],
@@ -70,13 +66,11 @@ const navSections: NavSection[] = [
       {
         href: "/products",
         label: "Produtos gerados",
-        description: "Edicao e publicacao",
         icon: Package,
       },
       {
         href: "/products/catalog",
         label: "Catalogo Shopify",
-        description: "Produtos lidos das lojas",
         icon: Boxes,
       },
     ],
@@ -87,25 +81,21 @@ const navSections: NavSection[] = [
       {
         href: "/bulk",
         label: "Importacao em lote",
-        description: "Fila de importacao",
         icon: PackageCheck,
       },
       {
         href: "/clone",
         label: "Central de clone",
-        description: "Escolha o recurso",
         icon: Copy,
       },
       {
         href: "/clone/shopify",
         label: "Clonar loja Shopify",
-        description: "Importar vitrine publica",
         icon: Download,
       },
       {
         href: "/clone/export",
         label: "Exportar catalogo",
-        description: "JSON ou CSV",
         icon: FileJson,
       },
     ],
@@ -116,7 +106,6 @@ const navSections: NavSection[] = [
       {
         href: "/clone/routed-checkout",
         label: "Visao do fluxo",
-        description: "Vitrine para dark store",
         icon: Workflow,
         children: [
           { href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
@@ -134,13 +123,11 @@ const navSections: NavSection[] = [
       {
         href: "/optimizer",
         label: "Otimizador IA",
-        description: "Texto, SEO e imagem",
         icon: Sparkles,
       },
       {
         href: "/reviews",
         label: "Gerador de reviews",
-        description: "UGC sintetico com IA",
         icon: MessageSquareText,
       },
     ],
@@ -192,108 +179,96 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[304px] flex-col border-r border-sidebar-border bg-sidebar/95 shadow-xl shadow-primary/10 md:flex">
-        <div className="border-b border-sidebar-border px-6 pb-5 pt-6">
-          <div
-            className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg shadow-primary/25"
-            style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
-          >
-            <Package className="h-5 w-5" style={{ color: "oklch(0.13 0.02 155)" }} />
-          </div>
-          <p
-            className="font-heading text-2xl font-bold text-sidebar-foreground"
-            style={{ letterSpacing: "-0.02em" }}
-          >
-            Shopify Creator
-          </p>
-          <p className="mt-2 text-[0.95rem] leading-6 text-sidebar-foreground/75">
-            Importe, clone, personalize e publique na sua loja.
-          </p>
+      <aside className="sticky top-0 hidden h-screen w-[264px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
+        <div className="border-b border-sidebar-border px-4 py-4">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-sm shadow-primary/20"
+              style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
+            >
+              <Package className="h-4 w-4" style={{ color: "oklch(0.13 0.02 155)" }} />
+            </div>
+            <span
+              className="truncate font-heading text-lg font-bold text-sidebar-foreground"
+              style={{ letterSpacing: "-0.01em" }}
+            >
+              Shopify Creator
+            </span>
+          </Link>
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
-          {navSections.map((section) => (
-            <div key={section.label} className="space-y-1.5">
-              <p className="px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/45">
-                {section.label}
-              </p>
-              {section.items.map((item) => {
-                const isActive = isHrefActive(item.href, true);
-                const isExpanded = item.children ? isItemExpanded(item) : false;
-                const hasActiveChild = item.children?.some((child) =>
-                  isHrefActive(child.href, true)
-                );
-                return (
-                  <div key={`${section.label}-${item.label}`} className="space-y-1">
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "group relative flex items-center gap-3 rounded-lg px-3 py-3 text-[15px] font-semibold transition-all duration-200",
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm shadow-primary/10"
-                          : hasActiveChild || isExpanded
-                            ? "bg-sidebar-accent/30 text-sidebar-foreground hover:bg-sidebar-accent/45"
-                            : "text-muted-foreground hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
-                      )}
-                    >
-                      {(isActive || hasActiveChild) && (
-                        <div
-                          className="absolute left-1 top-1/2 h-7 w-1 -translate-y-1/2 rounded-full animate-fade-in"
-                          style={{ background: "oklch(0.79 0.184 154)" }}
-                        />
-                      )}
-                      <item.icon
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="space-y-3">
+            {navSections.map((section) => (
+              <div key={section.label} className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = isHrefActive(item.href, true);
+                  const isExpanded = item.children ? isItemExpanded(item) : false;
+                  const hasActiveChild = item.children?.some((child) =>
+                    isHrefActive(child.href, true)
+                  );
+                  return (
+                    <div key={`${section.label}-${item.label}`} className="space-y-1">
+                      <Link
+                        href={item.href}
                         className={cn(
-                          "h-4 w-4 shrink-0 transition-colors duration-200",
-                          isActive || hasActiveChild
-                            ? "text-[oklch(0.79_0.184_154)]"
-                            : "text-muted-foreground group-hover:text-sidebar-foreground"
+                          "group relative flex h-10 items-center gap-3 rounded-md px-3 text-[14px] font-semibold transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : hasActiveChild || isExpanded
+                              ? "bg-sidebar-accent/35 text-sidebar-foreground"
+                              : "text-sidebar-foreground/68 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
                         )}
-                        style={isActive || hasActiveChild ? { color: "oklch(0.79 0.184 154)" } : undefined}
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate">{item.label}</span>
-                        {item.description ? (
-                          <span className="mt-0.5 block truncate text-[11px] font-medium text-sidebar-foreground/52">
-                            {item.description}
-                          </span>
-                        ) : null}
-                      </span>
-                    </Link>
-                    {item.children && (isExpanded || hasActiveChild) && (
-                      <div className="space-y-1 pl-9">
-                        {item.children.map((child, index) => (
-                          (() => {
+                      >
+                        {(isActive || hasActiveChild) && (
+                          <span
+                            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
+                            style={{ background: "oklch(0.79 0.184 154)" }}
+                          />
+                        )}
+                        <item.icon
+                          className="h-4 w-4 shrink-0"
+                          style={
+                            isActive || hasActiveChild
+                              ? { color: "oklch(0.79 0.184 154)" }
+                              : undefined
+                          }
+                        />
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </Link>
+                      {item.children && (isExpanded || hasActiveChild) && (
+                        <div className="space-y-1 border-l border-sidebar-border/80 pb-1 pl-4 pt-1 ml-5">
+                          {item.children.map((child, index) => {
                             const childActive = isHrefActive(child.href, true);
                             return (
-                          <Link
-                            key={`${child.label}-${index}`}
-                            href={child.href}
-                            className={cn(
-                              "block rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors",
-                              childActive
-                                ? "bg-sidebar-accent/65 text-sidebar-foreground"
-                                : "text-sidebar-foreground/62 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
-                            )}
-                          >
-                            {child.label}
-                          </Link>
+                              <Link
+                                key={`${child.label}-${index}`}
+                                href={child.href}
+                                className={cn(
+                                  "block rounded-md px-3 py-2 text-[13px] font-semibold transition-colors",
+                                  childActive
+                                    ? "bg-sidebar-accent/70 text-sidebar-foreground"
+                                    : "text-sidebar-foreground/58 hover:bg-sidebar-accent/45 hover:text-sidebar-foreground"
+                                )}
+                              >
+                                {child.label}
+                              </Link>
                             );
-                          })()
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </nav>
 
-        <div className="border-t border-sidebar-border p-4">
+        <div className="border-t border-sidebar-border p-3">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-3.5 text-[16px] font-semibold text-sidebar-foreground/75 transition-all duration-200 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+            className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-[14px] font-semibold text-sidebar-foreground/68 transition-colors hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
           >
             <LogOut className="h-4 w-4" />
             Sair
