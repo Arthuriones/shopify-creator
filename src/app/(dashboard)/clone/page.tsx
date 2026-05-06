@@ -334,6 +334,121 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
+function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
+  const content = {
+    "create-destination": {
+      eyebrow: "Etapa 1",
+      title: "Criar produtos na dark store",
+      description:
+        "Use quando a dark store ainda não tem os produtos equivalentes. O app copia os produtos da vitrine, pode traduzir/neutralizar e já prepara os mapas.",
+      checklist: [
+        "Escolha vitrine e dark store",
+        "Marque tradução ou neutralização se precisar",
+        "Clique em Criar destino",
+      ],
+    },
+    "create-route": {
+      eyebrow: "Etapa 2",
+      title: "Vincular produto da vitrine ao produto da dark store",
+      description:
+        "Aqui você confere qual variante da vitrine vira qual variante da dark store. Se os produtos já batem por SKU ou título, use os mapas reais.",
+      checklist: [
+        "Escolha as duas lojas",
+        "Revise as correspondências",
+        "Crie a rota e copie o token",
+      ],
+    },
+    script: {
+      eyebrow: "Etapa 3",
+      title: "Instalar o script na vitrine",
+      description:
+        "Depois que a rota existe, cole o loader no tema da loja vitrine. O token no script é o que liga a vitrine à rota salva.",
+      checklist: [
+        "Copie o código pronto",
+        "Cole antes de </body>",
+        "Teste em janela anônima",
+      ],
+    },
+    "active-routes": {
+      eyebrow: "Gestão",
+      title: "Rotas, tokens e manutenção",
+      description:
+        "Edite, exclua ou copie tokens das rotas já criadas. Se o checkout não rotear, confira primeiro se o token instalado no tema está nesta lista.",
+      checklist: [
+        "Confira o token ativo",
+        "Edite mapas se necessário",
+        "Copie o script atualizado",
+      ],
+    },
+    neutralize: {
+      eyebrow: "IA opcional",
+      title: "Neutralizar produtos antes de criar destino",
+      description:
+        "Use quando o produto original tem marca, logo ou identificador que não deve aparecer na dark store. A tradução é separada da neutralização.",
+      checklist: [
+        "Escolha as lojas",
+        "Ative neutralização",
+        "Crie destino na dark store",
+      ],
+    },
+  }[routedView];
+
+  const steps = [
+    { view: "create-destination", href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
+    { view: "neutralize", href: "/clone/routed-checkout/neutralize", label: "Opcional: IA" },
+    { view: "create-route", href: "/clone/routed-checkout/create-route", label: "2. Vincular produtos" },
+    { view: "script", href: "/clone/routed-checkout/script", label: "3. Instalar script" },
+    { view: "active-routes", href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <Badge variant="secondary" className="rounded-md">
+            {content.eyebrow}
+          </Badge>
+          <h2 className="mt-3 font-heading text-2xl font-bold tracking-tight text-foreground">
+            {content.title}
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            {content.description}
+          </p>
+        </div>
+        <div className="grid gap-2 text-xs leading-5 text-muted-foreground sm:grid-cols-3 xl:w-[520px]">
+          {content.checklist.map((item, index) => (
+            <div key={item} className="rounded-lg border border-border/60 bg-background/50 p-3">
+              <span className="mb-2 flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-[11px] font-bold text-primary">
+                {index + 1}
+              </span>
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+        {steps.map((step) => {
+          const active = routedView === step.view;
+          return (
+            <Link
+              key={step.href}
+              href={step.href}
+              className={cn(
+                "rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors",
+                active
+                  ? "border-primary/40 bg-primary/12 text-foreground"
+                  : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {step.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ServiceOverview() {
   const services = [
     {
@@ -517,120 +632,108 @@ function RoutedCheckoutTutorial({
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-lg border-primary/30 bg-primary/8">
+      <Card
+        id="routed-script"
+        className="scroll-mt-6 rounded-lg border-primary/30 bg-primary/8"
+      >
         <CardHeader>
-          <CardTitle className="text-xl">
-            O que este recurso faz?
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Code2 className="h-5 w-5 text-primary" />
+            Código pronto para colar na vitrine
           </CardTitle>
           <CardDescription>
-            Ele deixa uma loja vender como vitrine, mas manda o cliente pagar em outra loja. O cliente vê a vitrine normal; só no clique de checkout o carrinho é recriado na dark store com os produtos equivalentes.
+            Instale este loader na loja que o cliente visita. Não use o arquivo de referência <code>cartoriginals.web.app</code>, porque ele aponta para outro app.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {plainMeaning.map((item) => (
-            <div key={item.title} className="rounded-lg border border-border/60 bg-card/80 p-4">
-              <p className="font-heading text-base font-bold text-foreground">
-                {item.title}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {item.detail}
-              </p>
+        <CardContent className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="space-y-3">
+            <CodeBlock>{installSnippet}</CodeBlock>
+            <div className="rounded-lg border border-border/60 bg-card/80 p-3 text-sm leading-6 text-muted-foreground">
+              Cole imediatamente antes de <code>&lt;/body&gt;</code> no arquivo
+              <code> layout/theme.liquid</code>. Se seu editor não mostrar esse
+              arquivo, pesquise por <code>&lt;/body&gt;</code> ou por
+              <code> theme.liquid</code> no painel de código do tema.
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          </div>
 
-      <Card className="rounded-lg border-border/60">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            Token da rota
-          </CardTitle>
-          <CardDescription>
-            É o valor que liga o script instalado na vitrine à rota salva neste painel.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          {tokenGuide.map((item) => (
-            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
-              <p className="font-heading text-sm font-bold text-foreground">
-                {item.title}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {item.detail}
-              </p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-lg border-border/60">
-        <CardHeader>
-          <CardTitle className="text-lg">SKU, GID e modos</CardTitle>
-          <CardDescription>
-            Esses nomes aparecem porque o checkout precisa saber exatamente qual variante da dark store deve substituir cada item da vitrine.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-4">
-          {mapTerms.map((item) => (
-            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
-              <p className="font-heading text-sm font-bold text-foreground">
-                {item.title}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {item.detail}
-              </p>
-            </div>
-          ))}
-          <div className="rounded-lg border border-primary/25 bg-primary/8 p-4 lg:col-span-4">
-            <p className="font-heading text-sm font-bold text-foreground">
-              Diferença dos modos
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {modeGuide.map((item) => (
-                <div key={item.title} className="rounded-lg border border-border/60 bg-card/80 p-3">
-                  <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
-                    {item.title}
-                  </code>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {item.detail}
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-foreground">Passos exatos</p>
+            <ol className="space-y-2">
+              {installSteps.slice(0, 3).map((step, index) => (
+                <li key={step.title} className="rounded-lg border border-border/60 bg-card/80 p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
+                      {index + 1}
+                    </span>
+                    {step.title}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {step.detail}
                   </p>
-                </div>
+                </li>
               ))}
-            </div>
+            </ol>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Token usado agora: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
+            </p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Card className="rounded-lg border-border/60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Route className="h-4 w-4 text-primary" />
-              Tutorial: como o roteamento funciona
-            </CardTitle>
-            <CardDescription>
-              Fluxo prático inspirado no documento HeroCart anexado.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border border-border/60 bg-background/45 p-4">
-              <h3 className="text-sm font-semibold text-foreground">
-                Fluxo do pedido
-              </h3>
-              <ol className="mt-3 space-y-2">
-                {flow.map((item, index) => (
-                  <li key={item} className="flex gap-3 text-sm text-muted-foreground">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-                      {index + 1}
-                    </span>
-                    <span className="leading-6">{item}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {plainMeaning.map((item) => (
+          <div key={item.title} className="rounded-lg border border-border/60 bg-card p-4">
+            <p className="font-heading text-base font-bold text-foreground">
+              {item.title}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {item.detail}
+            </p>
+          </div>
+        ))}
+      </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+      <details className="rounded-lg border border-border/60 bg-card p-4">
+        <summary className="cursor-pointer text-base font-bold text-foreground">
+          Entender token, SKU e GID
+        </summary>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {tokenGuide.map((item) => (
+            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <p className="text-sm font-bold text-foreground">{item.title}</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+          {mapTerms.map((item) => (
+            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
+              <p className="text-sm font-bold text-foreground">{item.title}</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <details className="rounded-lg border border-border/60 bg-card p-4">
+        <summary className="cursor-pointer text-base font-bold text-foreground">
+          Como o pedido muda de loja
+        </summary>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <ol className="space-y-2">
+            {flow.map((item, index) => (
+              <li key={item} className="flex gap-3 rounded-lg border border-border/60 bg-background/45 p-3 text-sm text-muted-foreground">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <span className="leading-6">{item}</span>
+              </li>
+            ))}
+          </ol>
+
+          <div className="space-y-2">
             {modeGuide.map((item) => (
               <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-3">
                 <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
@@ -642,73 +745,25 @@ function RoutedCheckoutTutorial({
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       <Card className="rounded-lg border-border/60">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Code2 className="h-4 w-4 text-primary" />
-            Instalação do script
-          </CardTitle>
+          <CardTitle className="text-lg">Checklist de teste</CardTitle>
           <CardDescription>
-            Instale na loja vitrine. Não use cartoriginals.web.app: aquele loader carrega o app da referência, não este projeto.
+            Use depois de salvar o tema da vitrine.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <ol className="space-y-3">
-            {installSteps.map((step, index) => (
-              <li
-                key={step.title}
-                className="rounded-lg border border-border/60 bg-background/45 p-3"
-              >
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
-                    {index + 1}
-                  </span>
-                  {step.title}
-                </div>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {step.detail}
-                </p>
-              </li>
-            ))}
-          </ol>
+        <CardContent>
+          <CodeBlock>{`1. Remova a password protection da dark store
+2. Salve o theme.liquid da vitrine
+3. Abra a vitrine em janela anonima
+4. Adicione um produto que aparece na rota
+5. Clique em checkout
+6. Confirme se a URL final é da dark store`}</CodeBlock>
         </CardContent>
       </Card>
-
-      <Card
-        id="routed-script"
-        className="scroll-mt-6 rounded-lg border-border/60 xl:col-span-2"
-      >
-        <CardHeader>
-          <CardTitle className="text-lg">Código pronto para colar no tema</CardTitle>
-          <CardDescription>
-            Cole no arquivo <code>layout/theme.liquid</code>, imediatamente antes de <code>&lt;/body&gt;</code>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Instalação rápida</Label>
-            <CodeBlock>{installSnippet}</CodeBlock>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Cole tudo. Em uso normal, você só muda o <code>data-token</code> se criar outra rota. O <code>src</code> deve apontar para o domínio público deste app.
-            </p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Token usado agora: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Checklist de teste</Label>
-            <CodeBlock>{`1. Salve o theme.liquid
-2. Abra a vitrine em janela anonima
-3. Adicione um produto mapeado ao carrinho
-4. Clique em checkout
-5. Confira se a URL final é da dark store`}</CodeBlock>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
     </div>
   );
 }
@@ -1827,36 +1882,7 @@ export default function ClonePage() {
 
       {activeView === "routed-checkout" && (
       <section className="space-y-4" aria-labelledby="routed-checkout">
-        <ServiceIntro
-          icon={GitBranch}
-          title={
-            routedView === "create-route"
-              ? "Routed checkout: criar rota"
-              : routedView === "create-destination"
-                ? "Routed checkout: criar destino"
-                : routedView === "neutralize"
-                  ? "Routed checkout: neutralizar produtos"
-                  : routedView === "active-routes"
-                    ? "Routed checkout: rotas ativas"
-                    : "Routed checkout: script do tema"
-          }
-          description={
-            routedView === "create-route"
-              ? "Crie o mapeamento que diz qual produto da vitrine vira qual produto da dark store no checkout."
-              : routedView === "create-destination"
-                ? "Copie produtos da vitrine para a dark store e gere os mapas automaticamente."
-                : routedView === "neutralize"
-                  ? "Crie produtos de destino sem marca explícita em texto, SEO e imagens antes de enviar para a dark store."
-                  : routedView === "active-routes"
-                    ? "Gerencie tokens, edite mapas existentes e copie o código de instalação de cada rota."
-                    : "Copie o loader correto deste projeto e instale no tema da loja vitrine."
-          }
-          steps={[
-            "Escolha a loja vitrine e a dark store.",
-            "Cole mapas de SKU ou variantes em JSON.",
-            "Ative o token gerado no tema da vitrine.",
-          ]}
-        />
+        <RoutedTaskHeader routedView={routedView} />
 
         {routedView === "script" && (
           <RoutedCheckoutTutorial
@@ -1866,35 +1892,25 @@ export default function ClonePage() {
         )}
 
         {routedView !== "script" && routedView !== "active-routes" && (
-        <Card className="rounded-lg border-amber-300/70 bg-amber-50/80">
-          <CardContent className="p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-200/70 text-amber-900">
-                  <LockKeyhole className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="font-heading text-base font-bold text-amber-950">
-                    Antes de testar: desative a password protection da dark store
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-amber-900">
-                    Se a loja destino estiver em “Opening soon” ou protegida por senha,
-                    a Shopify redireciona o carrinho roteado para <code>/password</code>.
-                    O cliente chega na dark store, mas nao consegue abrir o checkout.
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-lg border border-amber-300/70 bg-white/65 p-3 text-xs leading-5 text-amber-950 lg:w-[360px]">
-                <p className="font-semibold">Como evitar o erro</p>
-                <p className="mt-1">
-                  Na dark store, abra Online Store &gt; Preferences &gt; Password
-                  protection e remova a senha. Depois teste em janela anonima:
-                  se ainda aparecer “Opening soon”, o roteamento tambem vai parar ali.
-                </p>
-              </div>
+        <details className="rounded-lg border border-amber-300/70 bg-amber-50/80 p-4">
+          <summary className="flex cursor-pointer items-center gap-3 text-sm font-bold text-amber-950">
+            <LockKeyhole className="h-4 w-4" />
+            Evitar erro /password na dark store
+          </summary>
+          <div className="mt-3 grid gap-3 text-sm leading-6 text-amber-900 lg:grid-cols-[1fr_360px]">
+            <p>
+              Se a loja destino estiver em “Opening soon” ou protegida por senha,
+              a Shopify redireciona o carrinho roteado para <code>/password</code>.
+              Na dark store, abra Online Store &gt; Preferences &gt; Password
+              protection e remova a senha antes de testar.
+            </p>
+            <div className="rounded-lg border border-amber-300/70 bg-white/65 p-3 text-xs leading-5 text-amber-950">
+              Teste em janela anônima. Se aparecer “Opening soon”, o checkout
+              roteado está chegando na loja certa, mas a própria Shopify está
+              bloqueando a abertura.
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
         )}
 
         {routedView !== "script" && (
@@ -1904,10 +1920,16 @@ export default function ClonePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Route className="h-4 w-4 text-primary" />
-              Criar rota
+              {routedView === "create-destination"
+                ? "Criar produtos de destino"
+                : routedView === "neutralize"
+                  ? "Neutralizar e criar destino"
+                  : "Vincular vitrine e dark store"}
             </CardTitle>
             <CardDescription>
-              Mapeamento SKU/variant para dark store. Use pelo menos um dos mapas.
+              {routedView === "create-route"
+                ? "Revise os pares de variantes e crie a rota que gera o token."
+                : "Escolha as lojas e crie os produtos equivalentes na dark store."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -1993,12 +2015,14 @@ export default function ClonePage() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
-                    Ligacao de produtos reais
+                    {routedView === "create-route"
+                      ? "Correspondências encontradas"
+                      : "Produtos que serão criados"}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    A tela le as duas lojas pela API da Shopify e mostra exatamente
-                    qual produto da vitrine vira qual produto no checkout da dark store.
-                    Se a dark store estiver vazia, crie os produtos de destino primeiro.
+                    {routedView === "create-route"
+                      ? "O app lê as duas lojas e sugere pares por SKU ou título. Depois você salva isso como rota."
+                      : "O app lê a vitrine pela API da Shopify e cria equivalentes na dark store selecionada."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2163,7 +2187,7 @@ export default function ClonePage() {
                 </div>
               ) : null}
 
-              {routeLinkRows.length > 0 ? (
+              {routedView === "create-route" && (routeLinkRows.length > 0 ? (
                 <div className="mt-4 max-h-56 overflow-auto rounded-lg border border-border/60">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-card text-muted-foreground">
@@ -2226,9 +2250,18 @@ export default function ClonePage() {
                 <div className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3 text-sm leading-6 text-muted-foreground">
                   Ainda nao ha mapa real para copiar. Para gerar automaticamente, a vitrine e a dark store precisam ter variantes equivalentes. Se a dark store estiver vazia, clique em Criar destino na dark store para copiar os produtos da vitrine e gerar os mapas.
                 </div>
-              )}
+              ))}
 
-              <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {routedView === "create-route" && (
+              <details className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3">
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                  Ver IDs técnicos lidos das lojas
+                </summary>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Use esta área apenas para conferência. O fluxo normal usa as
+                  correspondências e seletores acima.
+                </p>
+              <div className="mt-3 grid gap-3 xl:grid-cols-2">
                 <div className="rounded-lg border border-border/60 bg-card/60 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-foreground">Variantes da vitrine</h3>
@@ -2299,13 +2332,16 @@ export default function ClonePage() {
                   </div>
                 </div>
               </div>
+              </details>
+              )}
 
-              <div className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
+              {routedView === "create-route" && (
+              <details className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                  Ajustar ligação item por item
+                </summary>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Ajustar ligacao item por item
-                    </h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
                       Leia cada linha como “quando o cliente comprar isto na vitrine,
                       envie este item da dark store para o checkout”. Cada escolha
@@ -2405,11 +2441,20 @@ export default function ClonePage() {
                     ))
                   )}
                 </div>
-              </div>
+              </details>
+              )}
             </div>
 
             {routedView === "create-route" && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <details className="rounded-lg border border-border/60 bg-background/35 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                JSON avançado dos mapas
+              </summary>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Os campos abaixo são preenchidos automaticamente pelos seletores.
+                Edite manualmente só quando precisar colar um mapa externo.
+              </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor="sku-map">SKU map</Label>
@@ -2457,6 +2502,7 @@ export default function ClonePage() {
                 </p>
               </div>
             </div>
+            </details>
             )}
 
             {routedView === "create-route" && (

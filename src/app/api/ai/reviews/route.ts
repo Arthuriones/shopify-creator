@@ -20,6 +20,11 @@ interface GeneratedReview {
   imageUrl?: string;
 }
 
+function normalizeProductNumericId(value: string) {
+  const match = value.match(/Product\/(\d+)$/) || value.match(/^(\d+)$/);
+  return match?.[1] || "";
+}
+
 function ensureGeminiKey() {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY nao esta configurada.");
@@ -221,11 +226,16 @@ export async function POST(request: NextRequest) {
       typeof body.productDescription === "string"
         ? body.productDescription.trim()
         : "";
+    const productId =
+      typeof body.productId === "string" ? body.productId.trim() : "";
+    const productHandle =
+      typeof body.productHandle === "string" ? body.productHandle.trim() : "";
     const count = Math.min(Math.max(Number(body.count || 4), 1), 8);
     const tone = typeof body.tone === "string" ? body.tone : "natural";
     const imageStyle =
       typeof body.imageStyle === "string" ? body.imageStyle : "unboxing";
     const includeImages = body.includeImages !== false;
+    const publishToWidget = body.publishToWidget !== false && productId !== "manual";
 
     if (!storeId || !productTitle) {
       return NextResponse.json(
@@ -271,8 +281,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let savedCount = 0;
+    if (publishToWidget && productId) {
+      const admin = createAdminClient();
+      const disclosure =
+        store.target_language === "en-US"
+          ? "AI-generated synthetic review content. Do not publish as real customer reviews without disclosure."
+          : "Conteudo sintetico gerado por IA. Nao publique como avaliacao real de cliente sem disclosure.";
+      const { error } = await admin.from("ai_product_reviews").insert(
+        reviews.map((review) => ({
+          user_id: user.id,
+          store_id: storeId,
+          product_id: productId,
+          product_numeric_id: normalizeProductNumericId(productId),
+          product_handle: productHandle || null,
+          product_title: productTitle,
+          customer_name: review.customerName,
+          rating: review.rating,
+          title: review.title,
+          body: review.body,
+          product_use_case: review.productUseCase,
+          disclosure: review.disclosure || disclosure,
+          image_url: review.imageUrl || null,
+          image_prompt: review.imagePrompt || null,
+          published: true,
+        }))
+      );
+
+      if (error) {
+        throw new Error(`Reviews gerados, mas nao foi possivel salvar para o widget: ${error.message}`);
+      }
+      savedCount = reviews.length;
+    }
+
     return NextResponse.json({
       reviews,
+      savedCount,
       disclosure:
         store.target_language === "en-US"
           ? "AI-generated synthetic review content. Do not publish as real customer reviews without disclosure."

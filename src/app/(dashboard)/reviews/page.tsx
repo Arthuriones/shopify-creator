@@ -181,6 +181,7 @@ export default function ReviewsPage() {
   const [tone, setTone] = useState("natural");
   const [imageStyle, setImageStyle] = useState("unboxing");
   const [includeImages, setIncludeImages] = useState(true);
+  const [publishToWidget, setPublishToWidget] = useState(true);
   const [loading, setLoading] = useState(false);
   const [generationProgress, setGenerationProgress] = useState("");
   const [reviews, setReviews] = useState<GeneratedReview[]>([]);
@@ -213,6 +214,13 @@ export default function ReviewsPage() {
   );
 
   const primarySelectedProduct = selectedProducts[0];
+  const appBaseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const widgetScript = `<script
+  src="${appBaseUrl.replace(/\/$/, "")}/reviews-widget-loader.js"
+  async>
+</script>`;
 
   useEffect(() => {
     async function loadStores() {
@@ -324,6 +332,8 @@ export default function ReviewsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             storeId,
+            productId: product.id,
+            productHandle: product.handle,
             productTitle: product.title,
             productDescription:
               product.id === "manual" ? productDescription : description,
@@ -331,6 +341,7 @@ export default function ReviewsPage() {
             tone,
             imageStyle,
             includeImages,
+            publishToWidget: publishToWidget && product.id !== "manual",
           }),
         });
         const data = await res.json();
@@ -751,6 +762,24 @@ export default function ReviewsPage() {
               </span>
             </label>
 
+            <label className="flex items-start gap-3 rounded-lg border border-primary/25 bg-primary/8 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={publishToWidget}
+                onChange={(event) => setPublishToWidget(event.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block font-medium text-foreground">
+                  Salvar para aparecer na página do produto
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  Vincula os reviews ao produto selecionado e deixa o widget da
+                  vitrine carregar automaticamente. Produto manual não é publicado.
+                </span>
+              </span>
+            </label>
+
             <Button
               onClick={handleGenerate}
               disabled={
@@ -782,6 +811,41 @@ export default function ReviewsPage() {
         </Card>
 
         <div className="space-y-4">
+          <Card className="rounded-lg border-border/60">
+            <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <CardTitle className="text-lg">Widget na vitrine</CardTitle>
+                <CardDescription>
+                  Cole este script no tema da loja uma vez. Depois, os reviews
+                  salvos aparecem no produto correspondente.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(widgetScript);
+                  toast.success("Script do widget copiado.");
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copiar script
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <pre className="overflow-auto rounded-lg border border-border/60 bg-background/70 p-4 text-xs leading-6 text-foreground">
+                <code>{widgetScript}</code>
+              </pre>
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50/80 p-3 text-xs leading-5 text-amber-950">
+                Instale no tema da loja onde os produtos aparecem. Se o tema tiver
+                <code className="mx-1 rounded bg-amber-100 px-1">theme.liquid</code>,
+                cole antes de <code className="mx-1 rounded bg-amber-100 px-1">&lt;/body&gt;</code>.
+                Se não tiver, use a área de código global/head-body do tema ou adicione
+                este script no arquivo/section que carrega em todas as páginas de produto.
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="rounded-lg border-border/60">
             <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>

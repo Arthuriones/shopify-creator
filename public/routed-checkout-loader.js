@@ -14,6 +14,7 @@
   var isAddingToCart = false;
   var yampiPatchTimer = null;
   var yampiPatchAttempts = 0;
+  var initialized = false;
 
   function rootPath() {
     return (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || "/";
@@ -66,10 +67,16 @@
     if (!target || !target.closest) return false;
     var button = target.closest("button, a, input, [role='button']");
     if (!button) return false;
+    var closestForm = button.closest("form");
+    var formAction = closestForm && closestForm.getAttribute("action");
+    var insideCart =
+      button.closest("cart-drawer-component, cart-items-component") ||
+      (formAction && /\/cart(?!\/add)|\/checkout|\/checkouts/.test(formAction));
     var text = (button.textContent || button.value || "").toLowerCase();
     return Boolean(
       /comprar agora|buy now/.test(text) ||
-        button.matches(".shopify-payment-button__button, [data-testid*='Checkout-button'], .dm-quick-purchase__buy")
+        button.matches(".shopify-payment-button__button, [data-testid*='Checkout-button'], .dm-quick-purchase__buy") ||
+        (button.matches(".js-transparent-checkout") && !insideCart)
     );
   }
 
@@ -121,7 +128,7 @@
 
   function readProductFormLine(target) {
     if (!target || !target.closest) return null;
-    var form = target.closest("form");
+    var form = target.closest("form") || findProductForm(target);
     if (!form) return null;
     var variantInput =
       form.querySelector('[name="id"]') ||
@@ -223,11 +230,23 @@
 
   function submitProductForm(form) {
     var formData = new FormData(form);
+    var sectionIds = Array.prototype.slice
+      .call(document.querySelectorAll("cart-items-component"))
+      .map(function (element) {
+        return element.dataset && element.dataset.sectionId;
+      })
+      .filter(Boolean);
+
+    if (sectionIds.length) {
+      formData.set("sections", sectionIds.join(","));
+      formData.set("sections_url", window.location.pathname);
+    }
+
     return fetch(rootPath() + "cart/add.js", {
       method: "POST",
       credentials: "same-origin",
       headers: {
-        Accept: "application/json",
+        Accept: "application/json, text/html",
         "X-Requested-With": "XMLHttpRequest",
       },
       body: formData,
@@ -252,6 +271,54 @@
       if (!response.ok) throw new Error("Nao foi possivel adicionar ao carrinho.");
       return response.json();
     });
+  }
+
+  function getProductIdFromForm(form) {
+    var productInput = form && form.querySelector('[name="product-id"]');
+    return productInput && productInput.value ? productInput.value : "";
+  }
+
+  function animateAddToCartButton(target) {
+    var component = target && target.closest && target.closest("add-to-cart-component");
+    if (component && typeof component.animateAddToCart === "function") {
+      component.animateAddToCart();
+    }
+  }
+
+  async function syncThemeCart(item, response, form) {
+    var cart = await getCart().catch(function () {
+      return null;
+    });
+    var itemCount = cart && typeof cart.item_count === "number" ? cart.item_count : item.quantity || 1;
+    var detail = {
+      resource: {},
+      sourceId: String(item.id || item.variant_id || ""),
+      data: {
+        source: "routed-checkout-loader",
+        itemCount: itemCount,
+        productId: getProductIdFromForm(form),
+        sections: response && response.sections ? response.sections : {},
+      },
+    };
+
+    document.dispatchEvent(
+      new CustomEvent("cart:update", {
+        bubbles: true,
+        detail: detail,
+      })
+    );
+    document.dispatchEvent(
+      new CustomEvent("cart:refresh", {
+        bubbles: true,
+        detail: { item: item, cart: cart, sections: detail.data.sections },
+      })
+    );
+    document.dispatchEvent(
+      new CustomEvent("cart:updated", {
+        bubbles: true,
+        detail: { item: item, cart: cart, sections: detail.data.sections },
+      })
+    );
   }
 
   function openCartPreview() {
@@ -289,7 +356,7 @@
         document.dispatchEvent(new CustomEvent("cart:open"));
         document.dispatchEvent(new CustomEvent("theme:cart:open"));
       }
-    }, 250);
+    }, 450);
   }
 
   async function routeAddToCart(event) {
@@ -304,12 +371,13 @@
     isAddingToCart = true;
 
     try {
-      var item = await submitProductForm(form);
+      animateAddToCartButton(target);
+      var response = await submitProductForm(form);
+      var item = response.items && response.items[0] ? response.items[0] : response;
       document.dispatchEvent(
         new CustomEvent("routed-checkout:cart-added", { detail: { item: item } })
       );
-      document.dispatchEvent(new CustomEvent("cart:refresh", { detail: { item: item } }));
-      document.dispatchEvent(new CustomEvent("cart:updated", { detail: { item: item } }));
+      await syncThemeCart(item, response, form);
       openCartPreview();
     } catch (error) {
       console.warn("[RoutedCheckout] fallback para add-to-cart nativo", error);
@@ -367,6 +435,8 @@
   }
 
   function init() {
+    if (initialized || !document.body) return;
+    initialized = true;
     window.addEventListener("click", handleDocumentClick, true);
     document.addEventListener("click", handleDocumentClick, true);
     document.addEventListener(
@@ -395,9 +465,16 @@
     }, 500);
   }
 
-  if (document.body) {
-    init();
-  } else {
-    document.addEventListener("DOMContentLoaded", init);
+  function boot() {
+    if (document.body) {
+      init();
+      return;
+    }
+    setTimeout(boot, 50);
   }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  }
+  boot();
 })();

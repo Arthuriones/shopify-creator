@@ -9,7 +9,6 @@ import {
   Copy,
   Download,
   FileJson,
-  GitBranch,
   LayoutDashboard,
   LogOut,
   Package,
@@ -18,6 +17,7 @@ import {
   Sparkles,
   Store,
   MessageSquareText,
+  Workflow,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -37,7 +37,7 @@ interface NavSection {
 
 const navSections: NavSection[] = [
   {
-    label: "Operacao",
+    label: "Inicio",
     items: [
       {
         href: "/dashboard",
@@ -45,11 +45,22 @@ const navSections: NavSection[] = [
         description: "Resumo das operacoes",
         icon: LayoutDashboard,
       },
+    ],
+  },
+  {
+    label: "Lojas e setup",
+    items: [
       {
         href: "/stores",
         label: "Lojas conectadas",
         description: "Credenciais e conexoes Shopify",
         icon: Store,
+      },
+      {
+        href: "/store-setup",
+        label: "Setup da loja",
+        description: "Politicas, menus e paginas",
+        icon: Settings2,
       },
     ],
   },
@@ -68,29 +79,17 @@ const navSections: NavSection[] = [
         description: "Produtos lidos das lojas",
         icon: Boxes,
       },
+    ],
+  },
+  {
+    label: "Importacao e clone",
+    items: [
       {
         href: "/bulk",
         label: "Importacao em lote",
         description: "Fila de importacao",
         icon: PackageCheck,
       },
-      {
-        href: "/optimizer",
-        label: "Otimizador IA",
-        description: "Texto, SEO e imagem",
-        icon: Sparkles,
-      },
-      {
-        href: "/reviews",
-        label: "Gerador de reviews",
-        description: "UGC sintetico com IA",
-        icon: MessageSquareText,
-      },
-    ],
-  },
-  {
-    label: "Clone e checkout",
-    items: [
       {
         href: "/clone",
         label: "Central de clone",
@@ -109,29 +108,40 @@ const navSections: NavSection[] = [
         description: "JSON ou CSV",
         icon: FileJson,
       },
+    ],
+  },
+  {
+    label: "Checkout roteado",
+    items: [
       {
-        href: "/clone/routed-checkout/create-route",
-        label: "Routed checkout",
+        href: "/clone/routed-checkout",
+        label: "Visao do fluxo",
         description: "Vitrine para dark store",
-        icon: GitBranch,
+        icon: Workflow,
         children: [
-          { href: "/clone/routed-checkout/create-route", label: "Criar rota" },
-          { href: "/clone/routed-checkout/create-destination", label: "Criar destino" },
-          { href: "/clone/routed-checkout/neutralize", label: "Neutralizar produtos" },
-          { href: "/clone/routed-checkout/active-routes", label: "Rotas ativas" },
-          { href: "/clone/routed-checkout/script", label: "Script do tema" },
+          { href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
+          { href: "/clone/routed-checkout/create-route", label: "2. Vincular produtos" },
+          { href: "/clone/routed-checkout/script", label: "3. Instalar script" },
+          { href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
+          { href: "/clone/routed-checkout/neutralize", label: "Neutralizacao IA" },
         ],
       },
     ],
   },
   {
-    label: "Setup",
+    label: "IA e conteudo",
     items: [
       {
-        href: "/store-setup",
-        label: "Setup da loja",
-        description: "Politicas, menus e paginas",
-        icon: Settings2,
+        href: "/optimizer",
+        label: "Otimizador IA",
+        description: "Texto, SEO e imagem",
+        icon: Sparkles,
+      },
+      {
+        href: "/reviews",
+        label: "Gerador de reviews",
+        description: "UGC sintetico com IA",
+        icon: MessageSquareText,
       },
     ],
   },
@@ -139,10 +149,10 @@ const navSections: NavSection[] = [
 
 const mobileNavItems: NavItem[] = [
   navSections[0].items[0],
-  navSections[0].items[1],
   navSections[1].items[0],
   navSections[2].items[0],
-  navSections[3].items[0],
+  navSections[3].items[1],
+  navSections[4].items[0],
 ];
 
 function splitHref(href: string) {
@@ -158,8 +168,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  function isHrefActive(href: string) {
+  function isHrefActive(href: string, exact = false) {
     const target = splitHref(href);
+    if (exact) {
+      return pathname === target.path;
+    }
     if (pathname !== target.path && !pathname.startsWith(`${target.path}/`)) {
       return false;
     }
@@ -205,9 +218,11 @@ export function Sidebar() {
                 {section.label}
               </p>
               {section.items.map((item) => {
-                const isActive = isHrefActive(item.href);
+                const isActive = isHrefActive(item.href, true);
                 const isExpanded = item.children ? isItemExpanded(item) : false;
-                const hasActiveChild = item.children?.some((child) => isHrefActive(child.href));
+                const hasActiveChild = item.children?.some((child) =>
+                  isHrefActive(child.href, true)
+                );
                 return (
                   <div key={`${section.label}-${item.label}`} className="space-y-1">
                     <Link
@@ -249,7 +264,7 @@ export function Sidebar() {
                       <div className="space-y-1 pl-9">
                         {item.children.map((child, index) => (
                           (() => {
-                            const childActive = isHrefActive(child.href);
+                            const childActive = isHrefActive(child.href, true);
                             return (
                           <Link
                             key={`${child.label}-${index}`}
@@ -308,7 +323,9 @@ export function Sidebar() {
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-sidebar-border/70 bg-sidebar/95 px-1 py-1 backdrop-blur-md md:hidden">
         {mobileNavItems.map((item) => {
-          const isActive = isHrefActive(item.href);
+          const isActive = item.children
+            ? isItemExpanded(item)
+            : isHrefActive(item.href, true);
           return (
             <Link
               key={item.href}
