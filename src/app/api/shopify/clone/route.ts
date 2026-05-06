@@ -3,7 +3,10 @@ import { createProduct, getProducts, type ShopifyCredentials } from "@/lib/shopi
 import { optimizeProduct } from "@/lib/gemini/client";
 import {
   type PublicShopifyProduct,
+  fetchPublicShopifyCollections,
+  fetchPublicShopifyProduct,
   fetchPublicShopifyProducts,
+  fetchPublicShopifyProductsByHandles,
   productsToCsv,
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
@@ -77,12 +80,20 @@ async function buildCreateInputForTarget(
   product: PublicShopifyProduct,
   context: StoreContext | null,
   publishToStorefront: boolean,
-  translateProduct: boolean
+  translateProduct: boolean,
+  inventory: { tracked: boolean; quantity?: number }
 ) {
   const input = {
     ...toShopifyCreateProductInput(product),
     publishToStorefront,
   };
+  input.variants = input.variants.map((variant) => ({
+    ...variant,
+    inventoryTracked: inventory.tracked,
+    ...(inventory.tracked && typeof inventory.quantity === "number"
+      ? { inventoryQuantity: inventory.quantity }
+      : {}),
+  }));
 
   if (!translateProduct || !context || !process.env.GEMINI_API_KEY) return input;
 
@@ -268,14 +279,44 @@ export async function POST(request: NextRequest) {
   const requestedLimit = Number(body.limit || 250);
   const limit = Math.min(
     Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 250, 1),
-    1000
+    5000
   );
+  const requestedPage = Number(body.page || 0);
+  const page =
+    Number.isFinite(requestedPage) && requestedPage > 0
+      ? Math.floor(requestedPage)
+      : undefined;
+  const requestedPageSize = Number(body.pageSize || limit);
+  const pageSize = Math.min(
+    Math.max(
+      Number.isFinite(requestedPageSize) ? Math.floor(requestedPageSize) : limit,
+      1
+    ),
+    250
+  );
+  const shouldRecordRun = body.recordRun !== false;
   const publishToStorefront = body.publishToStorefront !== false;
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
   const duplicatePolicy: DuplicatePolicy =
     body.duplicatePolicy === "create" ? "create" : "skip";
   const createRoutingConfig = Boolean(body.createRoutingConfig);
+  const importMode = body.importMode === "single" ? "single" : "bulk";
+  const selectedProductHandles = Array.isArray(body.productHandles)
+    ? body.productHandles
+        .map((handle: unknown) => String(handle).trim())
+        .filter(Boolean)
+    : [];
+  const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
+  const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
+  const inventoryQuantity =
+    inventoryMode === "tracked" && Number.isFinite(inventoryQuantityRaw)
+      ? Math.max(0, Math.floor(inventoryQuantityRaw))
+      : undefined;
+  const inventory = {
+    tracked: inventoryMode === "tracked",
+    quantity: inventoryQuantity,
+  };
 
   if (!source) {
     return NextResponse.json(
@@ -289,20 +330,46 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { domain, products } = await fetchPublicShopifyProducts(source, {
-      limit,
-    });
+    let domain = "";
+    let products: PublicShopifyProduct[] = [];
+
+    if (selectedProductHandles.length > 0) {
+      const result = await fetchPublicShopifyProductsByHandles(
+        source,
+        selectedProductHandles
+      );
+      domain = result.domain;
+      products = result.products;
+    } else if (importMode === "single") {
+      const result = await fetchPublicShopifyProduct(source);
+      domain = result.domain;
+      products = [result.product];
+    } else {
+      const result = await fetchPublicShopifyProducts(source, {
+        limit,
+        page,
+        pageSize: page ? pageSize : undefined,
+      });
+      domain = result.domain;
+      products = result.products;
+    }
+    const collectionsResult =
+      action === "preview" || action === "export-json"
+        ? await fetchPublicShopifyCollections(source)
+        : { collections: [] };
 
     if (action === "export-csv") {
-      await recordCloneRun({
-        userId,
-        sourceDomain: domain,
-        targetStoreId: targetStoreId || null,
-        action,
-        status: "completed",
-        productCount: products.length,
-        result: { count: products.length },
-      });
+      if (shouldRecordRun) {
+        await recordCloneRun({
+          userId,
+          sourceDomain: domain,
+          targetStoreId: targetStoreId || null,
+          action,
+          status: "completed",
+          productCount: products.length,
+          result: { count: products.length },
+        });
+      }
 
       return new NextResponse(productsToCsv(products), {
         headers: {
@@ -313,20 +380,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "export-json" || action === "preview") {
-      await recordCloneRun({
-        userId,
-        sourceDomain: domain,
-        targetStoreId: targetStoreId || null,
-        action,
-        status: "completed",
-        productCount: products.length,
-        result: { count: products.length },
-      });
+      if (shouldRecordRun) {
+        await recordCloneRun({
+          userId,
+          sourceDomain: domain,
+          targetStoreId: targetStoreId || null,
+          action,
+          status: "completed",
+          productCount: products.length,
+          result: { count: products.length },
+        });
+      }
 
       return NextResponse.json({
         sourceDomain: domain,
         count: products.length,
         products,
+        collections: collectionsResult.collections,
       });
     }
 
@@ -358,6 +428,9 @@ export async function POST(request: NextRequest) {
     const aggregateVariantMap: Record<string, string> = {};
 
     for (const product of products) {
+      if (request.signal.aborted) {
+        break;
+      }
       try {
         if (duplicatePolicy === "skip") {
           const existing = await findExistingProduct(targetCreds, product);
@@ -379,7 +452,8 @@ export async function POST(request: NextRequest) {
             product,
             targetContext,
             publishToStorefront,
-            translateProduct
+            translateProduct,
+            inventory
           )
         );
         const maps = buildVariantMaps(product, result?.syncedProduct);
@@ -412,26 +486,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await recordCloneRun({
-      userId,
-      sourceDomain: domain,
-      targetStoreId,
-      action,
-      status: failed.length === products.length ? "failed" : "completed",
-      productCount: products.length,
-      result: {
-        createdCount: created.length,
-        skippedCount: skipped.length,
-        failedCount: failed.length,
-        skuMapCount: Object.keys(aggregateSkuMap).length,
-        variantMapCount: Object.keys(aggregateVariantMap).length,
-        routingConfig,
-      },
-      error:
-        failed.length === products.length
-          ? "Todos os produtos falharam ao clonar."
-          : undefined,
-    });
+    if (shouldRecordRun) {
+      await recordCloneRun({
+        userId,
+        sourceDomain: domain,
+        targetStoreId,
+        action,
+        status: failed.length === products.length ? "failed" : "completed",
+        productCount: products.length,
+        result: {
+          createdCount: created.length,
+          skippedCount: skipped.length,
+          failedCount: failed.length,
+          skuMapCount: Object.keys(aggregateSkuMap).length,
+          variantMapCount: Object.keys(aggregateVariantMap).length,
+          routingConfig,
+        },
+        error:
+          failed.length === products.length
+            ? "Todos os produtos falharam ao clonar."
+            : undefined,
+      });
+    }
 
     return NextResponse.json({
       sourceDomain: domain,
@@ -441,6 +517,8 @@ export async function POST(request: NextRequest) {
       failedCount: failed.length,
       skuMapCount: Object.keys(aggregateSkuMap).length,
       variantMapCount: Object.keys(aggregateVariantMap).length,
+      skuMap: aggregateSkuMap,
+      variantMap: aggregateVariantMap,
       routingConfig,
       created,
       skipped,
@@ -449,15 +527,17 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Falha ao clonar loja.";
-    await recordCloneRun({
-      userId,
-      sourceDomain: source,
-      targetStoreId: targetStoreId || null,
-      action,
-      status: "failed",
-      productCount: 0,
-      error: message,
-    }).catch(() => undefined);
+    if (shouldRecordRun) {
+      await recordCloneRun({
+        userId,
+        sourceDomain: source,
+        targetStoreId: targetStoreId || null,
+        action,
+        status: "failed",
+        productCount: 0,
+        error: message,
+      }).catch(() => undefined);
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

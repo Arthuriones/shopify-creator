@@ -41,7 +41,13 @@ interface DestinationProductInput {
   tags: string[];
   images: { src: string; altText: string }[];
   options?: string[];
-  variants: { price: string; compareAtPrice?: string; options?: string[] }[];
+  variants: {
+    price: string;
+    compareAtPrice?: string;
+    options?: string[];
+    inventoryTracked?: boolean;
+    inventoryQuantity?: number;
+  }[];
   seo: { title: string; description: string };
   publishToStorefront: boolean;
 }
@@ -165,6 +171,22 @@ function toCreateProductInput(product: ConnectedProduct): DestinationProductInpu
       description: product.seo?.description || product.title,
     },
     publishToStorefront: true,
+  };
+}
+
+function withInventorySettings(
+  input: DestinationProductInput,
+  inventory: { tracked: boolean; quantity?: number }
+): DestinationProductInput {
+  return {
+    ...input,
+    variants: input.variants.map((variant) => ({
+      ...variant,
+      inventoryTracked: inventory.tracked,
+      ...(inventory.tracked && typeof inventory.quantity === "number"
+        ? { inventoryQuantity: inventory.quantity }
+        : {}),
+    })),
   };
 }
 
@@ -301,6 +323,16 @@ export async function POST(request: NextRequest) {
   const neutralizeProducts = body.neutralizeProducts === true;
   const translateProducts =
     body.translateProducts === true || body.translateProduct === true;
+  const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
+  const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
+  const inventoryQuantity =
+    inventoryMode === "tracked" && Number.isFinite(inventoryQuantityRaw)
+      ? Math.max(0, Math.floor(inventoryQuantityRaw))
+      : undefined;
+  const inventory = {
+    tracked: inventoryMode === "tracked",
+    quantity: inventoryQuantity,
+  };
   const requestedLimit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
   const limit =
     neutralizeProducts || translateProducts
@@ -355,6 +387,9 @@ export async function POST(request: NextRequest) {
   const variantMap: Record<string, string> = {};
 
   for (const product of sourceProducts) {
+    if (request.signal.aborted) {
+      break;
+    }
     try {
       const destination = await toDestinationProductInput({
         product,
@@ -376,7 +411,10 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const result = await createProduct(targetCreds, destination.productInput);
+      const result = await createProduct(
+        targetCreds,
+        withInventorySettings(destination.productInput, inventory)
+      );
       const targetProduct = result?.syncedProduct as
         | { id?: string; variants?: { nodes?: ConnectedVariant[] } }
         | null

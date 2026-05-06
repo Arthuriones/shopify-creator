@@ -10,6 +10,8 @@ interface BulkImportProgress {
   optimize?: boolean;
   publishToStorefront?: boolean;
   perSourceLimit?: number;
+  inventoryMode?: "not_tracked" | "tracked";
+  inventoryQuantity?: number;
   current?: number;
   total?: number;
   product?: unknown;
@@ -99,9 +101,19 @@ export async function processBulkImportJobs(input: {
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
     const publishToStorefront = progress.publishToStorefront !== false;
+    const inventoryMode = progress.inventoryMode === "tracked" ? "tracked" : "not_tracked";
+    const inventoryQuantityRaw = Number(progress.inventoryQuantity ?? 0);
+    const inventoryQuantity =
+      inventoryMode === "tracked" && Number.isFinite(inventoryQuantityRaw)
+        ? Math.max(0, Math.floor(inventoryQuantityRaw))
+        : undefined;
+    const inventory = {
+      tracked: inventoryMode === "tracked",
+      quantity: inventoryQuantity,
+    };
     const perSourceLimit = Math.min(
       Math.max(Number(progress.perSourceLimit || 1), 1),
-      50
+      250
     );
 
     try {
@@ -176,6 +188,7 @@ export async function processBulkImportJobs(input: {
           context,
           optimize,
           publishToStorefront,
+          inventory,
         });
 
         publishedProducts.push({

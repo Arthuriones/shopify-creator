@@ -58,7 +58,13 @@ export async function POST(request: NextRequest) {
     : [];
   const optimize = body.optimize === true || body.translateProduct === true;
   const publishToStorefront = body.publishToStorefront !== false;
-  const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 50);
+  const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 250);
+  const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
+  const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
+  const inventoryQuantity =
+    inventoryMode === "tracked" && Number.isFinite(inventoryQuantityRaw)
+      ? Math.max(0, Math.floor(inventoryQuantityRaw))
+      : undefined;
   const sourceType =
     body.sourceType === "aliexpress" || body.sourceType === "shopify_public"
       ? body.sourceType
@@ -105,6 +111,8 @@ export async function POST(request: NextRequest) {
           optimize,
           publishToStorefront,
           perSourceLimit,
+          inventoryMode,
+          inventoryQuantity,
           step: "Aguardando processamento",
         },
       }))

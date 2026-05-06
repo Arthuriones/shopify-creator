@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -45,6 +45,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 
 interface StoreOption {
@@ -60,6 +68,14 @@ interface PreviewProduct {
   images: { src: string }[];
   variants: { id: number; sku: string | null; price: string }[];
   sourceUrl: string;
+}
+
+interface SourceCollection {
+  id: number;
+  title: string;
+  handle: string;
+  image?: string | null;
+  productsUrl: string;
 }
 
 interface CheckoutConfig {
@@ -90,8 +106,20 @@ interface CloneRun {
   created_at: string;
 }
 
+interface CloneApplyProgress {
+  phase: "analyzing" | "importing" | "routing" | "done";
+  current: number;
+  total: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  message: string;
+}
+
 type CloneView = "overview" | "shopify" | "export" | "routed-checkout";
 type CloneMode = "identical" | "translated" | "routed" | "complete" | "custom";
+type InventoryMode = "not_tracked" | "tracked";
+type ImportMode = "single" | "bulk";
 type RoutedCheckoutView =
   | "create-route"
   | "create-destination"
@@ -126,7 +154,8 @@ const DEFAULT_SKU_MAP = "{}";
 const DEFAULT_VARIANT_MAP = "{}";
 
 const DEFAULT_CLONE_LIMIT = 250;
-const MAX_CLONE_LIMIT = 1000;
+const MAX_CLONE_LIMIT = 5000;
+const CLONE_BATCH_SIZE = 5;
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -143,6 +172,20 @@ function parseCloneLimit(value: string) {
   const numeric = Number(value || DEFAULT_CLONE_LIMIT);
   if (!Number.isFinite(numeric)) return DEFAULT_CLONE_LIMIT;
   return Math.min(Math.max(Math.floor(numeric), 1), MAX_CLONE_LIMIT);
+}
+
+function parseInventoryQuantity(value: string) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.floor(numeric));
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function cloneSourceKey(sourceValue: string, limitValue: number) {
+  return `${sourceValue.trim().toLowerCase()}::${limitValue}`;
 }
 
 function parseJsonMap(value: string, label: string) {
@@ -783,6 +826,8 @@ export default function ClonePage() {
   const [storesLoading, setStoresLoading] = useState(true);
   const [source, setSource] = useState("");
   const [limit, setLimit] = useState(String(DEFAULT_CLONE_LIMIT));
+  const [inventoryMode, setInventoryMode] = useState<InventoryMode>("not_tracked");
+  const [inventoryQuantity, setInventoryQuantity] = useState("100");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [cloneMode, setCloneMode] = useState<CloneMode>("identical");
@@ -795,6 +840,12 @@ export default function ClonePage() {
   const [exportLoading, setExportLoading] = useState<"json" | "csv" | null>(null);
   const [preview, setPreview] = useState<PreviewProduct[]>([]);
   const [sourceDomain, setSourceDomain] = useState("");
+  const [previewKey, setPreviewKey] = useState("");
+  const [applyProgress, setApplyProgress] = useState<CloneApplyProgress | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>("bulk");
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [sourceCollections, setSourceCollections] = useState<SourceCollection[]>([]);
+  const [selectedProductHandles, setSelectedProductHandles] = useState<string[]>([]);
 
   const [configs, setConfigs] = useState<CheckoutConfig[]>([]);
   const [cloneRuns, setCloneRuns] = useState<CloneRun[]>([]);
@@ -820,6 +871,9 @@ export default function ClonePage() {
   const [routeProductsRefreshKey, setRouteProductsRefreshKey] = useState(0);
   const [appOrigin, setAppOrigin] = useState("");
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
+
+  const cloneAbortRef = useRef<AbortController | null>(null);
+  const destinationAbortRef = useRef<AbortController | null>(null);
 
   const activeView: CloneView = pathname.endsWith("/shopify")
     ? "shopify"
@@ -1142,23 +1196,32 @@ export default function ClonePage() {
     }
   }
 
-  async function runClone(action: "preview" | "export-json" | "export-csv" | "apply") {
+  async function runClone(
+    action: "preview" | "export-json" | "export-csv" | "apply",
+    signal?: AbortSignal,
+    overrides?: Record<string, unknown>
+  ) {
     const payload = {
       source,
       action,
+      importMode,
       sourceStoreId,
       targetStoreId,
       limit: parseCloneLimit(limit),
+      inventoryMode,
+      inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
       publishToStorefront,
       translateProducts: translateCloneProducts,
       duplicatePolicy,
       createRoutingConfig,
+      ...overrides,
     };
 
     const res = await fetch("/api/shopify/clone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal,
     });
 
     if (action === "export-csv") {
@@ -1181,14 +1244,25 @@ export default function ClonePage() {
     }
 
     setPreviewLoading(true);
+    const controller = new AbortController();
+    cloneAbortRef.current = controller;
     try {
-      const data = await runClone("preview");
-      setPreview(data.products || []);
+      const data = await runClone("preview", controller.signal);
+      const loadedProducts = (data.products || []) as PreviewProduct[];
+      setPreview(loadedProducts);
       setSourceDomain(data.sourceDomain || "");
+      setSourceCollections((data.collections || []) as SourceCollection[]);
+      setSelectedProductHandles(loadedProducts.map((product) => product.handle));
+      setPreviewKey(cloneSourceKey(source, parseCloneLimit(limit)));
       toast.success(`${data.count || 0} produtos encontrados.`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao analisar loja.");
+      if (isAbortError(error)) {
+        toast("Operacao cancelada.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Falha ao analisar loja.");
+      }
     } finally {
+      if (cloneAbortRef.current === controller) cloneAbortRef.current = null;
       setPreviewLoading(false);
     }
   }
@@ -1228,20 +1302,206 @@ export default function ClonePage() {
     }
 
     setApplyLoading(true);
+    setApplyProgress({
+      phase: "analyzing",
+      current: 0,
+      total: 0,
+      created: 0,
+      skipped: 0,
+      failed: 0,
+      message: "Lendo produtos da origem antes de importar...",
+    });
+    const controller = new AbortController();
+    cloneAbortRef.current = controller;
     try {
-      const data = await runClone("apply");
+      const requestedLimit = parseCloneLimit(limit);
+      const currentPreviewKey = cloneSourceKey(source, requestedLimit);
+      let total =
+        importMode === "single"
+          ? 1
+          : previewKey === currentPreviewKey
+            ? preview.length
+            : 0;
+      let resolvedSourceDomain = sourceDomain;
+      let selectedHandlesForRun =
+        importMode === "bulk" && previewKey === currentPreviewKey
+          ? selectedProductHandles
+          : [];
+
+      if (importMode === "bulk" && total === 0) {
+        const previewData = await runClone("preview", controller.signal, {
+          limit: requestedLimit,
+          recordRun: false,
+        });
+        const loadedProducts = previewData.products || [];
+        total = loadedProducts.length;
+        resolvedSourceDomain = previewData.sourceDomain || "";
+        setPreview(loadedProducts);
+        setSourceDomain(resolvedSourceDomain);
+        setSourceCollections((previewData.collections || []) as SourceCollection[]);
+        selectedHandlesForRun = loadedProducts.map(
+          (product: PreviewProduct) => product.handle
+        );
+        setSelectedProductHandles(selectedHandlesForRun);
+        setPreviewKey(currentPreviewKey);
+      }
+
+      if (total === 0) {
+        toast.error("Nenhum produto encontrado para importar.");
+        return;
+      }
+
+      const aggregate = {
+        attempted: 0,
+        createdCount: 0,
+        skippedCount: 0,
+        failedCount: 0,
+        skuMap: {} as Record<string, string>,
+        variantMap: {} as Record<string, string>,
+      };
+
+      const activeSelectedHandles =
+        importMode === "bulk" && selectedHandlesForRun.length > 0
+          ? selectedHandlesForRun
+          : [];
+      if (activeSelectedHandles.length > 0) {
+        total = activeSelectedHandles.length;
+      }
+      const totalPages = Math.ceil(total / CLONE_BATCH_SIZE);
+      for (let page = 1; page <= totalPages; page += 1) {
+        if (controller.signal.aborted) {
+          throw new DOMException("Operacao cancelada.", "AbortError");
+        }
+
+        const batchStart = (page - 1) * CLONE_BATCH_SIZE + 1;
+        const batchEnd = Math.min(page * CLONE_BATCH_SIZE, total);
+        setApplyProgress({
+          phase: "importing",
+          current: batchStart - 1,
+          total,
+          created: aggregate.createdCount,
+          skipped: aggregate.skippedCount,
+          failed: aggregate.failedCount,
+          message: `Importando produtos ${batchStart}-${batchEnd}/${total}...`,
+        });
+
+        const handleBatch = activeSelectedHandles.slice(
+          (page - 1) * CLONE_BATCH_SIZE,
+          page * CLONE_BATCH_SIZE
+        );
+        const data = await runClone("apply", controller.signal, {
+          importMode,
+          ...(handleBatch.length > 0
+            ? { productHandles: handleBatch, limit: handleBatch.length }
+            : {
+                page,
+                pageSize: CLONE_BATCH_SIZE,
+                limit: CLONE_BATCH_SIZE,
+              }),
+          createRoutingConfig: false,
+          recordRun: false,
+        });
+
+        const attempted = Number(data.attempted || 0);
+        if (attempted === 0) break;
+
+        aggregate.attempted += attempted;
+        aggregate.createdCount += Number(data.createdCount || 0);
+        aggregate.skippedCount += Number(data.skippedCount || 0);
+        aggregate.failedCount += Number(data.failedCount || 0);
+        Object.assign(aggregate.skuMap, data.skuMap || {});
+        Object.assign(aggregate.variantMap, data.variantMap || {});
+
+        setApplyProgress({
+          phase: "importing",
+          current: Math.min(aggregate.attempted, total),
+          total,
+          created: aggregate.createdCount,
+          skipped: aggregate.skippedCount,
+          failed: aggregate.failedCount,
+          message: `Importando produto ${Math.min(aggregate.attempted, total)}/${total}...`,
+        });
+      }
+
+      let routingConfig: unknown = null;
+      if (createRoutingConfig && sourceStoreId && targetStoreId) {
+        setApplyProgress({
+          phase: "routing",
+          current: Math.min(aggregate.attempted, total),
+          total,
+          created: aggregate.createdCount,
+          skipped: aggregate.skippedCount,
+          failed: aggregate.failedCount,
+          message: "Criando rota única com os mapas importados...",
+        });
+
+        const routeRes = await fetch("/api/checkout-routes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            name: `Clone ${resolvedSourceDomain || source} -> ${selectedTarget?.shop_domain || "destino"}`,
+            sourceStoreId,
+            targetStoreId,
+            mode: "enterprise_static",
+            skuMap: aggregate.skuMap,
+            variantMap: aggregate.variantMap,
+            settings: { generatedBy: "shopify_clone_batched" },
+          }),
+        });
+        const routeData = await routeRes.json().catch(() => ({}));
+        if (!routeRes.ok) {
+          throw new Error(routeData.error || "Produtos criados, mas falhou ao criar rota.");
+        }
+        routingConfig = routeData.config;
+      }
+
+      setApplyProgress({
+        phase: "done",
+        current: Math.min(aggregate.attempted, total),
+        total,
+        created: aggregate.createdCount,
+        skipped: aggregate.skippedCount,
+        failed: aggregate.failedCount,
+        message: "Importação concluída.",
+      });
       toast.success(
-        `${data.createdCount || 0} criados, ${data.skippedCount || 0} pulados e ${data.failedCount || 0} falharam de ${data.attempted || 0} produto(s).`
+        `${aggregate.createdCount} criados, ${aggregate.skippedCount} pulados e ${aggregate.failedCount} falharam de ${aggregate.attempted} produto(s).`
       );
-      if (data.failedCount) {
-        toast.error(`${data.failedCount} produtos falharam.`);
+      if (aggregate.failedCount) {
+        toast.error(`${aggregate.failedCount} produtos falharam.`);
+      }
+      if (routingConfig) {
+        toast.success("Rota de checkout criada com os mapas completos.");
       }
       await Promise.all([loadConfigs(), loadCloneRuns()]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao aplicar clone.");
+      if (isAbortError(error)) {
+        toast("Operacao cancelada.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Falha ao aplicar clone.");
+      }
     } finally {
+      if (cloneAbortRef.current === controller) cloneAbortRef.current = null;
       setApplyLoading(false);
     }
+  }
+
+  function openImportModal(mode: ImportMode) {
+    setImportMode(mode);
+    setImportModalOpen(true);
+    setApplyProgress(null);
+  }
+
+  function toggleProductHandle(handle: string, checked: boolean) {
+    setSelectedProductHandles((current) => {
+      if (checked) return [...new Set([...current, handle])];
+      return current.filter((item) => item !== handle);
+    });
+  }
+
+  function toggleAllProducts(checked: boolean) {
+    setSelectedProductHandles(checked ? preview.map((product) => product.handle) : []);
   }
 
   async function copyToClipboard(value: string, label: string) {
@@ -1307,14 +1567,19 @@ export default function ClonePage() {
     }
 
     setDestinationCreating(true);
+    const controller = new AbortController();
+    destinationAbortRef.current = controller;
     try {
       const res = await fetch("/api/checkout-routes/create-destination", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           sourceStoreId: routeSourceStoreId,
           targetStoreId: routeTargetStoreId,
           limit: 50,
+          inventoryMode,
+          inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
           neutralizeProducts: neutralizeDestinationProducts,
           translateProducts: translateDestinationProducts,
         }),
@@ -1338,8 +1603,13 @@ export default function ClonePage() {
         toast.error(`${data.failedCount} produto(s) falharam ao criar destino.`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao criar destino.");
+      if (isAbortError(error)) {
+        toast("Operacao cancelada.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Falha ao criar destino.");
+      }
     } finally {
+      if (destinationAbortRef.current === controller) destinationAbortRef.current = null;
       setDestinationCreating(false);
     }
   }
@@ -1470,6 +1740,340 @@ export default function ClonePage() {
           ]}
         />
 
+        <div className="grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => openImportModal("single")}
+            className="rounded-lg border border-border/60 bg-card p-4 text-left transition-colors hover:border-primary/45 hover:bg-card/80"
+          >
+            <Badge variant="secondary" className="rounded-md">individual</Badge>
+            <h2 className="mt-3 text-lg font-semibold text-foreground">
+              Importar produto individual
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Use uma URL de produto Shopify específica, configure destino e publique só aquele item.
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => openImportModal("bulk")}
+            className="rounded-lg border border-border/60 bg-card p-4 text-left transition-colors hover:border-primary/45 hover:bg-card/80"
+          >
+            <Badge variant="outline" className="rounded-md">massa</Badge>
+            <h2 className="mt-3 text-lg font-semibold text-foreground">
+              Importar em massa
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Leia a loja, selecione produtos, veja coleções encontradas e importe em lotes com progresso.
+            </p>
+          </button>
+        </div>
+
+        <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+          <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-5xl">
+            <DialogHeader className="border-b border-border/60 px-5 py-4">
+              <DialogTitle>
+                {importMode === "single"
+                  ? "Importar produto individual"
+                  : "Selecionar produtos para importar"}
+              </DialogTitle>
+              <DialogDescription>
+                Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid max-h-[70vh] gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4 overflow-auto px-5 py-4">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+                  <div className="space-y-2">
+                    <Label htmlFor="modal-source">
+                      {importMode === "single" ? "URL do produto" : "Loja de origem"}
+                    </Label>
+                    <Input
+                      id="modal-source"
+                      value={source}
+                      onChange={(event) => setSource(event.target.value)}
+                      placeholder={
+                        importMode === "single"
+                          ? "https://loja.com/products/produto"
+                          : "exemplo.myshopify.com ou dominio.com"
+                      }
+                    />
+                  </div>
+                  {importMode === "bulk" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="modal-limit">Limite</Label>
+                      <Input
+                        id="modal-limit"
+                        value={limit}
+                        onChange={(event) => setLimit(event.target.value)}
+                        inputMode="numeric"
+                        min={1}
+                        max={MAX_CLONE_LIMIT}
+                        type="number"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Destino conectado</Label>
+                    <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue placeholder="Selecione uma loja">
+                          {formatStoreLabel(selectedTarget)}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {formatStoreLabel(store)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Duplicados</Label>
+                    <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value || "skip")}>
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="skip">Pular existentes</SelectItem>
+                        <SelectItem value="create">Criar mesmo assim</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={publishToStorefront}
+                      onChange={(event) => setPublishToStorefront(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block font-medium text-foreground">Publicar produto</span>
+                      <span className="text-xs text-muted-foreground">Online Store ao importar.</span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={translateCloneProducts}
+                      onChange={(event) => setTranslateCloneProducts(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block font-medium text-foreground">Traduzir produto</span>
+                      <span className="text-xs text-muted-foreground">Usa idioma da loja destino.</span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={createRoutingConfig}
+                      onChange={(event) => setCreateRoutingConfig(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block font-medium text-foreground">Preparar rota</span>
+                      <span className="text-xs text-muted-foreground">Gera mapa para routed checkout.</span>
+                    </span>
+                  </label>
+                </div>
+
+                <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_160px]">
+                  <div className="space-y-2">
+                    <Label>Estoque</Label>
+                    <Select
+                      value={inventoryMode}
+                      onValueChange={(value) => setInventoryMode((value || "not_tracked") as InventoryMode)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
+                        <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Quantidade</Label>
+                    <Input
+                      value={inventoryQuantity}
+                      onChange={(event) => setInventoryQuantity(event.target.value)}
+                      type="number"
+                      min={0}
+                      disabled={inventoryMode === "not_tracked"}
+                    />
+                  </div>
+                </div>
+
+                {importMode === "bulk" && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Produtos da origem
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {preview.length
+                            ? `Mostrando ${preview.length}/${parseCloneLimit(limit)} carregados`
+                            : "Clique em analisar para carregar a lista."}
+                        </p>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={preview.length > 0 && selectedProductHandles.length === preview.length}
+                          onChange={(event) => toggleAllProducts(event.target.checked)}
+                          className="h-4 w-4 accent-primary"
+                        />
+                        Selecionar todos
+                      </label>
+                    </div>
+                    <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
+                      {preview.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-muted-foreground">
+                          Nenhum produto carregado ainda.
+                        </div>
+                      ) : (
+                        preview.map((product) => (
+                          <label
+                            key={product.handle}
+                            className="grid cursor-pointer grid-cols-[24px_56px_minmax(0,1fr)] gap-3 border-b border-border/50 p-3 last:border-b-0 hover:bg-muted/35"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedProductHandles.includes(product.handle)}
+                              onChange={(event) =>
+                                toggleProductHandle(product.handle, event.target.checked)
+                              }
+                              className="mt-4 h-4 w-4 accent-primary"
+                            />
+                            <div className="relative h-14 w-14 overflow-hidden rounded-md border border-border/60 bg-muted">
+                              {product.images?.[0]?.src ? (
+                                <img
+                                  src={product.images[0].src}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {product.title}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {product.variants.length} variante(s) · {product.variants[0]?.price || "0.00"}
+                              </p>
+                              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                                {product.handle}
+                              </p>
+                            </div>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <aside className="space-y-4 overflow-auto border-t border-border/60 bg-muted/25 px-5 py-4 lg:border-l lg:border-t-0">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Coleções reconhecidas
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Quando a origem expõe /collections.json, elas aparecem aqui para referência.
+                  </p>
+                </div>
+                {sourceCollections.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
+                    Nenhuma coleção pública carregada.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {sourceCollections.slice(0, 20).map((collection) => (
+                      <div
+                        key={collection.handle}
+                        className="rounded-lg border border-border/60 bg-background/55 p-3 text-sm"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium text-foreground">
+                            {collection.title}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            /collections/{collection.handle}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {applyProgress && (
+                  <div className="rounded-lg border border-primary/25 bg-primary/8 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-foreground">
+                        {applyProgress.message}
+                      </p>
+                      <Badge variant="secondary" className="rounded-md">
+                        {applyProgress.total > 0
+                          ? `${applyProgress.current}/${applyProgress.total}`
+                          : "calculando"}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/70">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width:
+                            applyProgress.total > 0
+                              ? `${Math.min(100, (applyProgress.current / applyProgress.total) * 100)}%`
+                              : "8%",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </div>
+
+            <DialogFooter className="items-center sm:justify-between">
+              <div className="text-xs text-muted-foreground">
+                {importMode === "bulk"
+                  ? `${selectedProductHandles.length} produto(s) selecionado(s)`
+                  : "Produto individual"}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={handlePreview} disabled={previewLoading || !source.trim()}>
+                  {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                  {importMode === "single" ? "Analisar produto" : "Analisar origem"}
+                </Button>
+                <Button
+                  onClick={handleApply}
+                  disabled={
+                    applyLoading ||
+                    !source.trim() ||
+                    !targetStoreId ||
+                    (importMode === "bulk" && preview.length > 0 && selectedProductHandles.length === 0)
+                  }
+                >
+                  {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
+                  Importar
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="rounded-lg border-border/60">
             <CardHeader>
@@ -1597,6 +2201,45 @@ export default function ClonePage() {
                 </div>
               </div>
 
+              <div className="grid gap-4 rounded-lg border border-border/70 bg-background/45 p-4 lg:grid-cols-[260px_180px_minmax(0,1fr)] lg:items-start">
+                <div className="space-y-2">
+                  <Label>Estoque</Label>
+                  <Select
+                    value={inventoryMode}
+                    onValueChange={(value) => {
+                      setInventoryMode((value || "not_tracked") as InventoryMode);
+                      setCloneMode("custom");
+                    }}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
+                      <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inventory-quantity">Quantidade</Label>
+                  <Input
+                    id="inventory-quantity"
+                    value={inventoryQuantity}
+                    onChange={(event) => setInventoryQuantity(event.target.value)}
+                    inputMode="numeric"
+                    min={0}
+                    type="number"
+                    disabled={inventoryMode === "not_tracked"}
+                  />
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  No modo <strong>Inventory not tracked</strong>, o app marca as
+                  variantes como “não rastrear estoque” na Shopify e não envia
+                  quantidade. Use “Definir estoque inicial” apenas quando quiser
+                  controlar estoque real por variante.
+                </p>
+              </div>
+
               <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px]">
                 <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
                   <input
@@ -1693,7 +2336,67 @@ export default function ClonePage() {
                   {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
                   Aplicar na loja
                 </Button>
+                {(previewLoading || applyLoading) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => cloneAbortRef.current?.abort()}
+                  >
+                    Cancelar operação
+                  </Button>
+                )}
               </div>
+
+              {applyProgress && (
+                <div className="rounded-lg border border-primary/25 bg-primary/8 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {applyProgress.phase === "done"
+                          ? "Importação finalizada"
+                          : applyProgress.phase === "routing"
+                            ? "Preparando rota"
+                            : applyProgress.phase === "analyzing"
+                              ? "Analisando origem"
+                              : "Importação em lotes"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {applyProgress.message}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="w-fit rounded-md">
+                      {applyProgress.total > 0
+                        ? `${applyProgress.current}/${applyProgress.total}`
+                        : "calculando"}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-background/70">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{
+                        width:
+                          applyProgress.total > 0
+                            ? `${Math.min(
+                                100,
+                                Math.round((applyProgress.current / applyProgress.total) * 100)
+                              )}%`
+                            : "8%",
+                      }}
+                    />
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
+                      Criados: <strong className="text-foreground">{applyProgress.created}</strong>
+                    </div>
+                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
+                      Pulados: <strong className="text-foreground">{applyProgress.skipped}</strong>
+                    </div>
+                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
+                      Falhas: <strong className="text-foreground">{applyProgress.failed}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -2070,6 +2773,16 @@ export default function ClonePage() {
                     Criar destino na dark store
                   </Button>
                   )}
+                  {routedView !== "create-route" && destinationCreating && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => destinationAbortRef.current?.abort()}
+                  >
+                    Cancelar operação
+                  </Button>
+                  )}
                   {routedView === "create-route" && (
                   <Button
                     variant="outline"
@@ -2099,6 +2812,46 @@ export default function ClonePage() {
                   )}
                 </div>
               </div>
+
+              {routedView !== "create-route" && (
+              <div className="mt-4 grid gap-4 rounded-lg border border-border/70 bg-card/70 p-4 lg:grid-cols-[260px_180px_minmax(0,1fr)] lg:items-start">
+                <div className="space-y-2">
+                  <Label>Estoque na dark store</Label>
+                  <Select
+                    value={inventoryMode}
+                    onValueChange={(value) =>
+                      setInventoryMode((value || "not_tracked") as InventoryMode)
+                    }
+                    disabled={destinationCreating}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
+                      <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="destination-inventory-quantity">Quantidade</Label>
+                  <Input
+                    id="destination-inventory-quantity"
+                    value={inventoryQuantity}
+                    onChange={(event) => setInventoryQuantity(event.target.value)}
+                    inputMode="numeric"
+                    min={0}
+                    type="number"
+                    disabled={destinationCreating || inventoryMode === "not_tracked"}
+                  />
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Para dark store, o recomendado é <strong>Inventory not tracked</strong>:
+                  o produto fica vendável sem depender de saldo. Se quiser controle
+                  real, selecione “Definir estoque inicial”.
+                </p>
+              </div>
+              )}
 
               {routedView !== "create-route" && (
               <label className="mt-4 flex items-start gap-3 rounded-lg border border-border/70 bg-card/70 p-4 text-sm">

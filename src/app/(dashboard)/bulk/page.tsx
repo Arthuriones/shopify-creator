@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Languages, Loader2, PlayCircle, RefreshCw, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -45,6 +46,8 @@ interface BulkJob {
   updated_at: string;
 }
 
+type InventoryMode = "not_tracked" | "tracked";
+
 export default function BulkImportPage() {
   const [sources, setSources] = useState("");
   const [stores, setStores] = useState<StoreOption[]>([]);
@@ -57,6 +60,8 @@ export default function BulkImportPage() {
   const [optimize, setOptimize] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [perSourceLimit, setPerSourceLimit] = useState("1");
+  const [inventoryMode, setInventoryMode] = useState<InventoryMode>("not_tracked");
+  const [inventoryQuantity, setInventoryQuantity] = useState("100");
 
   const hasRunningJobs = useMemo(
     () => jobs.some((job) => job.status === "pending" || job.status === "processing"),
@@ -150,6 +155,8 @@ export default function BulkImportPage() {
           optimize,
           publishToStorefront,
           perSourceLimit: Number(perSourceLimit || 1),
+          inventoryMode,
+          inventoryQuantity: Number(inventoryQuantity || 0),
         }),
       });
       const data = await res.json();
@@ -233,8 +240,47 @@ export default function BulkImportPage() {
                   <SelectItem value="5">5 produtos/origem</SelectItem>
                   <SelectItem value="20">20 produtos/origem</SelectItem>
                   <SelectItem value="50">50 produtos/origem</SelectItem>
+                  <SelectItem value="100">100 produtos/origem</SelectItem>
+                  <SelectItem value="250">250 produtos/origem</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-4 md:grid-cols-[1fr_180px]">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Estoque ao importar</p>
+              <Select
+                value={inventoryMode}
+                onValueChange={(value) =>
+                  setInventoryMode(value === "tracked" ? "tracked" : "not_tracked")
+                }
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
+                  <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Padrão recomendado: não rastreia estoque na Shopify e não envia quantidade zero.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Quantidade</p>
+              <Input
+                type="number"
+                min={0}
+                value={inventoryQuantity}
+                onChange={(event) => setInventoryQuantity(event.target.value)}
+                disabled={inventoryMode === "not_tracked"}
+                className="h-10"
+              />
+              <p className="text-xs text-muted-foreground">
+                Usado só quando o rastreio estiver ativo.
+              </p>
             </div>
           </div>
 

@@ -79,8 +79,10 @@ export function toCreateProductInput(input: {
   product: UnifiedImportProduct;
   optimized: OptimizationResult;
   publishToStorefront: boolean;
+  inventory?: { tracked: boolean; quantity?: number };
 }) {
   const { product, optimized, publishToStorefront } = input;
+  const inventory = input.inventory || { tracked: false };
   const hasOptions = product.options.length > 0 && product.variants.length > 1;
 
   return {
@@ -96,6 +98,10 @@ export function toCreateProductInput(input: {
             ? money(variant.compareAtPrice)
             : undefined,
           options: variant.optionValues,
+          inventoryTracked: inventory.tracked,
+          ...(inventory.tracked && typeof inventory.quantity === "number"
+            ? { inventoryQuantity: inventory.quantity }
+            : {}),
         }))
       : [
           {
@@ -103,6 +109,10 @@ export function toCreateProductInput(input: {
             compareAtPrice: product.compareAtPrice
               ? money(product.compareAtPrice)
               : undefined,
+            inventoryTracked: inventory.tracked,
+            ...(inventory.tracked && typeof inventory.quantity === "number"
+              ? { inventoryQuantity: inventory.quantity }
+              : {}),
           },
         ],
     seo: {
@@ -121,6 +131,7 @@ export async function publishImportedProduct(input: {
   context: StoreContext | null;
   optimize: boolean;
   publishToStorefront: boolean;
+  inventory?: { tracked: boolean; quantity?: number };
 }) {
   const optimized = await maybeOptimizeImportedProduct(
     input.product,
@@ -134,6 +145,7 @@ export async function publishImportedProduct(input: {
       product: input.product,
       optimized,
       publishToStorefront: input.publishToStorefront,
+      inventory: input.inventory,
     })
   );
 

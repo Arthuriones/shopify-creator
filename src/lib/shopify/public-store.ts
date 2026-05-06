@@ -23,6 +23,14 @@ export interface PublicShopifyProduct {
   sourceUrl: string;
 }
 
+export interface PublicShopifyCollection {
+  id: number;
+  title: string;
+  handle: string;
+  image?: string | null;
+  productsUrl: string;
+}
+
 interface ProductsJsonImage {
   src?: string;
   alt?: string | null;
@@ -56,6 +64,13 @@ interface ProductsJsonProduct {
   variants?: ProductsJsonVariant[];
 }
 
+interface CollectionsJsonCollection {
+  id?: number;
+  title?: string;
+  handle?: string;
+  image?: { src?: string | null } | string | null;
+}
+
 function normalizeTags(tags: string | string[] | undefined): string[] {
   if (Array.isArray(tags)) return tags.map((tag) => tag.trim()).filter(Boolean);
   return (tags || "")
@@ -67,6 +82,12 @@ function normalizeTags(tags: string | string[] | undefined): string[] {
 function normalizeMoney(value: string | number | null | undefined): string {
   const numeric = Number(value ?? 0);
   return Number.isFinite(numeric) && numeric > 0 ? numeric.toFixed(2) : "0.00";
+}
+
+function normalizeStorefrontCents(value: string | number | null | undefined): string {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "0.00";
+  return (Number.isInteger(numeric) ? numeric / 100 : numeric).toFixed(2);
 }
 
 function productUrl(domain: string, handle: string): string {
@@ -148,21 +169,216 @@ export function normalizePublicShopifyDomain(input: string): string | null {
   return normalizeShopDomain(input);
 }
 
-export async function fetchPublicShopifyProducts(
+function extractProductHandle(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const match = url.pathname.match(/\/products\/([^/?#]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    const match = value.match(/\/products\/([^/?#]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  }
+}
+
+function normalizeCollection(
+  domain: string,
+  collection: CollectionsJsonCollection
+): PublicShopifyCollection | null {
+  const id = Number(collection.id);
+  const title = (collection.title || "").trim();
+  const handle = (collection.handle || "").trim();
+  if (!Number.isFinite(id) || !title || !handle) return null;
+
+  const rawImage = collection.image;
+  const image =
+    typeof rawImage === "string" ? rawImage : rawImage?.src || null;
+
+  return {
+    id,
+    title,
+    handle,
+    image,
+    productsUrl: `https://${domain}/collections/${handle}`,
+  };
+}
+
+function normalizeStorefrontProduct(
+  domain: string,
+  product: ProductsJsonProduct & {
+    description?: string;
+    type?: string;
+    tags?: string[] | string;
+    images?: (ProductsJsonImage | string)[];
+    options?: (ProductsJsonOption | { name?: string } | string)[];
+    variants?: (ProductsJsonVariant & {
+      featured_image?: { src?: string | null } | null;
+    })[];
+  },
+  handleOverride?: string
+): PublicShopifyProduct | null {
+  return toPublicProduct(domain, {
+    ...product,
+    handle: product.handle || handleOverride,
+    body_html: product.body_html || product.description || "",
+    product_type: product.product_type || product.type || null,
+    images:
+      product.images?.map((image) =>
+        typeof image === "string" ? { src: image, alt: product.title || "" } : image
+      ) || [],
+    options:
+      product.options?.map((option) =>
+        typeof option === "string" ? { name: option } : option
+      ) || [],
+    variants:
+      product.variants?.map((variant) => ({
+        ...variant,
+        price: normalizeStorefrontCents(variant.price),
+        compare_at_price: variant.compare_at_price
+          ? normalizeStorefrontCents(variant.compare_at_price)
+          : null,
+      })) || [],
+  });
+}
+
+export async function fetchPublicShopifyCollections(
+  source: string
+): Promise<{ domain: string; collections: PublicShopifyCollection[] }> {
+  const domain = normalizePublicShopifyDomain(source);
+  if (!domain) {
+    throw new Error("Informe um dominio Shopify valido.");
+  }
+
+  try {
+    const res = await fetch(`https://${domain}/collections.json?limit=250`, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) return { domain, collections: [] };
+
+    const data = (await res.json()) as {
+      collections?: CollectionsJsonCollection[];
+      smart_collections?: CollectionsJsonCollection[];
+      custom_collections?: CollectionsJsonCollection[];
+    };
+    const rawCollections =
+      data.collections || data.smart_collections || data.custom_collections || [];
+
+    return {
+      domain,
+      collections: rawCollections
+        .map((collection) => normalizeCollection(domain, collection))
+        .filter((collection): collection is PublicShopifyCollection => Boolean(collection)),
+    };
+  } catch {
+    return { domain, collections: [] };
+  }
+}
+
+export async function fetchPublicShopifyProduct(
+  source: string
+): Promise<{ domain: string; product: PublicShopifyProduct }> {
+  const domain = normalizePublicShopifyDomain(source);
+  const handle = extractProductHandle(source);
+  if (!domain || !handle) {
+    throw new Error("Informe uma URL de produto Shopify valida.");
+  }
+
+  const jsonUrl = `https://${domain}/products/${handle}.json`;
+  const jsonRes = await fetch(jsonUrl, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
+    },
+    cache: "no-store",
+  });
+
+  if (jsonRes.ok) {
+    const data = (await jsonRes.json()) as { product?: ProductsJsonProduct };
+    const product = data.product ? toPublicProduct(domain, data.product) : null;
+    if (product) return { domain, product };
+  }
+
+  const jsRes = await fetch(`https://${domain}/products/${handle}.js`, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
+    },
+    cache: "no-store",
+  });
+
+  if (!jsRes.ok) {
+    throw new Error("Nao foi possivel ler o produto publico da Shopify.");
+  }
+
+  const jsProduct = (await jsRes.json()) as Parameters<typeof normalizeStorefrontProduct>[1];
+  const product = normalizeStorefrontProduct(domain, jsProduct, handle);
+  if (!product) {
+    throw new Error("Produto Shopify retornou dados incompletos.");
+  }
+
+  return { domain, product };
+}
+
+export async function fetchPublicShopifyProductsByHandles(
   source: string,
-  options?: { limit?: number; maxPages?: number }
+  handles: string[]
 ): Promise<{ domain: string; products: PublicShopifyProduct[] }> {
   const domain = normalizePublicShopifyDomain(source);
   if (!domain) {
     throw new Error("Informe um dominio Shopify valido.");
   }
 
-  const limit = Math.min(Math.max(Math.floor(options?.limit || 250), 1), 1000);
-  const maxPages = Math.min(Math.max(Math.floor(options?.maxPages || 4), 1), 20);
+  const products: PublicShopifyProduct[] = [];
+  for (const handle of [...new Set(handles.map((item) => item.trim()).filter(Boolean))]) {
+    try {
+      const result = await fetchPublicShopifyProduct(`https://${domain}/products/${handle}`);
+      products.push(result.product);
+    } catch {
+      // Continua importando os demais produtos selecionados.
+    }
+  }
+
+  return { domain, products };
+}
+
+export async function fetchPublicShopifyProducts(
+  source: string,
+  options?: { limit?: number; maxPages?: number; page?: number; pageSize?: number }
+): Promise<{ domain: string; products: PublicShopifyProduct[] }> {
+  const domain = normalizePublicShopifyDomain(source);
+  if (!domain) {
+    throw new Error("Informe um dominio Shopify valido.");
+  }
+
+  const limit = Math.min(Math.max(Math.floor(options?.limit || 250), 1), 5000);
+  const singlePage = options?.page
+    ? Math.max(Math.floor(options.page), 1)
+    : null;
+  const pageSize = Math.min(
+    Math.max(Math.floor(options?.pageSize || (singlePage ? limit : 250)), 1),
+    250
+  );
+  const maxPages = singlePage
+    ? 1
+    : Math.min(
+        Math.max(
+          Math.floor(options?.maxPages || Math.ceil(limit / pageSize)),
+          1
+        ),
+        200
+      );
   const products: PublicShopifyProduct[] = [];
 
-  for (let page = 1; page <= maxPages && products.length < limit; page += 1) {
-    const url = `https://${domain}/products.json?limit=250&page=${page}`;
+  for (let offset = 0; offset < maxPages && products.length < limit; offset += 1) {
+    const page = singlePage || offset + 1;
+    const url = `https://${domain}/products.json?limit=${pageSize}&page=${page}`;
     const res = await fetch(url, {
       headers: {
         accept: "application/json",

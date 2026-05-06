@@ -111,6 +111,8 @@ type LogoPosition =
   | "bottom-center"
   | "bottom-right";
 
+type InventoryMode = "not_tracked" | "tracked";
+
 interface PerImageLogoConfig {
   position: LogoPosition;
   scale: number;
@@ -320,6 +322,8 @@ function ProductsPageContent() {
   const [catalogSaving, setCatalogSaving] = useState(false);
   const [catalogOptimizing, setCatalogOptimizing] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
+  const [inventoryMode, setInventoryMode] = useState<InventoryMode>("not_tracked");
+  const [inventoryQuantity, setInventoryQuantity] = useState("100");
 
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -1427,6 +1431,16 @@ function ProductsPageContent() {
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
+    const inventoryQuantityValue = Math.max(
+      0,
+      Math.floor(Number(inventoryQuantity || 0))
+    );
+    const inventoryVariantSettings = {
+      inventoryTracked: inventoryMode === "tracked",
+      ...(inventoryMode === "tracked" && Number.isFinite(inventoryQuantityValue)
+        ? { inventoryQuantity: inventoryQuantityValue }
+        : {}),
+    };
 
     try {
       let res;
@@ -1479,6 +1493,7 @@ function ProductsPageContent() {
                       options: product.variantOptions.map(
                         (o) => v.properties[o.name] || ""
                       ),
+                      ...inventoryVariantSettings,
                     })),
                   }
                 : {
@@ -1489,6 +1504,7 @@ function ProductsPageContent() {
                           product.originalPrice > product.price
                             ? product.originalPrice.toFixed(2)
                             : undefined,
+                        ...inventoryVariantSettings,
                       },
                     ],
                   }),
@@ -1653,6 +1669,46 @@ function ProductsPageContent() {
               <p className="mt-1 pl-6 text-xs text-muted-foreground/80">
                 Marcado: publica ativo e disponivel no storefront. Desmarcado: salva como rascunho.
               </p>
+            </div>
+            <div className="rounded-md border border-border/40 bg-background/40 px-3 py-3">
+              <div className="grid gap-3 md:grid-cols-[1fr_160px]">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground/90">
+                    Estoque ao criar produto
+                  </p>
+                  <Select
+                    value={inventoryMode}
+                    onValueChange={(value) =>
+                      setInventoryMode(value === "tracked" ? "tracked" : "not_tracked")
+                    }
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
+                      <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground/80">
+                    Com Inventory not tracked, a Shopify nao recebe quantidade e o produto nao nasce com estoque 0.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground/90">Quantidade</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={inventoryQuantity}
+                    onChange={(event) => setInventoryQuantity(event.target.value)}
+                    disabled={inventoryMode === "not_tracked"}
+                    className="h-10 bg-background/50 border-border/50"
+                  />
+                  <p className="text-xs text-muted-foreground/80">
+                    Usada somente no modo rastreado.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm">

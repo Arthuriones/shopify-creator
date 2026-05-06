@@ -364,6 +364,140 @@ async function publishProductToStorefront(
   }
 }
 
+async function getPrimaryInventoryLocationId(creds: ShopifyCredentials) {
+  const query = `
+    query getInventoryLocation {
+      locations(first: 1, query: "active:true") {
+        nodes {
+          id
+          name
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query);
+  return data?.locations?.nodes?.[0]?.id as string | undefined;
+}
+
+async function getProductInventoryItems(
+  creds: ShopifyCredentials,
+  productId: string
+) {
+  const query = `
+    query getProductInventoryItems($id: ID!) {
+      product(id: $id) {
+        variants(first: 100) {
+          nodes {
+            id
+            inventoryItem {
+              id
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query, { id: productId });
+  return (
+    data?.product?.variants?.nodes as
+      | { id?: string; inventoryItem?: { id?: string } | null }[]
+      | undefined
+  ) || [];
+}
+
+async function applyInitialInventoryQuantities(
+  creds: ShopifyCredentials,
+  productId: string,
+  quantitiesByVariantIndex: (number | undefined)[]
+) {
+  const hasQuantity = quantitiesByVariantIndex.some(
+    (quantity) => typeof quantity === "number"
+  );
+  if (!hasQuantity) return [] as string[];
+
+  const warnings: string[] = [];
+
+  try {
+    const locationId = await getPrimaryInventoryLocationId(creds);
+    if (!locationId) {
+      return ["Estoque inicial nao aplicado: nenhuma location ativa encontrada na Shopify."];
+    }
+
+    const variants = await getProductInventoryItems(creds, productId);
+    const quantities = quantitiesByVariantIndex
+      .map((quantity, index) => {
+        const inventoryItemId = variants[index]?.inventoryItem?.id;
+        if (typeof quantity !== "number" || !inventoryItemId) return null;
+        return {
+          inventoryItemId,
+          locationId,
+          quantity,
+          compareQuantity: null,
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is {
+          inventoryItemId: string;
+          locationId: string;
+          quantity: number;
+          compareQuantity: null;
+        } => Boolean(item)
+      );
+
+    if (quantities.length === 0) {
+      return ["Estoque inicial nao aplicado: variantes sem inventory item retornado pela Shopify."];
+    }
+
+    const mutation = `
+      mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+        inventorySetQuantities(input: $input) {
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const result = await shopifyGraphQL(creds, mutation, {
+      input: {
+        ignoreCompareQuantity: true,
+        name: "available",
+        reason: "correction",
+        referenceDocumentUri: `gid://shopify-creator/ProductClone/${productId.split("/").pop() || Date.now()}`,
+        quantities,
+      },
+    });
+
+    const errors = result?.inventorySetQuantities?.userErrors as
+      | { field?: string[]; message: string }[]
+      | undefined;
+    if (errors?.length) {
+      warnings.push(
+        `Estoque inicial nao aplicado: ${errors
+          .map((error) =>
+            error.field?.length
+              ? `${error.field.join(".")}: ${error.message}`
+              : error.message
+          )
+          .join(" | ")}`
+      );
+    }
+  } catch (error) {
+    warnings.push(
+      `Estoque inicial nao aplicado: ${
+        error instanceof Error ? error.message : "erro desconhecido"
+      }`
+    );
+  }
+
+  return warnings;
+}
+
 export async function createProduct(
   creds: ShopifyCredentials,
   input: {
@@ -371,13 +505,26 @@ export async function createProduct(
     descriptionHtml: string;
     tags: string[];
     images: { src: string; altText: string }[];
-    variants: { price: string; compareAtPrice?: string; options?: string[] }[];
+    variants: {
+      price: string;
+      compareAtPrice?: string;
+      options?: string[];
+      inventoryQuantity?: number;
+      inventoryTracked?: boolean;
+    }[];
     options?: string[]; // nomes das opções: ["Cor", "Tamanho"]
     seo?: { title: string; description: string };
     publishToStorefront?: boolean;
   }
 ) {
   type ShopifyUserError = { field?: string[]; message: string };
+  type CreateProductVariantInput = {
+    price: string | number;
+    compareAtPrice?: string | number;
+    options?: string[];
+    inventoryQuantity?: number;
+    inventoryTracked?: boolean;
+  };
 
   function assertNoUserErrors(
     errors: ShopifyUserError[] | undefined,
@@ -412,6 +559,13 @@ export async function createProduct(
     return Number.isFinite(numeric) ? numeric.toFixed(2) : "0.00";
   }
 
+  function normalizeInventoryQuantity(value: unknown) {
+    if (value === null || value === undefined || value === "") return undefined;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return undefined;
+    return Math.max(0, Math.floor(numeric));
+  }
+
   function buildProductOptions() {
     if (!hasMultipleVariants || !input.options?.length) return undefined;
     return input.options.map((optionName, optionIndex) => {
@@ -430,14 +584,19 @@ export async function createProduct(
   }
 
   const shouldPublishToStorefront = input.publishToStorefront !== false;
-  const normalizedVariants = (
-    input.variants.length > 0 ? input.variants : [{ price: "0.00" }]
-  ).map((variant) => ({
+  const sourceVariants: CreateProductVariantInput[] =
+    input.variants.length > 0 ? input.variants : [{ price: "0.00" }];
+  const normalizedVariants = sourceVariants.map((variant) => ({
     ...variant,
     price: normalizePrice(variant.price),
     compareAtPrice: variant.compareAtPrice
       ? normalizePrice(variant.compareAtPrice)
       : undefined,
+    inventoryQuantity: normalizeInventoryQuantity(variant.inventoryQuantity),
+    inventoryTracked:
+      typeof variant.inventoryTracked === "boolean"
+        ? variant.inventoryTracked
+        : false,
   }));
   const hasMultipleVariants =
     normalizedVariants.length > 1 && Boolean(input.options?.length);
@@ -497,6 +656,9 @@ export async function createProduct(
     const variantsToCreate = normalizedVariants.slice(1).map((v) => ({
       price: v.price,
       ...(v.compareAtPrice ? { compareAtPrice: v.compareAtPrice } : {}),
+      ...(typeof v.inventoryTracked === "boolean"
+        ? { inventoryItem: { tracked: v.inventoryTracked } }
+        : {}),
       optionValues: (v.options || []).map((val, i) => ({
         optionName: input.options![i],
         name: val,
@@ -510,6 +672,9 @@ export async function createProduct(
         id: defaultVariantId,
         price: firstVariant.price,
         ...(firstVariant.compareAtPrice ? { compareAtPrice: firstVariant.compareAtPrice } : {}),
+        ...(typeof firstVariant.inventoryTracked === "boolean"
+          ? { inventoryItem: { tracked: firstVariant.inventoryTracked } }
+          : {}),
         optionValues: (firstVariant.options || []).map((val, i) => ({
           optionName: input.options![i],
           name: val,
@@ -574,6 +739,9 @@ export async function createProduct(
         id: defaultVariantId,
         price: variant.price,
         ...(variant.compareAtPrice ? { compareAtPrice: variant.compareAtPrice } : {}),
+        ...(typeof variant.inventoryTracked === "boolean"
+          ? { inventoryItem: { tracked: variant.inventoryTracked } }
+          : {}),
       }],
     });
     assertNoUserErrors(
@@ -602,6 +770,12 @@ export async function createProduct(
     });
   }
 
+  const inventoryWarnings = await applyInitialInventoryQuantities(
+    creds,
+    product.id,
+    normalizedVariants.map((variant) => variant.inventoryQuantity)
+  );
+
   let storefrontPublication:
     | { ok: boolean; publicationId?: string; reason?: string }
     | undefined;
@@ -616,6 +790,7 @@ export async function createProduct(
     ...createResult,
     syncedProduct,
     storefrontPublication,
+    inventoryWarnings,
   };
 }
 
