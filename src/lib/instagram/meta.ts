@@ -95,11 +95,34 @@ export async function exchangeForLongLivedToken(shortToken: string) {
   url.searchParams.set("client_secret", appSecret);
   url.searchParams.set("access_token", shortToken);
 
+  try {
+    return await readJsonResponse<{
+      access_token: string;
+      token_type?: string;
+      expires_in?: number;
+    }>(await fetch(url));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.toLowerCase().includes("method type: get")) {
+      throw error;
+    }
+  }
+
   return readJsonResponse<{
     access_token: string;
     token_type?: string;
     expires_in?: number;
-  }>(await fetch(url));
+  }>(
+    await fetch(instagramGraphUrl("/access_token", false), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "ig_exchange_token",
+        client_secret: appSecret,
+        access_token: shortToken,
+      }),
+    })
+  );
 }
 
 export async function resolveInstagramBusinessAccount(accessToken: string) {
