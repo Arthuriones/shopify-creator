@@ -124,29 +124,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    let account: {
-      instagramBusinessAccountId: string;
-      instagramUsername: string | null;
-      accountType: string | null;
-    };
-    try {
-      account = await resolveInstagramBusinessAccount(token.access_token);
-    } catch (accountError) {
-      console.warn("[instagram/callback] account lookup failed", {
-        error:
-          accountError instanceof Error
-            ? accountError.message
-            : String(accountError),
-      });
-      if (!shortToken.user_id) {
-        throw accountError;
-      }
-      account = {
-        instagramBusinessAccountId: String(shortToken.user_id),
-        instagramUsername: null,
-        accountType: null,
-      };
-    }
+    const account = await resolveInstagramBusinessAccount(token.access_token);
     const expiresAt = token.expires_in
       ? new Date(Date.now() + token.expires_in * 1000).toISOString()
       : null;

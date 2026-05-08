@@ -58,29 +58,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const accessToken = connection.page_access_token || connection.access_token;
-    let instagramUserId = connection.instagram_business_account_id;
-    try {
-      const resolved = await resolveInstagramBusinessAccount(accessToken);
-      instagramUserId = resolved.instagramBusinessAccountId;
-      if (instagramUserId !== connection.instagram_business_account_id) {
-        await supabase
-          .from("instagram_connections")
-          .update({
-            instagram_user_id: instagramUserId,
-            instagram_business_account_id: instagramUserId,
-            instagram_username: resolved.instagramUsername,
-            page_name: resolved.accountType,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", connection.id);
-      }
-    } catch (accountError) {
-      console.warn("[instagram/publish-carousel] account lookup failed", {
-        error:
-          accountError instanceof Error
-            ? accountError.message
-            : String(accountError),
-      });
+    const resolved = await resolveInstagramBusinessAccount(accessToken);
+    const instagramUserId = resolved.instagramBusinessAccountId;
+    if (instagramUserId !== connection.instagram_business_account_id) {
+      await supabase
+        .from("instagram_connections")
+        .update({
+          instagram_user_id: instagramUserId,
+          instagram_business_account_id: instagramUserId,
+          instagram_username: resolved.instagramUsername,
+          page_name: resolved.accountType,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", connection.id);
     }
 
     const result = await createInstagramPost({
