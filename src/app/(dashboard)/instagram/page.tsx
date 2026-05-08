@@ -81,6 +81,7 @@ export default function InstagramPage() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productError, setProductError] = useState("");
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [postTone, setPostTone] = useState("natural, premium e vendedor");
@@ -122,9 +123,10 @@ export default function InstagramPage() {
     }
   }
 
-  async function loadProducts(targetStoreId = storeId) {
+  async function loadProducts(targetStoreId = storeId, options?: { notify?: boolean }) {
     if (!targetStoreId) return;
     setLoadingProducts(true);
+    setProductError("");
     try {
       const res = await fetch(
         `/api/shopify/products?storeId=${encodeURIComponent(targetStoreId)}&first=250&status=ACTIVE`
@@ -134,7 +136,10 @@ export default function InstagramPage() {
       setProducts(data.products || []);
       setSelectedProductIds([]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao carregar produtos.");
+      const message =
+        error instanceof Error ? error.message : "Falha ao carregar produtos.";
+      setProductError(message);
+      if (options?.notify) toast.error(message);
       setProducts([]);
     } finally {
       setLoadingProducts(false);
@@ -431,7 +436,7 @@ export default function InstagramPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void loadProducts()}
+                onClick={() => void loadProducts(storeId, { notify: true })}
                 disabled={loadingProducts || !storeId}
               >
                 {loadingProducts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -442,7 +447,11 @@ export default function InstagramPage() {
           <CardContent>
             {products.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
-                {loadingProducts ? "Carregando produtos..." : "Nenhum produto carregado."}
+                {loadingProducts
+                  ? "Carregando produtos..."
+                  : productError
+                    ? productError
+                    : "Nenhum produto carregado."}
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
