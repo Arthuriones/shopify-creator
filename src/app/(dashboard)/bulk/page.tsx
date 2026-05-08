@@ -58,6 +58,7 @@ export default function BulkImportPage() {
   const [jobs, setJobs] = useState<BulkJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [optimize, setOptimize] = useState(false);
+  const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [perSourceLimit, setPerSourceLimit] = useState("1");
   const [inventoryMode, setInventoryMode] = useState<InventoryMode>("not_tracked");
@@ -153,6 +154,7 @@ export default function BulkImportPage() {
           storeId: selectedStore,
           sources: sourceList,
           optimize,
+          translateVariantOptions,
           publishToStorefront,
           perSourceLimit: Number(perSourceLimit || 1),
           inventoryMode,
@@ -302,6 +304,16 @@ export default function BulkImportPage() {
               />
               <Languages className="h-4 w-4 text-primary" />
               Traduzir produto
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={translateVariantOptions}
+                onChange={(event) => setTranslateVariantOptions(event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <Languages className="h-4 w-4 text-primary" />
+              Traduzir cores/tamanhos
             </label>
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input

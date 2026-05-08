@@ -8,6 +8,7 @@ interface BulkImportProgress {
   sourceType?: "auto" | "aliexpress" | "shopify_public";
   step?: string;
   optimize?: boolean;
+  translateVariantOptions?: boolean;
   publishToStorefront?: boolean;
   perSourceLimit?: number;
   inventoryMode?: "not_tracked" | "tracked";
@@ -100,6 +101,7 @@ export async function processBulkImportJobs(input: {
     const progress = job.progress || {};
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
+    const translateVariantOptions = progress.translateVariantOptions === true;
     const publishToStorefront = progress.publishToStorefront !== false;
     const inventoryMode = progress.inventoryMode === "tracked" ? "tracked" : "not_tracked";
     const inventoryQuantityRaw = Number(progress.inventoryQuantity ?? 0);
@@ -187,6 +189,7 @@ export async function processBulkImportJobs(input: {
           product,
           context,
           optimize,
+          translateVariantOptions,
           publishToStorefront,
           inventory,
         });

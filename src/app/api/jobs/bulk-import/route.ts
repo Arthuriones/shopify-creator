@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     ? body.sources.map((source: unknown) => String(source).trim()).filter(Boolean)
     : [];
   const optimize = body.optimize === true || body.translateProduct === true;
+  const translateVariantOptions = body.translateVariantOptions === true;
   const publishToStorefront = body.publishToStorefront !== false;
   const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 250);
   const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
           source,
           sourceType,
           optimize,
+          translateVariantOptions,
           publishToStorefront,
           perSourceLimit,
           inventoryMode,

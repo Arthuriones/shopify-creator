@@ -1,4 +1,5 @@
 import { optimizeProduct } from "@/lib/gemini/client";
+import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createProduct, type ShopifyCredentials } from "@/lib/shopify/client";
 import type { AliExpressProduct, OptimizationResult, StoreContext } from "@/types";
 import type { UnifiedImportProduct } from "./source-adapters";
@@ -80,12 +81,13 @@ export function toCreateProductInput(input: {
   optimized: OptimizationResult;
   publishToStorefront: boolean;
   inventory?: { tracked: boolean; quantity?: number };
+  translateVariantOptions?: boolean;
 }) {
   const { product, optimized, publishToStorefront } = input;
   const inventory = input.inventory || { tracked: false };
   const hasOptions = product.options.length > 0 && product.variants.length > 1;
 
-  return {
+  const createInput = {
     title: optimized.title || product.title,
     descriptionHtml: optimized.description || product.descriptionHtml || "<p></p>",
     tags: optimized.tags?.length ? optimized.tags : product.tags,
@@ -123,6 +125,10 @@ export function toCreateProductInput(input: {
     },
     publishToStorefront,
   };
+
+  return input.translateVariantOptions
+    ? translateProductVariantOptionsToPortuguese(createInput)
+    : createInput;
 }
 
 export async function publishImportedProduct(input: {
@@ -132,6 +138,7 @@ export async function publishImportedProduct(input: {
   optimize: boolean;
   publishToStorefront: boolean;
   inventory?: { tracked: boolean; quantity?: number };
+  translateVariantOptions?: boolean;
 }) {
   const optimized = await maybeOptimizeImportedProduct(
     input.product,
@@ -146,6 +153,7 @@ export async function publishImportedProduct(input: {
       optimized,
       publishToStorefront: input.publishToStorefront,
       inventory: input.inventory,
+      translateVariantOptions: input.translateVariantOptions,
     })
   );
 

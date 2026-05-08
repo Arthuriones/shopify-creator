@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Boxes,
+  Camera,
   Download,
   LayoutDashboard,
   LogOut,
@@ -112,8 +113,13 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "IA e conteudo",
+    label: "Canais e conteudo",
     items: [
+      {
+        href: "/instagram",
+        label: "Instagram",
+        icon: Camera,
+      },
       {
         href: "/optimizer",
         label: "Otimizador",
@@ -133,7 +139,7 @@ const mobileNavItems: NavItem[] = [
   navSections[1].items[0],
   navSections[1].items[3],
   navSections[4].items[0],
-  navSections[5].items[1],
+  navSections[5].items[0],
 ];
 
 function splitHref(href: string) {

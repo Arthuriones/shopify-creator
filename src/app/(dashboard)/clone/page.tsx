@@ -838,6 +838,7 @@ export default function ClonePage() {
   const [cloneMode, setCloneMode] = useState<CloneMode>("identical");
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
+  const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
   const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -866,6 +867,8 @@ export default function ClonePage() {
   const [deletingRouteId, setDeletingRouteId] = useState("");
   const [destinationCreating, setDestinationCreating] = useState(false);
   const [translateDestinationProducts, setTranslateDestinationProducts] =
+    useState(false);
+  const [translateDestinationVariantOptions, setTranslateDestinationVariantOptions] =
     useState(false);
   const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
     useState(false);
@@ -1213,6 +1216,7 @@ export default function ClonePage() {
     if (mode === "identical") {
       setPublishToStorefront(true);
       setTranslateCloneProducts(false);
+      setTranslateVariantOptions(false);
       setCreateRoutingConfig(false);
       setDuplicatePolicy("skip");
       return;
@@ -1221,6 +1225,7 @@ export default function ClonePage() {
     if (mode === "translated") {
       setPublishToStorefront(true);
       setTranslateCloneProducts(true);
+      setTranslateVariantOptions(true);
       setCreateRoutingConfig(false);
       setDuplicatePolicy("skip");
       return;
@@ -1229,6 +1234,7 @@ export default function ClonePage() {
     if (mode === "routed") {
       setPublishToStorefront(true);
       setTranslateCloneProducts(false);
+      setTranslateVariantOptions(false);
       setCreateRoutingConfig(true);
       setDuplicatePolicy("skip");
       return;
@@ -1237,6 +1243,7 @@ export default function ClonePage() {
     if (mode === "complete") {
       setPublishToStorefront(true);
       setTranslateCloneProducts(true);
+      setTranslateVariantOptions(true);
       setCreateRoutingConfig(true);
       setDuplicatePolicy("skip");
     }
@@ -1258,6 +1265,7 @@ export default function ClonePage() {
       inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
       publishToStorefront,
       translateProducts: translateCloneProducts,
+      translateVariantOptions,
       duplicatePolicy,
       createRoutingConfig,
       ...overrides,
@@ -1643,6 +1651,7 @@ export default function ClonePage() {
           inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
           neutralizeProducts: neutralizeDestinationProducts,
           translateProducts: translateDestinationProducts,
+          translateVariantOptions: translateDestinationVariantOptions,
         }),
       });
       const data = await res.json();
@@ -1885,7 +1894,7 @@ export default function ClonePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
                     <input
                       type="checkbox"
@@ -1908,6 +1917,20 @@ export default function ClonePage() {
                     <span>
                       <span className="block font-medium text-foreground">Traduzir produto</span>
                       <span className="text-xs text-muted-foreground">Usa idioma da loja destino.</span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={translateVariantOptions}
+                      onChange={(event) => setTranslateVariantOptions(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block font-medium text-foreground">Traduzir variações</span>
+                      <span className="text-xs text-muted-foreground">
+                        blue {"->"} azul, S/small {"->"} P.
+                      </span>
                     </span>
                   </label>
                   <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
@@ -2346,7 +2369,7 @@ export default function ClonePage() {
                 </p>
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px]">
+              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px]">
                 <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
                   <input
                     type="checkbox"
@@ -2385,6 +2408,28 @@ export default function ClonePage() {
                     <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                       Desligado preserva o texto original. Ligado adapta titulo,
                       descricao e SEO para o idioma da loja destino.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={translateVariantOptions}
+                    onChange={(event) => {
+                      setTranslateVariantOptions(event.target.checked);
+                      setCloneMode("custom");
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span>
+                    <span className="flex items-center gap-2 font-medium text-foreground">
+                      <Languages className="h-4 w-4 text-primary" />
+                      Traduzir cores e tamanhos
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      Converte nomes de opções e valores comuns: Color vira Cor,
+                      Size vira Tamanho, blue vira azul e S/small vira P.
                     </span>
                   </span>
                 </label>
@@ -2984,6 +3029,31 @@ export default function ClonePage() {
                   <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                     A traducao nao remove marcas nem altera imagens. Para apagar logos
                     e identificadores, use a neutralizacao IA.
+                  </span>
+                </span>
+              </label>
+              )}
+
+              {routedView !== "create-route" && (
+              <label className="mt-4 flex items-start gap-3 rounded-lg border border-border/70 bg-card/70 p-4 text-sm">
+                <input
+                  type="checkbox"
+                  checked={translateDestinationVariantOptions}
+                  onChange={(event) =>
+                    setTranslateDestinationVariantOptions(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                  disabled={destinationCreating}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 font-semibold text-foreground">
+                    <Languages className="h-4 w-4 text-primary" />
+                    Traduzir cores e tamanhos ao criar destino
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    Use quando a dark store deve receber variantes em português.
+                    Exemplos: Color vira Cor, Size vira Tamanho, blue vira azul e
+                    small/S vira P.
                   </span>
                 </span>
               </label>

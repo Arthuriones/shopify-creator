@@ -17,6 +17,7 @@ import {
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
 import { createClient } from "@/lib/supabase/server";
+import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import type { StoreContext } from "@/types";
 
 export const runtime = "nodejs";
@@ -87,9 +88,10 @@ async function buildCreateInputForTarget(
   context: StoreContext | null,
   publishToStorefront: boolean,
   translateProduct: boolean,
+  translateVariantOptions: boolean,
   inventory: { tracked: boolean; quantity?: number }
 ) {
-  const input = {
+  let input = {
     ...toShopifyCreateProductInput(product),
     publishToStorefront,
   };
@@ -100,6 +102,9 @@ async function buildCreateInputForTarget(
       ? { inventoryQuantity: inventory.quantity }
       : {}),
   }));
+  if (translateVariantOptions) {
+    input = translateProductVariantOptionsToPortuguese(input);
+  }
 
   if (!translateProduct || !context || !process.env.GEMINI_API_KEY) return input;
 
@@ -304,6 +309,7 @@ export async function POST(request: NextRequest) {
   const publishToStorefront = body.publishToStorefront !== false;
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
+  const translateVariantOptions = body.translateVariantOptions === true;
   const duplicatePolicy: DuplicatePolicy =
     body.duplicatePolicy === "create" ? "create" : "skip";
   const createRoutingConfig = Boolean(body.createRoutingConfig);
@@ -519,6 +525,7 @@ export async function POST(request: NextRequest) {
             targetContext,
             publishToStorefront,
             translateProduct,
+            translateVariantOptions,
             inventory
           )
         );

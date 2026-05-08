@@ -8,6 +8,7 @@ import {
   neutralizeProductForDestination,
   translateProductForDestination,
 } from "@/lib/ai/product-neutralizer";
+import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -197,6 +198,7 @@ async function toDestinationProductInput({
   supabase,
   userId,
   targetLanguage,
+  translateVariantOptions,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
@@ -205,8 +207,11 @@ async function toDestinationProductInput({
   supabase: any;
   userId: string;
   targetLanguage: string;
+  translateVariantOptions: boolean;
 }) {
-  const input = toCreateProductInput(product);
+  const input = translateVariantOptions
+    ? translateProductVariantOptionsToPortuguese(toCreateProductInput(product))
+    : toCreateProductInput(product);
   if (!neutralize && !translate) {
     return {
       productForLookup: product,
@@ -323,6 +328,7 @@ export async function POST(request: NextRequest) {
   const neutralizeProducts = body.neutralizeProducts === true;
   const translateProducts =
     body.translateProducts === true || body.translateProduct === true;
+  const translateVariantOptions = body.translateVariantOptions === true;
   const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
   const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
   const inventoryQuantity =
@@ -398,6 +404,7 @@ export async function POST(request: NextRequest) {
         supabase,
         userId,
         targetLanguage: targetStore.target_language || "pt-BR",
+        translateVariantOptions,
       });
       const existing = await findExistingProduct(
         targetCreds,
