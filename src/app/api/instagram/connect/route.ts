@@ -16,15 +16,22 @@ function encodeState(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
+function isConfiguredId(value: string) {
+  return /^\d+$/.test(value.trim());
+}
+
 export async function GET(request: NextRequest) {
   const authMode = getInstagramAuthMode();
   const appId =
     authMode === "facebook"
       ? process.env.META_APP_ID?.trim() || getInstagramClientId()
       : getInstagramClientId();
-  if (!appId) {
+  if (!appId || !isConfiguredId(appId)) {
     return NextResponse.redirect(
-      new URL("/instagram?error=meta_app_id_missing", request.nextUrl.origin)
+      new URL(
+        "/instagram?error=meta_app_id_invalido_configure_id_numerico_na_vercel",
+        request.nextUrl.origin
+      )
     );
   }
 
@@ -61,8 +68,9 @@ export async function GET(request: NextRequest) {
   if (!url.searchParams.get("client_id")) {
     url.searchParams.set("client_id", appId);
   }
-  const configId = process.env.INSTAGRAM_CONFIG_ID?.trim();
-  if (configId && !url.searchParams.get("config_id")) {
+  const configId =
+    authMode === "instagram" ? process.env.INSTAGRAM_CONFIG_ID?.trim() : "";
+  if (configId && /^\d+$/.test(configId) && !url.searchParams.get("config_id")) {
     url.searchParams.set("config_id", configId);
   }
   if (!url.searchParams.get("redirect_uri")) {
