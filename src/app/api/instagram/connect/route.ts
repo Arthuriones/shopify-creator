@@ -2,7 +2,9 @@ import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  FACEBOOK_INSTAGRAM_OAUTH_SCOPES,
   getInstagramClientId,
+  getInstagramAuthMode,
   INSTAGRAM_OAUTH_SCOPES,
 } from "@/lib/instagram/meta";
 import { getPublicAppUrl } from "@/lib/public-url";
@@ -15,7 +17,11 @@ function encodeState(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const appId = getInstagramClientId();
+  const authMode = getInstagramAuthMode();
+  const appId =
+    authMode === "facebook"
+      ? process.env.META_APP_ID?.trim() || getInstagramClientId()
+      : getInstagramClientId();
   if (!appId) {
     return NextResponse.redirect(
       new URL("/instagram?error=meta_app_id_missing", request.nextUrl.origin)
@@ -46,23 +52,35 @@ export async function GET(request: NextRequest) {
   const popup = request.nextUrl.searchParams.get("popup") === "1";
   const state = encodeState({ userId: user.id, nonce, popup });
   const dashboardEmbedUrl = process.env.INSTAGRAM_EMBED_URL?.trim();
-  const url = new URL(
-    dashboardEmbedUrl || "https://www.instagram.com/oauth/authorize"
-  );
+  const url =
+    authMode === "facebook"
+      ? new URL("https://www.facebook.com/dialog/oauth")
+      : new URL(
+          dashboardEmbedUrl || "https://www.instagram.com/oauth/authorize"
+        );
   if (!url.searchParams.get("client_id")) {
     url.searchParams.set("client_id", appId);
+  }
+  const configId = process.env.INSTAGRAM_CONFIG_ID?.trim();
+  if (configId && !url.searchParams.get("config_id")) {
+    url.searchParams.set("config_id", configId);
   }
   if (!url.searchParams.get("redirect_uri")) {
     url.searchParams.set("redirect_uri", redirectUri);
   }
   url.searchParams.set("state", state);
   if (!url.searchParams.get("scope")) {
-    url.searchParams.set("scope", INSTAGRAM_OAUTH_SCOPES);
+    url.searchParams.set(
+      "scope",
+      authMode === "facebook"
+        ? FACEBOOK_INSTAGRAM_OAUTH_SCOPES
+        : INSTAGRAM_OAUTH_SCOPES
+    );
   }
   if (!url.searchParams.get("response_type")) {
     url.searchParams.set("response_type", "code");
   }
-  if (!url.searchParams.get("enable_fb_login")) {
+  if (authMode === "instagram" && !url.searchParams.get("enable_fb_login")) {
     url.searchParams.set("enable_fb_login", "0");
   }
 

@@ -1,8 +1,12 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  exchangeFacebookCodeForUserToken,
   exchangeCodeForUserToken,
+  exchangeForLongLivedFacebookToken,
   exchangeForLongLivedToken,
+  getInstagramAuthMode,
+  resolveFacebookInstagramBusinessAccount,
   resolveInstagramBusinessAccount,
 } from "@/lib/instagram/meta";
 import { getPublicAppUrl } from "@/lib/public-url";
@@ -114,17 +118,27 @@ export async function GET(request: NextRequest) {
   try {
     const publicUrl = getPublicAppUrl(request.nextUrl.origin);
     const redirectUri = `${publicUrl}/api/instagram/callback`;
-    const shortToken = await exchangeCodeForUserToken({ code, redirectUri });
+    const authMode = getInstagramAuthMode();
+    const shortToken =
+      authMode === "facebook"
+        ? await exchangeFacebookCodeForUserToken({ code, redirectUri })
+        : await exchangeCodeForUserToken({ code, redirectUri });
     let token = shortToken;
     try {
-      token = await exchangeForLongLivedToken(shortToken.access_token);
+      token =
+        authMode === "facebook"
+          ? await exchangeForLongLivedFacebookToken(shortToken.access_token)
+          : await exchangeForLongLivedToken(shortToken.access_token);
     } catch (tokenError) {
       console.warn("[instagram/callback] long lived token exchange failed", {
         error: tokenError instanceof Error ? tokenError.message : String(tokenError),
       });
     }
 
-    const account = await resolveInstagramBusinessAccount(token.access_token);
+    const account =
+      authMode === "facebook"
+        ? await resolveFacebookInstagramBusinessAccount(token.access_token)
+        : await resolveInstagramBusinessAccount(token.access_token);
     const expiresAt = token.expires_in
       ? new Date(Date.now() + token.expires_in * 1000).toISOString()
       : null;
@@ -137,10 +151,11 @@ export async function GET(request: NextRequest) {
           instagram_user_id: account.instagramBusinessAccountId,
           instagram_business_account_id: account.instagramBusinessAccountId,
           instagram_username: account.instagramUsername,
-          page_id: null,
+          page_id: "pageId" in account ? account.pageId : null,
           page_name: account.accountType,
           access_token: token.access_token,
-          page_access_token: null,
+          page_access_token:
+            "pageAccessToken" in account ? account.pageAccessToken : null,
           token_expires_at: expiresAt,
           updated_at: new Date().toISOString(),
         },

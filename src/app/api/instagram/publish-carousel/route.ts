@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createInstagramPost,
+  getInstagramAuthMode,
+  resolveFacebookInstagramBusinessAccount,
   resolveInstagramBusinessAccount,
 } from "@/lib/instagram/meta";
 import { createClient } from "@/lib/supabase/server";
@@ -57,8 +59,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const authMode = getInstagramAuthMode();
     const accessToken = connection.page_access_token || connection.access_token;
-    const resolved = await resolveInstagramBusinessAccount(accessToken);
+    const resolved =
+      authMode === "facebook"
+        ? await resolveFacebookInstagramBusinessAccount(connection.access_token)
+        : await resolveInstagramBusinessAccount(accessToken);
     const instagramUserId = resolved.instagramBusinessAccountId;
     if (instagramUserId !== connection.instagram_business_account_id) {
       await supabase
@@ -75,9 +81,13 @@ export async function POST(request: NextRequest) {
 
     const result = await createInstagramPost({
       instagramUserId,
-      accessToken,
+      accessToken:
+        authMode === "facebook" && "pageAccessToken" in resolved
+          ? resolved.pageAccessToken
+          : accessToken,
       imageUrls,
       caption,
+      graphHost: authMode === "facebook" ? "facebook" : "instagram",
     });
 
     await supabase.from("instagram_posts").insert({
