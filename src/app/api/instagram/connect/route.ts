@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
     maxAge: 10 * 60,
   });
 
-  const state = encodeState({ userId: user.id, nonce });
+  const popup = request.nextUrl.searchParams.get("popup") === "1";
+  const state = encodeState({ userId: user.id, nonce, popup });
   const url = new URL("https://www.instagram.com/oauth/authorize");
   url.searchParams.set("client_id", appId);
   url.searchParams.set("redirect_uri", redirectUri);
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("scope", INSTAGRAM_OAUTH_SCOPES);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("enable_fb_login", "0");
-  url.searchParams.set("force_authentication", "1");
+  url.searchParams.set("force_reauth", "true");
 
   return NextResponse.redirect(url);
 }

@@ -82,6 +82,7 @@ export default function InstagramPage() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productError, setProductError] = useState("");
+  const [connectingInstagram, setConnectingInstagram] = useState(false);
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [postTone, setPostTone] = useState("natural, premium e vendedor");
@@ -161,7 +162,6 @@ export default function InstagramPage() {
 
       const loadedStores = data || [];
       setStores(loadedStores);
-      if (loadedStores[0]) setStoreId(loadedStores[0].id);
     }
 
     void loadStores();
@@ -174,9 +174,57 @@ export default function InstagramPage() {
 
   useEffect(() => {
     if (!storeId) return;
-    void loadProducts(storeId);
+    setProducts([]);
+    setSelectedProductIds([]);
+    setProductError("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+  useEffect(() => {
+    function handleInstagramMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "shopify-creator:instagram-oauth") return;
+
+      setConnectingInstagram(false);
+      if (event.data.connected) {
+        toast.success("Instagram conectado.");
+        void loadStatus();
+        return;
+      }
+
+      toast.error(event.data.error || "Erro ao conectar Instagram.");
+    }
+
+    window.addEventListener("message", handleInstagramMessage);
+    return () => window.removeEventListener("message", handleInstagramMessage);
+  }, []);
+
+  function openInstagramLogin() {
+    setConnectingInstagram(true);
+    const width = 620;
+    const height = 760;
+    const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
+    const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
+    const popup = window.open(
+      "/api/instagram/connect?popup=1",
+      "instagram-oauth",
+      `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      setConnectingInstagram(false);
+      toast.error("O navegador bloqueou o popup do Instagram.");
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      if (popup.closed) {
+        window.clearInterval(timer);
+        setConnectingInstagram(false);
+        void loadStatus();
+      }
+    }, 700);
+  }
 
   function toggleProduct(productId: string) {
     setSelectedProductIds((current) =>
@@ -294,13 +342,19 @@ export default function InstagramPage() {
             {status?.connected ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
             ) : (
-              <a
-                href="/api/instagram/connect"
+              <button
+                type="button"
+                onClick={openInstagramLogin}
+                disabled={connectingInstagram}
                 className={cn(buttonVariants({ size: "sm" }), "shrink-0")}
               >
-                <Camera className="h-3.5 w-3.5" />
-                Conectar
-              </a>
+                {connectingInstagram ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Camera className="h-3.5 w-3.5" />
+                )}
+                {connectingInstagram ? "Conectando" : "Conectar"}
+              </button>
             )}
           </CardContent>
         </Card>
@@ -337,6 +391,9 @@ export default function InstagramPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Os produtos so carregam quando voce clicar em Atualizar, para nao misturar erros de lojas inativas com o login do Instagram.
+              </p>
             </div>
 
             <div className="space-y-2">

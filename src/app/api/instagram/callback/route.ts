@@ -15,6 +15,7 @@ function decodeState(value: string) {
     return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as {
       userId?: string;
       nonce?: string;
+      popup?: boolean;
     };
   } catch {
     return {};
@@ -27,6 +28,48 @@ function dashboardRedirect(request: NextRequest, params: Record<string, string>)
   return NextResponse.redirect(url);
 }
 
+function popupResponse(request: NextRequest, params: Record<string, string>) {
+  const payload = JSON.stringify({
+    type: "shopify-creator:instagram-oauth",
+    ...params,
+  }).replace(/</g, "\\u003c");
+  const targetOrigin = JSON.stringify(request.nextUrl.origin);
+
+  return new NextResponse(
+    `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Instagram conectado</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f1412; color: #f8faf7; }
+      main { max-width: 360px; padding: 28px; text-align: center; }
+      p { color: #b9c2bd; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Conexao concluida</h1>
+      <p>Voce ja pode voltar ao Shopify Creator. Esta janela sera fechada automaticamente.</p>
+    </main>
+    <script>
+      const payload = ${payload};
+      if (window.opener) {
+        window.opener.postMessage(payload, ${targetOrigin});
+      }
+      setTimeout(() => window.close(), 350);
+    </script>
+  </body>
+</html>`,
+    {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    }
+  );
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code") || "";
   const stateRaw = request.nextUrl.searchParams.get("state") || "";
@@ -35,31 +78,36 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("error") ||
     request.nextUrl.searchParams.get("message");
 
+  const cookieStore = await cookies();
+  const state = stateRaw ? decodeState(stateRaw) : {};
+  const isPopup = Boolean(state.popup);
+
+  const finish = (params: Record<string, string>) =>
+    isPopup ? popupResponse(request, params) : dashboardRedirect(request, params);
+
   if (error) {
-    return dashboardRedirect(request, { error });
+    return finish({ error });
   }
   if (!code) {
-    return dashboardRedirect(request, { error: "oauth_callback_invalido" });
+    return finish({ error: "oauth_callback_invalido" });
   }
 
-  const cookieStore = await cookies();
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return dashboardRedirect(request, { error: "sessao_expirada" });
+    return finish({ error: "sessao_expirada" });
   }
 
   if (stateRaw) {
     const nonce = cookieStore.get("instagram_oauth_nonce")?.value;
-    const state = decodeState(stateRaw);
     if (!nonce || !state.nonce || nonce !== state.nonce) {
-      return dashboardRedirect(request, { error: "oauth_state_invalido" });
+      return finish({ error: "oauth_state_invalido" });
     }
     if (state.userId && user.id !== state.userId) {
-      return dashboardRedirect(request, { error: "sessao_expirada" });
+      return finish({ error: "sessao_expirada" });
     }
   }
 
@@ -76,7 +124,29 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const account = await resolveInstagramBusinessAccount(token.access_token);
+    let account: {
+      instagramBusinessAccountId: string;
+      instagramUsername: string | null;
+      accountType: string | null;
+    };
+    try {
+      account = await resolveInstagramBusinessAccount(token.access_token);
+    } catch (accountError) {
+      console.warn("[instagram/callback] account lookup failed", {
+        error:
+          accountError instanceof Error
+            ? accountError.message
+            : String(accountError),
+      });
+      if (!shortToken.user_id) {
+        throw accountError;
+      }
+      account = {
+        instagramBusinessAccountId: String(shortToken.user_id),
+        instagramUsername: null,
+        accountType: null,
+      };
+    }
     const expiresAt = token.expires_in
       ? new Date(Date.now() + token.expires_in * 1000).toISOString()
       : null;
@@ -104,10 +174,10 @@ export async function GET(request: NextRequest) {
     }
 
     cookieStore.delete("instagram_oauth_nonce");
-    return dashboardRedirect(request, { connected: "1" });
+    return finish({ connected: "1" });
   } catch (caught) {
     const message =
       caught instanceof Error ? caught.message : "Falha ao conectar Instagram.";
-    return dashboardRedirect(request, { error: message.slice(0, 160) });
+    return finish({ error: message.slice(0, 160) });
   }
 }

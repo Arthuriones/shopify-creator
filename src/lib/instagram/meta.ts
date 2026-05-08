@@ -52,6 +52,19 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+function firstDataItem<T>(data: T | { data?: T[] }): T {
+  if (
+    data &&
+    typeof data === "object" &&
+    "data" in data &&
+    Array.isArray((data as { data?: T[] }).data)
+  ) {
+    const first = (data as { data?: T[] }).data?.[0];
+    if (first) return first;
+  }
+  return data as T;
+}
+
 export async function exchangeCodeForUserToken(input: {
   code: string;
   redirectUri: string;
@@ -64,12 +77,24 @@ export async function exchangeCodeForUserToken(input: {
     );
   }
 
-  return readJsonResponse<{
-    access_token: string;
-    user_id?: number | string;
-    token_type?: string;
-    expires_in?: number;
-  }>(
+  const data = await readJsonResponse<
+    | {
+        access_token: string;
+        user_id?: number | string;
+        permissions?: string;
+        token_type?: string;
+        expires_in?: number;
+      }
+    | {
+        data?: {
+          access_token: string;
+          user_id?: number | string;
+          permissions?: string;
+          token_type?: string;
+          expires_in?: number;
+        }[];
+      }
+  >(
     await fetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -82,12 +107,29 @@ export async function exchangeCodeForUserToken(input: {
       }),
     })
   );
+
+  const token = firstDataItem<{
+    access_token: string;
+    user_id?: number | string;
+    permissions?: string;
+    token_type?: string;
+    expires_in?: number;
+  }>(data);
+
+  if (!token.access_token) {
+    throw new Error("A Meta nao retornou access_token no callback do Instagram.");
+  }
+
+  return token;
 }
 
 export async function exchangeForLongLivedToken(shortToken: string) {
   const appSecret = getInstagramClientSecret();
   if (!appSecret) {
     throw new Error("Configure INSTAGRAM_CLIENT_SECRET ou META_APP_SECRET para renovar o token do Instagram.");
+  }
+  if (!shortToken) {
+    throw new Error("Token curto do Instagram ausente.");
   }
 
   const url = new URL(instagramGraphUrl("/access_token", false));
@@ -127,33 +169,54 @@ export async function exchangeForLongLivedToken(shortToken: string) {
 
 export async function resolveInstagramBusinessAccount(accessToken: string) {
   const url = new URL(instagramGraphUrl("/me"));
-  url.searchParams.set("fields", "id,username,account_type,media_count");
+  url.searchParams.set("fields", "user_id,username,account_type,media_count");
   url.searchParams.set("access_token", accessToken);
 
-  const data = await readJsonResponse<{
-    id: string;
+  const data = await readJsonResponse<
+    | {
+        id?: string;
+        user_id?: string;
+        username?: string;
+        account_type?: string;
+        media_count?: number;
+      }
+    | {
+        data?: {
+          id?: string;
+          user_id?: string;
+          username?: string;
+          account_type?: string;
+          media_count?: number;
+        }[];
+      }
+  >(await fetch(url));
+
+  const account = firstDataItem<{
+    id?: string;
+    user_id?: string;
     username?: string;
     account_type?: string;
     media_count?: number;
-  }>(await fetch(url));
+  }>(data);
+  const instagramUserId = account.user_id || account.id;
 
-  if (!data.id) {
+  if (!instagramUserId) {
     throw new Error(
       "Nao foi possivel identificar a conta profissional do Instagram."
     );
   }
 
-  const accountType = String(data.account_type || "").toUpperCase();
-  if (accountType && !["BUSINESS", "CREATOR"].includes(accountType)) {
+  const accountType = String(account.account_type || "").toUpperCase();
+  if (accountType && !["BUSINESS", "CREATOR", "MEDIA_CREATOR"].includes(accountType)) {
     throw new Error(
       "Conecte uma conta Instagram profissional, do tipo Empresa ou Criador."
     );
   }
 
   return {
-    instagramBusinessAccountId: data.id,
-    instagramUsername: data.username || null,
-    accountType: data.account_type || null,
+    instagramBusinessAccountId: instagramUserId,
+    instagramUsername: account.username || null,
+    accountType: account.account_type || null,
   };
 }
 
