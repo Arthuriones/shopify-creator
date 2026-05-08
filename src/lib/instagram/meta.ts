@@ -40,14 +40,20 @@ export function instagramGraphUrl(path: string, includeVersion = true) {
   return `https://graph.instagram.com${version}${path}`;
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T> {
+async function readJsonResponse<T>(
+  response: Response,
+  context?: { endpoint?: string; method?: string }
+): Promise<T> {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message =
       data?.error?.message ||
       data?.error_description ||
       `Meta API retornou HTTP ${response.status}.`;
-    throw new Error(message);
+    const operation = context?.endpoint
+      ? `${context.method || "GET"} ${context.endpoint}`
+      : "Meta API";
+    throw new Error(`${operation}: ${message}`);
   }
   return data as T;
 }
@@ -189,7 +195,7 @@ export async function resolveInstagramBusinessAccount(accessToken: string) {
           media_count?: number;
         }[];
       }
-  >(await fetch(url));
+  >(await fetch(url), { endpoint: "/me", method: "GET" });
 
   const account = firstDataItem<{
     id?: string;
@@ -220,59 +226,91 @@ export async function resolveInstagramBusinessAccount(accessToken: string) {
   };
 }
 
-export async function createInstagramCarousel(input: {
+async function instagramPostJson<T>(
+  endpoint: string,
+  accessToken: string,
+  body: Record<string, unknown>
+) {
+  const response = await fetch(instagramGraphUrl(endpoint), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  return readJsonResponse<T>(response, { endpoint, method: "POST" });
+}
+
+export async function createInstagramPost(input: {
   instagramUserId: string;
   accessToken: string;
   imageUrls: string[];
   caption: string;
 }) {
   const imageUrls = input.imageUrls.slice(0, 10);
-  if (imageUrls.length < 2) {
-    throw new Error("Carrossel do Instagram precisa de pelo menos 2 imagens.");
+  if (imageUrls.length < 1) {
+    throw new Error("Selecione pelo menos 1 imagem para publicar no Instagram.");
+  }
+
+  if (imageUrls.length === 1) {
+    const container = await instagramPostJson<{ id: string }>(
+      `/${input.instagramUserId}/media`,
+      input.accessToken,
+      {
+        image_url: imageUrls[0],
+        caption: input.caption.slice(0, 2200),
+      }
+    );
+
+    const published = await instagramPostJson<{ id: string }>(
+      `/${input.instagramUserId}/media_publish`,
+      input.accessToken,
+      { creation_id: container.id }
+    );
+
+    return {
+      type: "single_image" as const,
+      childIds: [],
+      containerId: container.id,
+      publishedMediaId: published.id,
+    };
   }
 
   const childIds: string[] = [];
   for (const imageUrl of imageUrls) {
-    const form = new URLSearchParams();
-    form.set("image_url", imageUrl);
-    form.set("is_carousel_item", "true");
-    form.set("access_token", input.accessToken);
-
-    const child = await readJsonResponse<{ id: string }>(
-      await fetch(instagramGraphUrl(`/${input.instagramUserId}/media`), {
-        method: "POST",
-        body: form,
-      })
+    const child = await instagramPostJson<{ id: string }>(
+      `/${input.instagramUserId}/media`,
+      input.accessToken,
+      {
+        image_url: imageUrl,
+        is_carousel_item: true,
+      }
     );
     childIds.push(child.id);
   }
 
-  const carouselForm = new URLSearchParams();
-  carouselForm.set("media_type", "CAROUSEL");
-  carouselForm.set("children", childIds.join(","));
-  carouselForm.set("caption", input.caption.slice(0, 2200));
-  carouselForm.set("access_token", input.accessToken);
-
-  const carousel = await readJsonResponse<{ id: string }>(
-    await fetch(instagramGraphUrl(`/${input.instagramUserId}/media`), {
-      method: "POST",
-      body: carouselForm,
-    })
+  const carousel = await instagramPostJson<{ id: string }>(
+    `/${input.instagramUserId}/media`,
+    input.accessToken,
+    {
+      media_type: "CAROUSEL",
+      children: childIds.join(","),
+      caption: input.caption.slice(0, 2200),
+    }
   );
 
-  const publishForm = new URLSearchParams();
-  publishForm.set("creation_id", carousel.id);
-  publishForm.set("access_token", input.accessToken);
-
-  const published = await readJsonResponse<{ id: string }>(
-    await fetch(instagramGraphUrl(`/${input.instagramUserId}/media_publish`), {
-      method: "POST",
-      body: publishForm,
-    })
+  const published = await instagramPostJson<{ id: string }>(
+    `/${input.instagramUserId}/media_publish`,
+    input.accessToken,
+    { creation_id: carousel.id }
   );
 
   return {
+    type: "carousel" as const,
     childIds,
+    containerId: carousel.id,
     carouselContainerId: carousel.id,
     publishedMediaId: published.id,
   };

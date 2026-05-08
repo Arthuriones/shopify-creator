@@ -73,6 +73,19 @@ function firstImage(product: ProductOption) {
   return product.images?.nodes?.find((image) => image.url)?.url || "";
 }
 
+function productImages(product: ProductOption) {
+  const seen = new Set<string>();
+  return (
+    product.images?.nodes
+      ?.map((image) => image.url || "")
+      .filter((url) => {
+        if (!url || seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      }) || []
+  );
+}
+
 export default function InstagramPage() {
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storeId, setStoreId] = useState("");
@@ -102,7 +115,12 @@ export default function InstagramPage() {
   );
 
   const selectedImageUrls = useMemo(
-    () => selectedProducts.map(firstImage).filter(Boolean).slice(0, 10),
+    () => {
+      if (selectedProducts.length === 1) {
+        return productImages(selectedProducts[0]).slice(0, 10);
+      }
+      return selectedProducts.map(firstImage).filter(Boolean).slice(0, 10);
+    },
     [selectedProducts]
   );
 
@@ -138,6 +156,14 @@ export default function InstagramPage() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Falha ao carregar produtos.";
+      if (!options?.notify && stores.length > 1) {
+        const currentIndex = stores.findIndex((store) => store.id === targetStoreId);
+        const nextStore = stores.slice(currentIndex + 1).find((store) => store.id);
+        if (nextStore) {
+          setStoreId(nextStore.id);
+          return;
+        }
+      }
       setProductError(message);
       if (options?.notify) toast.error(message);
       setProducts([]);
@@ -161,7 +187,8 @@ export default function InstagramPage() {
 
       const loadedStores = data || [];
       setStores(loadedStores);
-      if (loadedStores[0]) setStoreId(loadedStores[0].id);
+      const currentStoreId = storeId;
+      if (!currentStoreId && loadedStores[0]) setStoreId(loadedStores[0].id);
     }
 
     void loadStores();
@@ -193,8 +220,8 @@ export default function InstagramPage() {
       toast.error("Conecte o Instagram primeiro.");
       return;
     }
-    if (selectedImageUrls.length < 2) {
-      toast.error("Selecione pelo menos 2 produtos com imagem.");
+    if (selectedImageUrls.length < 1) {
+      toast.error("Selecione pelo menos 1 produto com imagem.");
       return;
     }
 
@@ -396,8 +423,9 @@ export default function InstagramPage() {
 
             <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/25 p-3 text-xs leading-5 text-muted-foreground">
               <p>
-                A Meta publica em três passos: cria um container para cada imagem,
-                cria o container do carrossel e depois publica esse container.
+                Com 1 imagem, o app publica um post simples. Com 2 a 10 imagens,
+                cria um carrossel. Se voce selecionar apenas 1 produto, todas as
+                imagens dele entram no carrossel.
               </p>
               <p>
                 A conta precisa ser profissional e o app Meta precisa ter permissão
@@ -407,11 +435,11 @@ export default function InstagramPage() {
 
             <Button
               onClick={publishCarousel}
-              disabled={publishing || !status?.connected || selectedImageUrls.length < 2}
+              disabled={publishing || !status?.connected || selectedImageUrls.length < 1}
               className="w-full"
             >
               {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Postar carrossel
+              {selectedImageUrls.length > 1 ? "Postar carrossel" : "Postar imagem"}
             </Button>
             {lastResult ? (
               <p className="rounded-lg border border-primary/25 bg-primary/8 p-3 text-xs text-muted-foreground">

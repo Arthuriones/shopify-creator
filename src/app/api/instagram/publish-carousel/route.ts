@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createInstagramCarousel } from "@/lib/instagram/meta";
+import {
+  createInstagramPost,
+  resolveInstagramBusinessAccount,
+} from "@/lib/instagram/meta";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -29,9 +32,9 @@ export async function POST(request: NextRequest) {
     ? body.productIds.map((id: unknown) => String(id)).filter(Boolean)
     : [];
 
-  if (imageUrls.length < 2) {
+  if (imageUrls.length < 1) {
     return NextResponse.json(
-      { error: "Selecione pelo menos 2 imagens/produtos para criar carrossel." },
+      { error: "Selecione pelo menos 1 imagem/produto para publicar." },
       { status: 400 }
     );
   }
@@ -54,9 +57,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await createInstagramCarousel({
-      instagramUserId: connection.instagram_business_account_id,
-      accessToken: connection.page_access_token || connection.access_token,
+    const accessToken = connection.page_access_token || connection.access_token;
+    let instagramUserId = connection.instagram_business_account_id;
+    try {
+      const resolved = await resolveInstagramBusinessAccount(accessToken);
+      instagramUserId = resolved.instagramBusinessAccountId;
+      if (instagramUserId !== connection.instagram_business_account_id) {
+        await supabase
+          .from("instagram_connections")
+          .update({
+            instagram_user_id: instagramUserId,
+            instagram_business_account_id: instagramUserId,
+            instagram_username: resolved.instagramUsername,
+            page_name: resolved.accountType,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", connection.id);
+      }
+    } catch (accountError) {
+      console.warn("[instagram/publish-carousel] account lookup failed", {
+        error:
+          accountError instanceof Error
+            ? accountError.message
+            : String(accountError),
+      });
+    }
+
+    const result = await createInstagramPost({
+      instagramUserId,
+      accessToken,
       imageUrls,
       caption,
     });
