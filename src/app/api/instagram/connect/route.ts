@@ -41,12 +41,14 @@ export async function GET(request: NextRequest) {
   });
 
   const state = encodeState({ userId: user.id, nonce });
-  const url = new URL("https://www.facebook.com/dialog/oauth");
+  const url = new URL("https://www.instagram.com/oauth/authorize");
   url.searchParams.set("client_id", appId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("scope", INSTAGRAM_OAUTH_SCOPES);
   url.searchParams.set("response_type", "code");
+  url.searchParams.set("enable_fb_login", "0");
+  url.searchParams.set("force_authentication", "1");
 
   return NextResponse.redirect(url);
 }

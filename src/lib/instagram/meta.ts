@@ -2,10 +2,8 @@ export const META_GRAPH_VERSION =
   process.env.META_GRAPH_VERSION?.trim() || "v24.0";
 
 export const INSTAGRAM_OAUTH_SCOPES = [
-  "instagram_basic",
-  "instagram_content_publish",
-  "pages_show_list",
-  "pages_read_engagement",
+  "instagram_business_basic",
+  "instagram_business_content_publish",
 ].join(",");
 
 export interface InstagramConnection {
@@ -21,8 +19,9 @@ export interface InstagramConnection {
   token_expires_at?: string | null;
 }
 
-export function graphUrl(path: string) {
-  return `https://graph.facebook.com/${META_GRAPH_VERSION}${path}`;
+export function instagramGraphUrl(path: string, includeVersion = true) {
+  const version = includeVersion ? `/${META_GRAPH_VERSION}` : "";
+  return `https://graph.instagram.com${version}${path}`;
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -47,17 +46,24 @@ export async function exchangeCodeForUserToken(input: {
     throw new Error("Configure META_APP_ID e META_APP_SECRET para conectar Instagram.");
   }
 
-  const url = new URL(graphUrl("/oauth/access_token"));
-  url.searchParams.set("client_id", appId);
-  url.searchParams.set("client_secret", appSecret);
-  url.searchParams.set("redirect_uri", input.redirectUri);
-  url.searchParams.set("code", input.code);
-
   return readJsonResponse<{
     access_token: string;
+    user_id?: number | string;
     token_type?: string;
     expires_in?: number;
-  }>(await fetch(url));
+  }>(
+    await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: appId,
+        client_secret: appSecret,
+        grant_type: "authorization_code",
+        redirect_uri: input.redirectUri,
+        code: input.code,
+      }),
+    })
+  );
 }
 
 export async function exchangeForLongLivedToken(shortToken: string) {
@@ -66,10 +72,10 @@ export async function exchangeForLongLivedToken(shortToken: string) {
     throw new Error("Configure META_APP_SECRET para renovar o token do Instagram.");
   }
 
-  const url = new URL(graphUrl("/oauth/access_token"));
-  url.searchParams.set("grant_type", "fb_exchange_token");
+  const url = new URL(instagramGraphUrl("/access_token", false));
+  url.searchParams.set("grant_type", "ig_exchange_token");
   url.searchParams.set("client_secret", appSecret);
-  url.searchParams.set("fb_exchange_token", shortToken);
+  url.searchParams.set("access_token", shortToken);
 
   return readJsonResponse<{
     access_token: string;
@@ -79,35 +85,34 @@ export async function exchangeForLongLivedToken(shortToken: string) {
 }
 
 export async function resolveInstagramBusinessAccount(accessToken: string) {
-  const url = new URL(graphUrl("/me/accounts"));
-  url.searchParams.set(
-    "fields",
-    "id,name,access_token,instagram_business_account{id,username}"
-  );
+  const url = new URL(instagramGraphUrl("/me"));
+  url.searchParams.set("fields", "id,username,account_type,media_count");
   url.searchParams.set("access_token", accessToken);
 
   const data = await readJsonResponse<{
-    data?: {
-      id: string;
-      name: string;
-      access_token?: string;
-      instagram_business_account?: { id: string; username?: string };
-    }[];
+    id: string;
+    username?: string;
+    account_type?: string;
+    media_count?: number;
   }>(await fetch(url));
 
-  const page = data.data?.find((item) => item.instagram_business_account?.id);
-  if (!page?.instagram_business_account?.id) {
+  if (!data.id) {
     throw new Error(
-      "Nenhuma conta profissional do Instagram vinculada a uma Página foi encontrada."
+      "Nao foi possivel identificar a conta profissional do Instagram."
+    );
+  }
+
+  const accountType = String(data.account_type || "").toUpperCase();
+  if (accountType && !["BUSINESS", "CREATOR"].includes(accountType)) {
+    throw new Error(
+      "Conecte uma conta Instagram profissional, do tipo Empresa ou Criador."
     );
   }
 
   return {
-    pageId: page.id,
-    pageName: page.name,
-    pageAccessToken: page.access_token,
-    instagramBusinessAccountId: page.instagram_business_account.id,
-    instagramUsername: page.instagram_business_account.username || null,
+    instagramBusinessAccountId: data.id,
+    instagramUsername: data.username || null,
+    accountType: data.account_type || null,
   };
 }
 
@@ -130,7 +135,7 @@ export async function createInstagramCarousel(input: {
     form.set("access_token", input.accessToken);
 
     const child = await readJsonResponse<{ id: string }>(
-      await fetch(graphUrl(`/${input.instagramUserId}/media`), {
+      await fetch(instagramGraphUrl(`/${input.instagramUserId}/media`), {
         method: "POST",
         body: form,
       })
@@ -145,7 +150,7 @@ export async function createInstagramCarousel(input: {
   carouselForm.set("access_token", input.accessToken);
 
   const carousel = await readJsonResponse<{ id: string }>(
-    await fetch(graphUrl(`/${input.instagramUserId}/media`), {
+    await fetch(instagramGraphUrl(`/${input.instagramUserId}/media`), {
       method: "POST",
       body: carouselForm,
     })
@@ -156,7 +161,7 @@ export async function createInstagramCarousel(input: {
   publishForm.set("access_token", input.accessToken);
 
   const published = await readJsonResponse<{ id: string }>(
-    await fetch(graphUrl(`/${input.instagramUserId}/media_publish`), {
+    await fetch(instagramGraphUrl(`/${input.instagramUserId}/media_publish`), {
       method: "POST",
       body: publishForm,
     })

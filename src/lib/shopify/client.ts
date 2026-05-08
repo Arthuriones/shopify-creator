@@ -234,7 +234,24 @@ async function shopifyGraphQL(
   });
 
   if (!res.ok) {
-    throw new Error(`Shopify API error: ${res.status} ${res.statusText}`);
+    if (res.status === 402) {
+      throw new ShopifyClientError(
+        "A Shopify recusou a chamada API com 402 Payment Required. Normalmente isso acontece quando a loja esta pausada, congelada, sem plano ativo ou com restricao de billing. Ative um plano/trial valido nessa loja e tente novamente.",
+        "REQUEST_FAILED",
+        402
+      );
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    const body = await res.text().catch(() => "");
+    const details = sanitizeErrorText(body);
+    throw new ShopifyClientError(
+      details
+        ? `Shopify API error: ${res.status} ${res.statusText} - ${details}`
+        : `Shopify API error: ${res.status} ${res.statusText}`,
+      "REQUEST_FAILED",
+      res.status
+    );
   }
 
   const json = await res.json();
