@@ -45,14 +45,26 @@ export async function GET(request: NextRequest) {
 
   const popup = request.nextUrl.searchParams.get("popup") === "1";
   const state = encodeState({ userId: user.id, nonce, popup });
-  const url = new URL("https://www.instagram.com/oauth/authorize");
-  url.searchParams.set("client_id", appId);
-  url.searchParams.set("redirect_uri", redirectUri);
+  const dashboardEmbedUrl = process.env.INSTAGRAM_EMBED_URL?.trim();
+  const url = new URL(
+    dashboardEmbedUrl || "https://www.instagram.com/oauth/authorize"
+  );
+  if (!url.searchParams.get("client_id")) {
+    url.searchParams.set("client_id", appId);
+  }
+  if (!url.searchParams.get("redirect_uri")) {
+    url.searchParams.set("redirect_uri", redirectUri);
+  }
   url.searchParams.set("state", state);
-  url.searchParams.set("scope", INSTAGRAM_OAUTH_SCOPES);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("enable_fb_login", "0");
-  url.searchParams.set("force_reauth", "true");
+  if (!url.searchParams.get("scope")) {
+    url.searchParams.set("scope", INSTAGRAM_OAUTH_SCOPES);
+  }
+  if (!url.searchParams.get("response_type")) {
+    url.searchParams.set("response_type", "code");
+  }
+  if (!url.searchParams.get("enable_fb_login")) {
+    url.searchParams.set("enable_fb_login", "0");
+  }
 
   return NextResponse.redirect(url);
 }
