@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { INSTAGRAM_OAUTH_SCOPES } from "@/lib/instagram/meta";
+import {
+  getInstagramClientId,
+  INSTAGRAM_OAUTH_SCOPES,
+} from "@/lib/instagram/meta";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,7 +15,7 @@ function encodeState(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const appId = process.env.META_APP_ID;
+  const appId = getInstagramClientId();
   if (!appId) {
     return NextResponse.redirect(
       new URL("/instagram?error=meta_app_id_missing", request.nextUrl.origin)

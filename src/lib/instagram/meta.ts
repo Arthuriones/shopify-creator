@@ -6,6 +6,22 @@ export const INSTAGRAM_OAUTH_SCOPES = [
   "instagram_business_content_publish",
 ].join(",");
 
+export function getInstagramClientId() {
+  return (
+    process.env.INSTAGRAM_CLIENT_ID?.trim() ||
+    process.env.META_APP_ID?.trim() ||
+    ""
+  );
+}
+
+function getInstagramClientSecret() {
+  return (
+    process.env.INSTAGRAM_CLIENT_SECRET?.trim() ||
+    process.env.META_APP_SECRET?.trim() ||
+    ""
+  );
+}
+
 export interface InstagramConnection {
   id?: string;
   user_id: string;
@@ -40,10 +56,12 @@ export async function exchangeCodeForUserToken(input: {
   code: string;
   redirectUri: string;
 }) {
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const appId = getInstagramClientId();
+  const appSecret = getInstagramClientSecret();
   if (!appId || !appSecret) {
-    throw new Error("Configure META_APP_ID e META_APP_SECRET para conectar Instagram.");
+    throw new Error(
+      "Configure INSTAGRAM_CLIENT_ID/INSTAGRAM_CLIENT_SECRET ou META_APP_ID/META_APP_SECRET para conectar Instagram."
+    );
   }
 
   return readJsonResponse<{
@@ -67,9 +85,9 @@ export async function exchangeCodeForUserToken(input: {
 }
 
 export async function exchangeForLongLivedToken(shortToken: string) {
-  const appSecret = process.env.META_APP_SECRET;
+  const appSecret = getInstagramClientSecret();
   if (!appSecret) {
-    throw new Error("Configure META_APP_SECRET para renovar o token do Instagram.");
+    throw new Error("Configure INSTAGRAM_CLIENT_SECRET ou META_APP_SECRET para renovar o token do Instagram.");
   }
 
   const url = new URL(instagramGraphUrl("/access_token", false));
