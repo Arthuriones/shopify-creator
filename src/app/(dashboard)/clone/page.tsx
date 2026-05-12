@@ -13,6 +13,7 @@ import {
   FileJson,
   FileOutput,
   GitBranch,
+  Image as ImageIcon,
   Languages,
   Loader2,
   LockKeyhole,
@@ -839,6 +840,8 @@ export default function ClonePage() {
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
+  const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
+  const [applyLogoToCloneImages, setApplyLogoToCloneImages] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
   const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -1266,6 +1269,8 @@ export default function ClonePage() {
       publishToStorefront,
       translateProducts: translateCloneProducts,
       translateVariantOptions,
+      neutralizeProducts: neutralizeCloneProducts,
+      applyLogoToImages: applyLogoToCloneImages,
       duplicatePolicy,
       createRoutingConfig,
       ...overrides,
@@ -1417,6 +1422,8 @@ export default function ClonePage() {
         createdCount: 0,
         skippedCount: 0,
         failedCount: 0,
+        neutralizedCount: 0,
+        logoAppliedCount: 0,
         skuMap: {} as Record<string, string>,
         variantMap: {} as Record<string, string>,
       };
@@ -1484,6 +1491,8 @@ export default function ClonePage() {
         aggregate.createdCount += Number(data.createdCount || 0);
         aggregate.skippedCount += Number(data.skippedCount || 0);
         aggregate.failedCount += Number(data.failedCount || 0);
+        aggregate.neutralizedCount += Number(data.neutralizedCount || 0);
+        aggregate.logoAppliedCount += Number(data.logoAppliedCount || 0);
         Object.assign(aggregate.skuMap, data.skuMap || {});
         Object.assign(aggregate.variantMap, data.variantMap || {});
 
@@ -1548,6 +1557,12 @@ export default function ClonePage() {
       }
       if (routingConfig) {
         toast.success("Rota de checkout criada com os mapas completos.");
+      }
+      if (aggregate.neutralizedCount) {
+        toast.success(`${aggregate.neutralizedCount} produto(s) neutralizados com IA.`);
+      }
+      if (aggregate.logoAppliedCount) {
+        toast.success(`${aggregate.logoAppliedCount} imagem(ns) receberam a logo.`);
       }
       await Promise.all([loadConfigs(), loadCloneRuns()]);
     } catch (error) {
@@ -1894,7 +1909,7 @@ export default function ClonePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
                     <input
                       type="checkbox"
@@ -1930,6 +1945,40 @@ export default function ClonePage() {
                       <span className="block font-medium text-foreground">Traduzir variações</span>
                       <span className="text-xs text-muted-foreground">
                         blue {"->"} azul, S/small {"->"} P.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={neutralizeCloneProducts}
+                      onChange={(event) => setNeutralizeCloneProducts(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <WandSparkles className="h-3.5 w-3.5 text-primary" />
+                        Neutralizar
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Remove marcas do texto e imagens.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={applyLogoToCloneImages}
+                      onChange={(event) => setApplyLogoToCloneImages(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                        Aplicar logo
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Marca as imagens em massa.
                       </span>
                     </span>
                   </label>

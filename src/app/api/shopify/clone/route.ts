@@ -6,6 +6,8 @@ import {
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
 import { optimizeProduct } from "@/lib/gemini/client";
+import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import { applyLogoToProductImages } from "@/lib/images/apply-logo";
 import {
   attachCollectionsToProducts,
   type PublicShopifyProduct,
@@ -17,6 +19,7 @@ import {
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import type { StoreContext } from "@/types";
 
@@ -160,6 +163,77 @@ async function buildCreateInputForTarget(
       description: optimized.seoDescription,
     },
   };
+}
+
+type TargetCreateInput = Awaited<ReturnType<typeof buildCreateInputForTarget>>;
+
+async function prepareCreateInputForImport(input: {
+  userId: string;
+  targetStoreId: string;
+  productInput: TargetCreateInput;
+  targetLanguage: string;
+  neutralizeProducts: boolean;
+  applyLogoToImages: boolean;
+}) {
+  let productInput = input.productInput;
+  const warnings: string[] = [];
+  let neutralized = false;
+  let logoAppliedCount = 0;
+  let storageClient: ReturnType<typeof createAdminClient> | null = null;
+
+  function getStorageClient() {
+    storageClient ||= createAdminClient();
+    return storageClient;
+  }
+
+  if (input.neutralizeProducts) {
+    const neutralizedProduct = await neutralizeProductForDestination({
+      userId: input.userId,
+      title: productInput.title,
+      descriptionHtml: productInput.descriptionHtml,
+      tags: productInput.tags,
+      seo: productInput.seo,
+      images: productInput.images.map((image) => ({
+        url: image.src,
+        altText: image.altText,
+      })),
+      maxImages: 3,
+      storageClient: getStorageClient(),
+      targetLanguage: input.targetLanguage,
+    });
+
+    productInput = {
+      ...productInput,
+      title: neutralizedProduct.title,
+      descriptionHtml: neutralizedProduct.descriptionHtml,
+      tags: neutralizedProduct.tags,
+      seo: neutralizedProduct.seo,
+      images:
+        neutralizedProduct.images.length > 0
+          ? neutralizedProduct.images
+          : productInput.images,
+    };
+    warnings.push(...neutralizedProduct.warnings);
+    neutralized = true;
+  }
+
+  if (input.applyLogoToImages) {
+    const branded = await applyLogoToProductImages({
+      userId: input.userId,
+      storeId: input.targetStoreId,
+      images: productInput.images,
+      storageClient: getStorageClient(),
+      maxImages: 20,
+    });
+    productInput = {
+      ...productInput,
+      images: branded.images,
+    };
+    logoAppliedCount = branded.appliedCount;
+    warnings.push(...branded.warnings);
+  }
+
+  return { productInput, warnings, neutralized, logoAppliedCount };
 }
 
 function variantSignature(optionValues: string[]) {
@@ -309,6 +383,8 @@ export async function POST(request: NextRequest) {
   const publishToStorefront = body.publishToStorefront !== false;
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
+  const neutralizeProducts = body.neutralizeProducts === true;
+  const applyLogoToImages = body.applyLogoToImages === true || body.applyLogo === true;
   const translateVariantOptions = body.translateVariantOptions === true;
   const duplicatePolicy: DuplicatePolicy =
     body.duplicatePolicy === "create" ? "create" : "skip";
@@ -472,6 +548,12 @@ export async function POST(request: NextRequest) {
     const created: { sourceHandle: string; result: unknown }[] = [];
     const skipped: { sourceHandle: string; existingProductId: string }[] = [];
     const failed: { sourceHandle: string; error: string }[] = [];
+    const transformed: {
+      sourceHandle: string;
+      neutralized: boolean;
+      logoAppliedCount: number;
+      warnings: string[];
+    }[] = [];
     const aggregateSkuMap: Record<string, string> = {};
     const aggregateVariantMap: Record<string, string> = {};
     const collectionProductIds = new Map<string, Set<string>>();
@@ -518,22 +600,39 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const result = await createProduct(
-          targetCreds,
-          await buildCreateInputForTarget(
+        const prepared = await prepareCreateInputForImport({
+          userId,
+          targetStoreId,
+          targetLanguage: targetContext?.targetLanguage || "pt-BR",
+          neutralizeProducts,
+          applyLogoToImages,
+          productInput: await buildCreateInputForTarget(
             product,
             targetContext,
             publishToStorefront,
             translateProduct,
             translateVariantOptions,
             inventory
-          )
-        );
+          ),
+        });
+        const result = await createProduct(targetCreds, prepared.productInput);
         const maps = buildVariantMaps(product, result?.syncedProduct);
         Object.assign(aggregateSkuMap, maps.skuMap);
         Object.assign(aggregateVariantMap, maps.variantMap);
         assignProductToCollections(product, result?.syncedProduct?.id);
         created.push({ sourceHandle: product.handle, result });
+        if (
+          prepared.neutralized ||
+          prepared.logoAppliedCount > 0 ||
+          prepared.warnings.length > 0
+        ) {
+          transformed.push({
+            sourceHandle: product.handle,
+            neutralized: prepared.neutralized,
+            logoAppliedCount: prepared.logoAppliedCount,
+            warnings: prepared.warnings,
+          });
+        }
       } catch (error) {
         failed.push({
           sourceHandle: product.handle,
@@ -584,11 +683,16 @@ export async function POST(request: NextRequest) {
           createdCount: created.length,
           skippedCount: skipped.length,
           failedCount: failed.length,
+          neutralizedCount: transformed.filter((item) => item.neutralized).length,
+          logoAppliedCount: transformed.reduce(
+            (total, item) => total + item.logoAppliedCount,
+            0
+          ),
           skuMapCount: Object.keys(aggregateSkuMap).length,
           variantMapCount: Object.keys(aggregateVariantMap).length,
-        routingConfig,
-        collectionSync,
-      },
+          routingConfig,
+          collectionSync,
+        },
         error:
           failed.length === products.length
             ? "Todos os produtos falharam ao clonar."
@@ -602,6 +706,11 @@ export async function POST(request: NextRequest) {
       createdCount: created.length,
       skippedCount: skipped.length,
       failedCount: failed.length,
+      neutralizedCount: transformed.filter((item) => item.neutralized).length,
+      logoAppliedCount: transformed.reduce(
+        (total, item) => total + item.logoAppliedCount,
+        0
+      ),
       skuMapCount: Object.keys(aggregateSkuMap).length,
       variantMapCount: Object.keys(aggregateVariantMap).length,
       skuMap: aggregateSkuMap,
@@ -611,6 +720,7 @@ export async function POST(request: NextRequest) {
       created,
       skipped,
       failed,
+      transformed,
     });
   } catch (error) {
     const message =

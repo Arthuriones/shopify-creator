@@ -8,6 +8,8 @@ interface BulkImportProgress {
   sourceType?: "auto" | "aliexpress" | "shopify_public";
   step?: string;
   optimize?: boolean;
+  neutralize?: boolean;
+  applyLogo?: boolean;
   translateVariantOptions?: boolean;
   publishToStorefront?: boolean;
   perSourceLimit?: number;
@@ -101,6 +103,8 @@ export async function processBulkImportJobs(input: {
     const progress = job.progress || {};
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
+    const neutralize = progress.neutralize === true;
+    const applyLogo = progress.applyLogo === true;
     const translateVariantOptions = progress.translateVariantOptions === true;
     const publishToStorefront = progress.publishToStorefront !== false;
     const inventoryMode = progress.inventoryMode === "tracked" ? "tracked" : "not_tracked";
@@ -173,7 +177,13 @@ export async function processBulkImportJobs(input: {
           progress: {
             ...progress,
             source,
-            step: optimize ? "Traduzindo e publicando" : "Publicando",
+            step: neutralize
+              ? "Neutralizando e publicando"
+              : applyLogo
+                ? "Aplicando logo e publicando"
+                : optimize
+                  ? "Traduzindo e publicando"
+                  : "Publicando",
             current: index + 1,
             total: imported.products.length,
             product: productSummary(product),
@@ -189,9 +199,14 @@ export async function processBulkImportJobs(input: {
           product,
           context,
           optimize,
+          neutralize,
+          applyLogo,
           translateVariantOptions,
           publishToStorefront,
           inventory,
+          userId: job.user_id,
+          storeId: job.store_id,
+          storageClient: supabase,
         });
 
         publishedProducts.push({
@@ -202,6 +217,9 @@ export async function processBulkImportJobs(input: {
             published.result?.syncedProduct?.id ||
             null,
           publication: published.result?.storefrontPublication || null,
+          neutralized: published.neutralized,
+          logoAppliedCount: published.logoAppliedCount,
+          warnings: published.warnings,
         });
       }
 
@@ -219,6 +237,12 @@ export async function processBulkImportJobs(input: {
           sourceType: imported.sourceType,
           sourceDomain: imported.sourceDomain || null,
           products: publishedProducts,
+          neutralizedCount: publishedProducts.filter((product) => product.neutralized)
+            .length,
+          logoAppliedCount: publishedProducts.reduce(
+            (total, product) => total + Number(product.logoAppliedCount || 0),
+            0
+          ),
         },
         error: null,
       });

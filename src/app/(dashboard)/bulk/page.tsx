@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Languages, Loader2, PlayCircle, RefreshCw, Store } from "lucide-react";
+import { Image as ImageIcon, Languages, Loader2, PlayCircle, RefreshCw, Sparkles, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +58,8 @@ export default function BulkImportPage() {
   const [jobs, setJobs] = useState<BulkJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [optimize, setOptimize] = useState(false);
+  const [neutralize, setNeutralize] = useState(false);
+  const [applyLogo, setApplyLogo] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [perSourceLimit, setPerSourceLimit] = useState("1");
@@ -154,6 +156,8 @@ export default function BulkImportPage() {
           storeId: selectedStore,
           sources: sourceList,
           optimize,
+          neutralize,
+          applyLogo,
           translateVariantOptions,
           publishToStorefront,
           perSourceLimit: Number(perSourceLimit || 1),
@@ -314,6 +318,26 @@ export default function BulkImportPage() {
               />
               <Languages className="h-4 w-4 text-primary" />
               Traduzir cores/tamanhos
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={neutralize}
+                onChange={(event) => setNeutralize(event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <Sparkles className="h-4 w-4 text-primary" />
+              Neutralizar produto
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={applyLogo}
+                onChange={(event) => setApplyLogo(event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <ImageIcon className="h-4 w-4 text-primary" />
+              Aplicar logo em massa
             </label>
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input

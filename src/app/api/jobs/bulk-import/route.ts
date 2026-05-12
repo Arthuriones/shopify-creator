@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
     ? body.sources.map((source: unknown) => String(source).trim()).filter(Boolean)
     : [];
   const optimize = body.optimize === true || body.translateProduct === true;
+  const neutralize = body.neutralize === true || body.neutralizeProducts === true;
+  const applyLogo = body.applyLogo === true || body.applyLogoToImages === true;
   const translateVariantOptions = body.translateVariantOptions === true;
   const publishToStorefront = body.publishToStorefront !== false;
   const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 250);
@@ -110,6 +112,8 @@ export async function POST(request: NextRequest) {
           source,
           sourceType,
           optimize,
+          neutralize,
+          applyLogo,
           translateVariantOptions,
           publishToStorefront,
           perSourceLimit,

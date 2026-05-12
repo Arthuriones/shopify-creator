@@ -1,8 +1,11 @@
 import { optimizeProduct } from "@/lib/gemini/client";
+import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import { applyLogoToProductImages } from "@/lib/images/apply-logo";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createProduct, type ShopifyCredentials } from "@/lib/shopify/client";
 import type { AliExpressProduct, OptimizationResult, StoreContext } from "@/types";
 import type { UnifiedImportProduct } from "./source-adapters";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function money(value: string | number | null | undefined): string {
   const numeric = Number(value || 0);
@@ -139,17 +142,86 @@ export async function publishImportedProduct(input: {
   publishToStorefront: boolean;
   inventory?: { tracked: boolean; quantity?: number };
   translateVariantOptions?: boolean;
+  neutralize?: boolean;
+  applyLogo?: boolean;
+  userId?: string;
+  storeId?: string;
+  storageClient?: SupabaseClient;
 }) {
-  const optimized = await maybeOptimizeImportedProduct(
+  let product = input.product;
+  let optimized = await maybeOptimizeImportedProduct(
     input.product,
     input.context,
     input.optimize
   );
+  const warnings: string[] = [];
+  let neutralized = false;
+  let logoAppliedCount = 0;
+
+  if (input.neutralize) {
+    if (!input.userId || !input.storageClient) {
+      warnings.push("Neutralizacao ignorada: usuario ou storage ausente.");
+    } else {
+      const neutralizedProduct = await neutralizeProductForDestination({
+        userId: input.userId,
+        title: optimized.title,
+        descriptionHtml: optimized.description,
+        tags: optimized.tags,
+        seo: {
+          title: optimized.seoTitle,
+          description: optimized.seoDescription,
+        },
+        images: product.images.map((image) => ({
+          url: image.src,
+          altText: image.altText,
+        })),
+        maxImages: 3,
+        storageClient: input.storageClient,
+        targetLanguage: input.context?.targetLanguage || "pt-BR",
+      });
+
+      optimized = {
+        title: neutralizedProduct.title,
+        description: neutralizedProduct.descriptionHtml,
+        tags: neutralizedProduct.tags,
+        seoTitle: neutralizedProduct.seo.title,
+        seoDescription: neutralizedProduct.seo.description,
+      };
+      if (neutralizedProduct.images.length > 0) {
+        product = {
+          ...product,
+          images: neutralizedProduct.images,
+        };
+      }
+      warnings.push(...neutralizedProduct.warnings);
+      neutralized = true;
+    }
+  }
+
+  if (input.applyLogo) {
+    if (!input.userId || !input.storeId || !input.storageClient) {
+      warnings.push("Logo ignorada: loja, usuario ou storage ausente.");
+    } else {
+      const branded = await applyLogoToProductImages({
+        userId: input.userId,
+        storeId: input.storeId,
+        images: product.images,
+        storageClient: input.storageClient,
+        maxImages: 20,
+      });
+      product = {
+        ...product,
+        images: branded.images,
+      };
+      logoAppliedCount = branded.appliedCount;
+      warnings.push(...branded.warnings);
+    }
+  }
 
   const result = await createProduct(
     input.creds,
     toCreateProductInput({
-      product: input.product,
+      product,
       optimized,
       publishToStorefront: input.publishToStorefront,
       inventory: input.inventory,
@@ -157,5 +229,5 @@ export async function publishImportedProduct(input: {
     })
   );
 
-  return { optimized, result };
+  return { optimized, result, warnings, neutralized, logoAppliedCount };
 }
