@@ -173,6 +173,7 @@ async function prepareCreateInputForImport(input: {
   productInput: TargetCreateInput;
   targetLanguage: string;
   neutralizeProducts: boolean;
+  neutralizationInstructions: string;
   applyLogoToImages: boolean;
 }) {
   let productInput = input.productInput;
@@ -200,6 +201,7 @@ async function prepareCreateInputForImport(input: {
       maxImages: 3,
       storageClient: getStorageClient(),
       targetLanguage: input.targetLanguage,
+      customInstructions: input.neutralizationInstructions,
     });
 
     productInput = {
@@ -384,6 +386,10 @@ export async function POST(request: NextRequest) {
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
   const neutralizeProducts = body.neutralizeProducts === true;
+  const neutralizationInstructions =
+    typeof body.neutralizationInstructions === "string"
+      ? body.neutralizationInstructions.trim().slice(0, 1200)
+      : "";
   const applyLogoToImages = body.applyLogoToImages === true || body.applyLogo === true;
   const translateVariantOptions = body.translateVariantOptions === true;
   const duplicatePolicy: DuplicatePolicy =
@@ -605,6 +611,7 @@ export async function POST(request: NextRequest) {
           targetStoreId,
           targetLanguage: targetContext?.targetLanguage || "pt-BR",
           neutralizeProducts,
+          neutralizationInstructions,
           applyLogoToImages,
           productInput: await buildCreateInputForTarget(
             product,

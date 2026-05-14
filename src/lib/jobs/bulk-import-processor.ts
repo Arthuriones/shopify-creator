@@ -9,6 +9,7 @@ interface BulkImportProgress {
   step?: string;
   optimize?: boolean;
   neutralize?: boolean;
+  neutralizationInstructions?: string;
   applyLogo?: boolean;
   translateVariantOptions?: boolean;
   publishToStorefront?: boolean;
@@ -104,6 +105,9 @@ export async function processBulkImportJobs(input: {
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
     const neutralize = progress.neutralize === true;
+    const neutralizationInstructions = String(
+      progress.neutralizationInstructions || ""
+    ).trim();
     const applyLogo = progress.applyLogo === true;
     const translateVariantOptions = progress.translateVariantOptions === true;
     const publishToStorefront = progress.publishToStorefront !== false;
@@ -200,6 +204,7 @@ export async function processBulkImportJobs(input: {
           context,
           optimize,
           neutralize,
+          neutralizationInstructions,
           applyLogo,
           translateVariantOptions,
           publishToStorefront,

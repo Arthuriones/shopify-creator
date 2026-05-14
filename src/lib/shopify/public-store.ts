@@ -184,6 +184,20 @@ function extractProductHandle(input: string): string | null {
   }
 }
 
+function extractCollectionHandle(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    const match = url.pathname.match(/\/collections\/([^/?#]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    const match = value.match(/\/collections\/([^/?#]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  }
+}
+
 function normalizeCollection(
   domain: string,
   collection: CollectionsJsonCollection
@@ -423,6 +437,7 @@ export async function fetchPublicShopifyProducts(
   }
 
   const limit = Math.min(Math.max(Math.floor(options?.limit || 250), 1), 5000);
+  const collectionHandle = extractCollectionHandle(source);
   const singlePage = options?.page
     ? Math.max(Math.floor(options.page), 1)
     : null;
@@ -443,7 +458,10 @@ export async function fetchPublicShopifyProducts(
 
   for (let offset = 0; offset < maxPages && products.length < limit; offset += 1) {
     const page = singlePage || offset + 1;
-    const url = `https://${domain}/products.json?limit=${pageSize}&page=${page}`;
+    const path = collectionHandle
+      ? `/collections/${encodeURIComponent(collectionHandle)}/products.json`
+      : "/products.json";
+    const url = `https://${domain}${path}?limit=${pageSize}&page=${page}`;
     const res = await fetch(url, {
       headers: {
         accept: "application/json",
@@ -455,7 +473,9 @@ export async function fetchPublicShopifyProducts(
     if (!res.ok) {
       if (page === 1) {
         throw new Error(
-          `Nao foi possivel ler produtos publicos da loja (${res.status}).`
+          collectionHandle
+            ? `Nao foi possivel ler produtos publicos da colecao "${collectionHandle}" (${res.status}).`
+            : `Nao foi possivel ler produtos publicos da loja (${res.status}).`
         );
       }
       break;
@@ -467,7 +487,13 @@ export async function fetchPublicShopifyProducts(
 
     for (const product of pageProducts) {
       const normalized = toPublicProduct(domain, product);
-      if (normalized) products.push(normalized);
+      if (normalized) {
+        products.push(
+          collectionHandle
+            ? { ...normalized, collectionHandles: [collectionHandle] }
+            : normalized
+        );
+      }
       if (products.length >= limit) break;
     }
   }

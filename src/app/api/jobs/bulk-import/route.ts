@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
     : [];
   const optimize = body.optimize === true || body.translateProduct === true;
   const neutralize = body.neutralize === true || body.neutralizeProducts === true;
+  const neutralizationInstructions =
+    typeof body.neutralizationInstructions === "string"
+      ? body.neutralizationInstructions.trim().slice(0, 1200)
+      : "";
   const applyLogo = body.applyLogo === true || body.applyLogoToImages === true;
   const translateVariantOptions = body.translateVariantOptions === true;
   const publishToStorefront = body.publishToStorefront !== false;
@@ -113,6 +117,7 @@ export async function POST(request: NextRequest) {
           sourceType,
           optimize,
           neutralize,
+          neutralizationInstructions,
           applyLogo,
           translateVariantOptions,
           publishToStorefront,

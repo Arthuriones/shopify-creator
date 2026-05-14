@@ -143,6 +143,7 @@ export async function publishImportedProduct(input: {
   inventory?: { tracked: boolean; quantity?: number };
   translateVariantOptions?: boolean;
   neutralize?: boolean;
+  neutralizationInstructions?: string;
   applyLogo?: boolean;
   userId?: string;
   storeId?: string;
@@ -178,6 +179,7 @@ export async function publishImportedProduct(input: {
         maxImages: 3,
         storageClient: input.storageClient,
         targetLanguage: input.context?.targetLanguage || "pt-BR",
+        customInstructions: input.neutralizationInstructions,
       });
 
       optimized = {

@@ -59,6 +59,7 @@ export default function BulkImportPage() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [optimize, setOptimize] = useState(false);
   const [neutralize, setNeutralize] = useState(false);
+  const [neutralizationInstructions, setNeutralizationInstructions] = useState("");
   const [applyLogo, setApplyLogo] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [publishToStorefront, setPublishToStorefront] = useState(true);
@@ -157,6 +158,7 @@ export default function BulkImportPage() {
           sources: sourceList,
           optimize,
           neutralize,
+          neutralizationInstructions,
           applyLogo,
           translateVariantOptions,
           publishToStorefront,
@@ -298,6 +300,26 @@ export default function BulkImportPage() {
             className="font-mono text-sm"
           />
 
+          {neutralize && (
+            <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
+              <p className="text-sm font-medium text-foreground">
+                Instruções extras para neutralização
+              </p>
+              <Textarea
+                rows={3}
+                value={neutralizationInstructions}
+                onChange={(event) =>
+                  setNeutralizationInstructions(event.target.value)
+                }
+                placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
+                className="bg-background/70 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Essas instruções serão aplicadas em todos os produtos deste lote.
+              </p>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input
@@ -327,7 +349,7 @@ export default function BulkImportPage() {
                 className="h-4 w-4 accent-primary"
               />
               <Sparkles className="h-4 w-4 text-primary" />
-              Neutralizar produto
+              Limpar logos externos
             </label>
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input

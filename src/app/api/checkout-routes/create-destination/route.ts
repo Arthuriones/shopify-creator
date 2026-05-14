@@ -199,6 +199,7 @@ async function toDestinationProductInput({
   userId,
   targetLanguage,
   translateVariantOptions,
+  neutralizationInstructions,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
@@ -208,6 +209,7 @@ async function toDestinationProductInput({
   userId: string;
   targetLanguage: string;
   translateVariantOptions: boolean;
+  neutralizationInstructions: string;
 }) {
   const input = translateVariantOptions
     ? translateProductVariantOptionsToPortuguese(toCreateProductInput(product))
@@ -265,6 +267,7 @@ async function toDestinationProductInput({
     maxImages: 3,
     storageClient: supabase,
     targetLanguage,
+    customInstructions: neutralizationInstructions,
   });
 
   const productForLookup: ConnectedProduct = {
@@ -326,6 +329,10 @@ export async function POST(request: NextRequest) {
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const neutralizeProducts = body.neutralizeProducts === true;
+  const neutralizationInstructions =
+    typeof body.neutralizationInstructions === "string"
+      ? body.neutralizationInstructions.trim().slice(0, 1200)
+      : "";
   const translateProducts =
     body.translateProducts === true || body.translateProduct === true;
   const translateVariantOptions = body.translateVariantOptions === true;
@@ -405,6 +412,7 @@ export async function POST(request: NextRequest) {
         userId,
         targetLanguage: targetStore.target_language || "pt-BR",
         translateVariantOptions,
+        neutralizationInstructions,
       });
       const existing = await findExistingProduct(
         targetCreds,

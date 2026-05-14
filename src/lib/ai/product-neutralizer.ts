@@ -16,6 +16,7 @@ interface ProductNeutralizeInput {
   images?: ProductImageInput[];
   maxImages?: number;
   targetLanguage?: string;
+  customInstructions?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   storageClient: any;
 }
@@ -46,26 +47,16 @@ export interface ProductTranslateResult {
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-const KNOWN_BRANDS = [
-  "adidas",
-  "apple",
-  "balenciaga",
-  "calvin klein",
-  "chanel",
-  "dior",
-  "gucci",
-  "lacoste",
-  "louis vuitton",
-  "lv",
-  "nike",
-  "off-white",
-  "polo",
-  "prada",
-  "puma",
-  "supreme",
-  "tommy hilfiger",
-  "versace",
-  "zara",
+const EXTERNAL_MARKETPLACE_TERMS = [
+  "aliexpress",
+  "ali express",
+  "shopee",
+  "shein",
+  "temu",
+  "mercado livre",
+  "mercadolivre",
+  "amazon",
+  "dropshipping",
 ];
 
 function ensureGeminiKey(action = "usar IA em produtos") {
@@ -88,10 +79,10 @@ function parseJsonObject<T>(text: string): T {
   }
 }
 
-function stripKnownBrands(value: string) {
+function stripExternalArtifacts(value: string) {
   let output = value || "";
-  for (const brand of KNOWN_BRANDS) {
-    output = output.replace(new RegExp(`\\b${brand}\\b`, "gi"), "");
+  for (const term of EXTERNAL_MARKETPLACE_TERMS) {
+    output = output.replace(new RegExp(`\\b${term}\\b`, "gi"), "");
   }
   return output.replace(/\s{2,}/g, " ").replace(/\s+[-|,]\s*$/g, "").trim();
 }
@@ -119,9 +110,10 @@ async function ensureProductImagesBucket() {
 
 async function neutralizeText(input: ProductNeutralizeInput) {
   const language = input.targetLanguage || "pt-BR";
+  const customInstructions = input.customInstructions?.trim();
   const prompt = `Voce e um especialista em catalogo de e-commerce.
 
-Transforme este produto em uma versao neutra, sem marca registrada, sem logo e sem qualquer identificador de marca.
+Limpe este produto para cadastro em loja, removendo apenas referencias externas de marketplace, fornecedor, vendedor ou loja de origem.
 
 Produto original:
 Titulo: ${input.title}
@@ -131,14 +123,15 @@ SEO: ${JSON.stringify(input.seo || {})}
 Idioma final obrigatório: ${language}
 
 Regras obrigatorias:
-- Remova nomes como Nike, Adidas, Apple, Gucci, Louis Vuitton e qualquer marca reconhecivel.
-- Se o titulo for "camisa nike", retorne algo como "camisa" ou "camiseta esportiva", preservando o tipo do produto.
-- Nao invente uma nova marca.
-- Preserve material, cor, publico, uso e detalhes comerciais quando forem seguros.
+- Remova referencias a marketplace/fornecedor/loja de origem, como AliExpress, Shopee, Temu, Mercado Livre, dropshipping, vendedor, atacado ou codigo interno de anuncio.
+- Preserve marcas, times, escudos, modelos, fabricantes, patrocinadores, colecoes e qualquer identificador que seja parte real do produto anunciado.
+- Nao transforme um produto especifico em generico quando os detalhes forem comerciais do proprio produto.
+- Preserve material, cor, publico, uso, medidas e detalhes comerciais quando forem seguros.
 - Tudo no idioma final obrigatório "${language}".
 - Titulo com no maximo 70 caracteres.
 - Descricao em HTML limpo, objetiva e vendavel.
-- Tags genericas, sem marcas.
+- Tags uteis para Shopify, sem termos de marketplace/fornecedor.
+${customInstructions ? `\nINSTRUCOES ESPECIFICAS DO USUARIO:\n${customInstructions}\n- Estas instrucoes especificas tem prioridade sobre a regra generica. Se o usuario pedir para remover, manter ou alterar um detalhe especifico do produto, obedeça.` : ""}
 
 Responda apenas JSON valido:
 {
@@ -159,20 +152,20 @@ Responda apenas JSON valido:
     seo?: { title?: string; description?: string };
   }>(response.text || "");
 
-  const title = stripKnownBrands(parsed.title || input.title) || "Produto";
+  const title = stripExternalArtifacts(parsed.title || input.title) || "Produto";
   const descriptionHtml =
     parsed.descriptionHtml || `<p>${title}</p>`;
   const tags = Array.isArray(parsed.tags)
-    ? parsed.tags.map(stripKnownBrands).filter(Boolean).slice(0, 10)
+    ? parsed.tags.map(stripExternalArtifacts).filter(Boolean).slice(0, 10)
     : [];
 
   return {
     title,
-    descriptionHtml: stripKnownBrands(descriptionHtml),
+    descriptionHtml: stripExternalArtifacts(descriptionHtml),
     tags,
     seo: {
-      title: stripKnownBrands(parsed.seo?.title || title).slice(0, 70),
-      description: stripKnownBrands(parsed.seo?.description || title).slice(0, 155),
+      title: stripExternalArtifacts(parsed.seo?.title || title).slice(0, 70),
+      description: stripExternalArtifacts(parsed.seo?.description || title).slice(0, 155),
     },
   };
 }
@@ -245,6 +238,7 @@ async function neutralizeImage(
   input: ProductNeutralizeInput,
   index: number
 ) {
+  const customInstructions = input.customInstructions?.trim();
   const imageResponse = await fetch(image.url, {
     signal: AbortSignal.timeout(20000),
   });
@@ -262,18 +256,21 @@ async function neutralizeImage(
         role: "user",
         parts: [
           {
-            text: `Neutralize this e-commerce product image.
+            text: `Clean this e-commerce product image conservatively.
 
 Product: "${title}"
 Target language for any internal reasoning: "${input.targetLanguage || "pt-BR"}"
 
 Requirements:
-- Remove every visible brand logo, trademark, badge, wordmark, monogram, watermark, store name, and identifying text.
-- If a logo is printed on the product, erase it and rebuild the fabric/material naturally.
-- Keep the same product type, color, angle, shape, material, and main commercial details.
+- Remove only external seller/store/marketplace artifacts: watermarks, store logos, marketplace badges, promotional text overlays, UI labels, screenshot/crop artifacts, and unrelated floating stickers.
+- Preserve every design detail that is physically part of the product: embroidered or printed crests, team badges, sponsor marks, manufacturer logos, certification patches, decorative patterns, graphics, seams, collar details, sleeve stripes, colors, texture, shape, fit, and angle.
+- Do not simplify the product, do not erase chest details, and do not replace the garment with a blank or generic version.
+- If unsure whether a mark is part of the product or just a watermark, keep it.
 - Do not add any new brand, text, symbol, watermark, or label.
+- If the user provides custom instructions below, follow them exactly, including requests to remove or preserve specific product details.
 - Use a clean marketplace-ready product photo style.
-- Keep the result realistic and ready for Shopify product media.`,
+- Keep the result realistic and ready for Shopify product media while preserving the original product faithfully.
+${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""}`,
           },
           {
             inlineData: {

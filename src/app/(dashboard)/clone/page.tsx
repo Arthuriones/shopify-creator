@@ -441,7 +441,7 @@ function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
       eyebrow: "IA opcional",
       title: "Neutralizar produtos antes de criar destino",
       description:
-        "Use quando o produto original tem marca, logo ou identificador que não deve aparecer na dark store. A tradução é separada da neutralização.",
+        "Use para limpar marcas d'agua, logos de loja e artefatos externos sem apagar detalhes reais do produto.",
       checklist: [
         "Escolha as lojas",
         "Ative neutralização",
@@ -841,6 +841,8 @@ export default function ClonePage() {
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
+  const [cloneNeutralizationInstructions, setCloneNeutralizationInstructions] =
+    useState("");
   const [applyLogoToCloneImages, setApplyLogoToCloneImages] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
   const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
@@ -875,6 +877,10 @@ export default function ClonePage() {
     useState(false);
   const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
     useState(false);
+  const [
+    destinationNeutralizationInstructions,
+    setDestinationNeutralizationInstructions,
+  ] = useState("");
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -1270,6 +1276,7 @@ export default function ClonePage() {
       translateProducts: translateCloneProducts,
       translateVariantOptions,
       neutralizeProducts: neutralizeCloneProducts,
+      neutralizationInstructions: cloneNeutralizationInstructions,
       applyLogoToImages: applyLogoToCloneImages,
       duplicatePolicy,
       createRoutingConfig,
@@ -1665,6 +1672,7 @@ export default function ClonePage() {
           inventoryMode,
           inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
           neutralizeProducts: neutralizeDestinationProducts,
+          neutralizationInstructions: destinationNeutralizationInstructions,
           translateProducts: translateDestinationProducts,
           translateVariantOptions: translateDestinationVariantOptions,
         }),
@@ -1958,10 +1966,10 @@ export default function ClonePage() {
                     <span>
                       <span className="flex items-center gap-1.5 font-medium text-foreground">
                         <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                        Neutralizar
+                        Limpar externos
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Remove marcas do texto e imagens.
+                        Preserva estampas e escudos.
                       </span>
                     </span>
                   </label>
@@ -1995,6 +2003,27 @@ export default function ClonePage() {
                     </span>
                   </label>
                 </div>
+
+                {neutralizeCloneProducts && (
+                  <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
+                    <Label htmlFor="clone-neutralization-instructions">
+                      Instruções extras para neutralização
+                    </Label>
+                    <Textarea
+                      id="clone-neutralization-instructions"
+                      rows={3}
+                      value={cloneNeutralizationInstructions}
+                      onChange={(event) =>
+                        setCloneNeutralizationInstructions(event.target.value)
+                      }
+                      placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
+                      className="bg-background/70 text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Vale para os produtos selecionados nesta importação.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_160px]">
                   <div className="space-y-2">
@@ -3076,8 +3105,8 @@ export default function ClonePage() {
                     para o idioma configurado na loja destino antes de criar o produto.
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    A traducao nao remove marcas nem altera imagens. Para apagar logos
-                    e identificadores, use a neutralizacao IA.
+                    A traducao nao altera imagens. Para limpar marcas de agua,
+                    logos de loja e textos externos, use a neutralizacao IA.
                   </span>
                 </span>
               </label>
@@ -3122,10 +3151,10 @@ export default function ClonePage() {
                       </h3>
                     </div>
                     <p className="mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
-                      Quando ativo, o app usa Gemini para remover marcas do título,
-                      descrição, SEO e das imagens antes de criar o produto na dark
-                      store. Exemplo: “camisa Nike” vira “camisa esportiva”, e logos
-                      visíveis são apagados/recriados em uma imagem neutra.
+                      Quando ativo, o app usa Gemini para limpar marcas de agua,
+                      logos de loja, textos externos e artefatos de marketplace. Nas
+                      imagens, detalhes que fazem parte do produto, como escudos,
+                      patches, estampas e costuras, devem ser preservados.
                     </p>
                     <p className="mt-2 text-xs leading-5 text-muted-foreground">
                       Por segurança de tempo, a neutralização processa até 10 produtos
@@ -3149,6 +3178,28 @@ export default function ClonePage() {
                       : "Ativar neutralização"}
                   </Button>
                 </div>
+                {neutralizeDestinationProducts && (
+                  <div className="mt-4 space-y-2 rounded-lg border border-primary/20 bg-background/60 p-3">
+                    <Label htmlFor="destination-neutralization-instructions">
+                      Instruções extras para esta neutralização
+                    </Label>
+                    <Textarea
+                      id="destination-neutralization-instructions"
+                      rows={3}
+                      value={destinationNeutralizationInstructions}
+                      onChange={(event) =>
+                        setDestinationNeutralizationInstructions(event.target.value)
+                      }
+                      placeholder="Ex.: manter escudos do time, remover só selo de vendedor e texto promocional."
+                      className="bg-background/70 text-sm"
+                      disabled={destinationCreating}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      O comando customizado tem prioridade quando você pedir para
+                      remover, manter ou alterar um detalhe específico.
+                    </p>
+                  </div>
+                )}
               </div>
               )}
 
