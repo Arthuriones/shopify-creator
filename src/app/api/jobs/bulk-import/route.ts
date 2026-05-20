@@ -73,7 +73,9 @@ export async function POST(request: NextRequest) {
       ? Math.max(0, Math.floor(inventoryQuantityRaw))
       : undefined;
   const sourceType =
-    body.sourceType === "aliexpress" || body.sourceType === "shopify_public"
+    body.sourceType === "aliexpress" ||
+    body.sourceType === "shopify_public" ||
+    body.sourceType === "generic_site"
       ? body.sourceType
       : "auto";
 

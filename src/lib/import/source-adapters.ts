@@ -3,9 +3,10 @@ import {
   type PublicShopifyProduct,
   fetchPublicShopifyProducts,
 } from "@/lib/shopify/public-store";
+import { fetchGenericSiteProducts } from "@/lib/import/generic-site";
 import type { AliExpressProduct } from "@/types";
 
-export type ImportSourceType = "aliexpress" | "shopify_public";
+export type ImportSourceType = "aliexpress" | "shopify_public" | "generic_site";
 
 export interface UnifiedImportProduct {
   sourceType: ImportSourceType;
@@ -118,15 +119,43 @@ export async function importFromSource(input: {
     };
   }
 
-  const { domain, products } = await fetchPublicShopifyProducts(input.source, {
-    limit: input.limit || 50,
-  });
+  if (sourceType === "generic_site") {
+    const { domain, products } = await fetchGenericSiteProducts(input.source, {
+      limit: input.limit || 1,
+    });
 
-  return {
-    sourceType,
-    sourceDomain: domain,
-    products: products.map(normalizePublicShopifyProduct),
-  };
+    return {
+      sourceType,
+      sourceDomain: domain,
+      products,
+    };
+  }
+
+  try {
+    const { domain, products } = await fetchPublicShopifyProducts(input.source, {
+      limit: input.limit || 50,
+    });
+
+    return {
+      sourceType,
+      sourceDomain: domain,
+      products: products.map(normalizePublicShopifyProduct),
+    };
+  } catch (error) {
+    if (input.sourceType && input.sourceType !== "auto") {
+      throw error;
+    }
+
+    const { domain, products } = await fetchGenericSiteProducts(input.source, {
+      limit: input.limit || 1,
+    });
+
+    return {
+      sourceType: "generic_site" as const,
+      sourceDomain: domain,
+      products,
+    };
+  }
 }
 
 export function productSummary(product: UnifiedImportProduct) {

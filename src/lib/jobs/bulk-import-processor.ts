@@ -5,7 +5,7 @@ import type { StoreContext } from "@/types";
 
 interface BulkImportProgress {
   source?: string;
-  sourceType?: "auto" | "aliexpress" | "shopify_public";
+  sourceType?: "auto" | "aliexpress" | "shopify_public" | "generic_site";
   step?: string;
   optimize?: boolean;
   neutralize?: boolean;
