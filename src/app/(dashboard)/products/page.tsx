@@ -233,6 +233,12 @@ function parseNumericInput(value: string): number {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+function parseAiMediaLimit(value: string) {
+  const numeric = Number(value || 1);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 function formatPrice(value: number, currencyCode: string): string {
   try {
     return new Intl.NumberFormat("pt-BR", {
@@ -310,6 +316,8 @@ function ProductsPageContent() {
   const [neutralizeOnImport, setNeutralizeOnImport] = useState(false);
   const [removeExternalReferencesOnImport, setRemoveExternalReferencesOnImport] =
     useState(false);
+  const [aiMediaLimit, setAiMediaLimit] = useState("1");
+  const [genericizeNeutralizedText, setGenericizeNeutralizedText] = useState(true);
   const [customImportPrompt, setCustomImportPrompt] = useState("");
 
   const [catalogProducts, setCatalogProducts] = useState<ShopifyCatalogProduct[]>([]);
@@ -1338,6 +1346,8 @@ function ProductsPageContent() {
             product: normalizedProduct,
             customInstructions: customImportPrompt,
             mode: cleanupMode,
+            maxImages: parseAiMediaLimit(aiMediaLimit),
+            genericizeText: genericizeNeutralizedText,
           }),
         });
         const neutralizeData = await neutralizeRes.json();
@@ -1824,6 +1834,10 @@ function ProductsPageContent() {
               setNeutralizeOnImport={setNeutralizeOnImport}
               removeExternalReferencesOnImport={removeExternalReferencesOnImport}
               setRemoveExternalReferencesOnImport={setRemoveExternalReferencesOnImport}
+              aiMediaLimit={aiMediaLimit}
+              setAiMediaLimit={setAiMediaLimit}
+              genericizeNeutralizedText={genericizeNeutralizedText}
+              setGenericizeNeutralizedText={setGenericizeNeutralizedText}
               customPrompt={customImportPrompt}
               setCustomPrompt={setCustomImportPrompt}
               hasSelectedStore={Boolean(selectedStore)}

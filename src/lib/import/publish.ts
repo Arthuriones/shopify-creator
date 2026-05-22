@@ -19,6 +19,12 @@ function stripHtml(html: string) {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function clampAiMediaLimit(value: unknown, fallback = 1) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 export function toAliExpressLikeProduct(
   product: UnifiedImportProduct
 ): AliExpressProduct {
@@ -149,6 +155,8 @@ export async function publishImportedProduct(input: {
   customPrompt?: string;
   neutralize?: boolean;
   removeExternalReferences?: boolean;
+  aiMediaLimit?: number;
+  genericizeText?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
   userId?: string;
@@ -183,11 +191,12 @@ export async function publishImportedProduct(input: {
           url: image.src,
           altText: image.altText,
         })),
-        maxImages: 3,
+        maxImages: clampAiMediaLimit(input.aiMediaLimit, 1),
         storageClient: input.storageClient,
         targetLanguage: input.context?.targetLanguage || "pt-BR",
         customInstructions:
           input.neutralizationInstructions || input.customPrompt,
+        genericizeText: input.genericizeText !== false,
       };
       const neutralizedProduct = input.removeExternalReferences
         ? await removeExternalReferencesForDestination(cleanupInput)
@@ -203,7 +212,10 @@ export async function publishImportedProduct(input: {
       if (neutralizedProduct.images.length > 0) {
         product = {
           ...product,
-          images: neutralizedProduct.images,
+          images: [
+            ...neutralizedProduct.images,
+            ...product.images.slice(neutralizedProduct.images.length),
+          ],
         };
       }
       warnings.push(...neutralizedProduct.warnings);

@@ -32,6 +32,12 @@ export const maxDuration = 120;
 type CloneAction = "preview" | "export-json" | "export-csv" | "apply";
 type DuplicatePolicy = "skip" | "create";
 
+function clampAiMediaLimit(value: unknown, fallback = 1) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 interface SyncedVariant {
   id: string;
   sku?: string | null;
@@ -172,6 +178,35 @@ async function buildCreateInputForTarget(
 
 type TargetCreateInput = Awaited<ReturnType<typeof buildCreateInputForTarget>>;
 
+function toTransformedPreviewProduct(
+  product: PublicShopifyProduct,
+  productInput: TargetCreateInput,
+  prepared: Awaited<ReturnType<typeof prepareCreateInputForImport>>
+) {
+  return {
+    source: {
+      title: product.title,
+      handle: product.handle,
+      images: product.images,
+      variants: product.variants,
+    },
+    transformed: {
+      title: prepared.productInput.title,
+      descriptionHtml: prepared.productInput.descriptionHtml,
+      tags: prepared.productInput.tags || [],
+      seo: prepared.productInput.seo,
+      images: prepared.productInput.images || [],
+      variants: prepared.productInput.variants || [],
+      options: prepared.productInput.options || [],
+      publishToStorefront: prepared.productInput.publishToStorefront,
+    },
+    neutralized: prepared.neutralized,
+    logoAppliedCount: prepared.logoAppliedCount,
+    warnings: prepared.warnings,
+    originalInput: productInput,
+  };
+}
+
 async function prepareCreateInputForImport(input: {
   userId: string;
   targetStoreId: string;
@@ -179,6 +214,8 @@ async function prepareCreateInputForImport(input: {
   targetLanguage: string;
   neutralizeProducts: boolean;
   removeExternalReferences: boolean;
+  aiMediaLimit: number;
+  genericizeText: boolean;
   neutralizationInstructions: string;
   customPrompt: string;
   applyLogoToImages: boolean;
@@ -205,11 +242,12 @@ async function prepareCreateInputForImport(input: {
         url: image.src,
         altText: image.altText,
       })),
-      maxImages: 3,
+      maxImages: input.aiMediaLimit,
       storageClient: getStorageClient(),
       targetLanguage: input.targetLanguage,
       customInstructions:
         input.neutralizationInstructions || input.customPrompt,
+      genericizeText: input.genericizeText,
     };
     const neutralizedProduct = input.removeExternalReferences
       ? await removeExternalReferencesForDestination(cleanupInput)
@@ -223,7 +261,10 @@ async function prepareCreateInputForImport(input: {
       seo: neutralizedProduct.seo,
       images:
         neutralizedProduct.images.length > 0
-          ? neutralizedProduct.images
+          ? [
+              ...neutralizedProduct.images,
+              ...productInput.images.slice(neutralizedProduct.images.length),
+            ]
           : productInput.images,
     };
     warnings.push(...neutralizedProduct.warnings);
@@ -398,6 +439,8 @@ export async function POST(request: NextRequest) {
     body.translateProduct === true || body.translateProducts === true;
   const neutralizeProducts = body.neutralizeProducts === true;
   const removeExternalReferences = body.removeExternalReferences === true;
+  const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
+  const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
@@ -502,6 +545,63 @@ export async function POST(request: NextRequest) {
         products,
         collectionsResult.collections
       );
+    }
+
+    if (action === "preview" && body.transformPreview === true) {
+      if (!targetStoreId) {
+        return NextResponse.json(
+          { error: "Selecione a loja de destino para visualizar a transformacao." },
+          { status: 400 }
+        );
+      }
+
+      const product = products[0];
+      if (!product) {
+        return NextResponse.json(
+          { error: "Nenhum produto encontrado para visualizar." },
+          { status: 404 }
+        );
+      }
+
+      const targetStore = await getStoreCredentials(targetStoreId, userId);
+      if (!targetStore) {
+        return NextResponse.json(
+          { error: "Loja de destino nao encontrada." },
+          { status: 404 }
+        );
+      }
+
+      const targetContext = toStoreContext(targetStore);
+      const productInput = await buildCreateInputForTarget(
+        product,
+        targetContext,
+        publishToStorefront,
+        translateProduct,
+        translateVariantOptions,
+        inventory,
+        customPrompt
+      );
+      const prepared = await prepareCreateInputForImport({
+        userId,
+        targetStoreId,
+        targetLanguage: targetContext?.targetLanguage || "pt-BR",
+        neutralizeProducts,
+        removeExternalReferences,
+        aiMediaLimit,
+        genericizeText,
+        neutralizationInstructions,
+        customPrompt,
+        applyLogoToImages,
+        productInput,
+      });
+
+      return NextResponse.json({
+        sourceDomain: domain,
+        count: products.length,
+        products,
+        collections: collectionsResult.collections,
+        transformedPreview: toTransformedPreviewProduct(product, productInput, prepared),
+      });
     }
 
     if (action === "export-csv") {
@@ -628,6 +728,8 @@ export async function POST(request: NextRequest) {
           targetLanguage: targetContext?.targetLanguage || "pt-BR",
           neutralizeProducts,
           removeExternalReferences,
+          aiMediaLimit,
+          genericizeText,
           neutralizationInstructions,
           customPrompt,
           applyLogoToImages,

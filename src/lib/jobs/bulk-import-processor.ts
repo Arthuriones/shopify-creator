@@ -11,6 +11,8 @@ interface BulkImportProgress {
   customPrompt?: string;
   neutralize?: boolean;
   removeExternalReferences?: boolean;
+  aiMediaLimit?: number;
+  genericizeText?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
   translateVariantOptions?: boolean;
@@ -109,6 +111,11 @@ export async function processBulkImportJobs(input: {
     const customPrompt = String(progress.customPrompt || "").trim();
     const neutralize = progress.neutralize === true;
     const removeExternalReferences = progress.removeExternalReferences === true;
+    const aiMediaLimit = Math.min(
+      Math.max(Math.floor(Number(progress.aiMediaLimit || 1)), 1),
+      20
+    );
+    const genericizeText = progress.genericizeText !== false;
     const neutralizationInstructions = String(
       progress.neutralizationInstructions || ""
     ).trim();
@@ -212,6 +219,8 @@ export async function processBulkImportJobs(input: {
           customPrompt,
           neutralize,
           removeExternalReferences,
+          aiMediaLimit,
+          genericizeText,
           neutralizationInstructions,
           applyLogo,
           translateVariantOptions,

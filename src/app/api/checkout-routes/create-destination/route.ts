@@ -14,6 +14,12 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+function clampAiMediaLimit(value: unknown, fallback = 1) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 interface ConnectedVariant {
   id: string;
   title: string;
@@ -200,6 +206,8 @@ async function toDestinationProductInput({
   targetLanguage,
   translateVariantOptions,
   neutralizationInstructions,
+  aiMediaLimit,
+  genericizeText,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
@@ -210,6 +218,8 @@ async function toDestinationProductInput({
   targetLanguage: string;
   translateVariantOptions: boolean;
   neutralizationInstructions: string;
+  aiMediaLimit: number;
+  genericizeText: boolean;
 }) {
   const input = translateVariantOptions
     ? translateProductVariantOptionsToPortuguese(toCreateProductInput(product))
@@ -264,10 +274,11 @@ async function toDestinationProductInput({
       url: image.url,
       altText: image.altText,
     })),
-    maxImages: 3,
+    maxImages: aiMediaLimit,
     storageClient: supabase,
     targetLanguage,
     customInstructions: neutralizationInstructions,
+    genericizeText,
   });
 
   const productForLookup: ConnectedProduct = {
@@ -286,7 +297,13 @@ async function toDestinationProductInput({
       title: neutralized.title,
       descriptionHtml: neutralized.descriptionHtml,
       tags: neutralized.tags,
-      images: neutralized.images,
+      images:
+        neutralized.images.length > 0
+          ? [
+              ...neutralized.images,
+              ...input.images.slice(neutralized.images.length),
+            ]
+          : input.images,
       seo: neutralized.seo,
     },
     neutralizationWarnings: neutralized.warnings,
@@ -329,6 +346,8 @@ export async function POST(request: NextRequest) {
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const neutralizeProducts = body.neutralizeProducts === true;
+  const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
+  const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
@@ -413,6 +432,8 @@ export async function POST(request: NextRequest) {
         targetLanguage: targetStore.target_language || "pt-BR",
         translateVariantOptions,
         neutralizationInstructions,
+        aiMediaLimit,
+        genericizeText,
       });
       const existing = await findExistingProduct(
         targetCreds,

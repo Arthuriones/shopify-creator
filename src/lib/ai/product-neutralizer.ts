@@ -19,6 +19,7 @@ interface ProductNeutralizeInput {
   maxImages?: number;
   targetLanguage?: string;
   customInstructions?: string;
+  genericizeText?: boolean;
   mode?: ProductCleanupMode;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   storageClient: any;
@@ -151,6 +152,15 @@ Responda apenas JSON valido:
 }`;
   }
 
+  const genericizeText = input.genericizeText !== false;
+  const stockTextRules = genericizeText
+    ? `- Transforme nome, descricao, tags e SEO em uma versao generica/stock, sem marcas, colecoes ou modelos proprietarios.
+- Exemplos: "Air Jordan shoes" vira "Tenis esportivo casual"; "Pokemon booster box" vira "Caixa de cartas colecionaveis".
+- Preserve categoria, formato, material, cor, uso, publico, medidas e beneficios reais.`
+    : `- Remova marcas e identificadores, mas mantenha o texto o mais proximo possivel da funcao real do produto.
+- Preserve categoria, formato, material, cor, uso, publico, medidas e beneficios reais.
+- Nao substitua detalhes funcionais por copy generica demais.`;
+
   return `Voce e um especialista em catalogo de e-commerce e produtos stock/unbranded.
 
 Neutralize este produto para cadastro em loja propria, removendo marcas comerciais e identificadores de marca do proprio produto e tambem referencias externas de marketplace, fornecedor, vendedor ou loja de origem.
@@ -159,7 +169,7 @@ ${productBlock}
 
 Regras obrigatorias:
 - Remova nomes de marcas, fabricantes, times, personagens, colecoes protegidas, modelos proprietarios, patrocinadores, marketplaces e fornecedores quando aparecerem no titulo, descricao, tags ou SEO.
-- Transforme o produto em uma versao generica/stock preservando categoria, formato, material, cor, uso, publico, medidas e beneficios reais.
+${stockTextRules}
 - Nao mencione Nike, Adidas, Pokemon, Apple, Samsung, times, personagens, AliExpress, Shopee, Temu, Mercado Livre, dropshipping, vendedor, atacado ou codigo interno de anuncio.
 - Nao invente certificacoes, originalidade, garantia, estoque ou beneficios que nao existam.
 - Tudo no idioma final obrigatorio "${language}".

@@ -74,6 +74,25 @@ interface PreviewProduct {
   collectionHandles?: string[];
 }
 
+interface TransformedPreviewProduct {
+  source: {
+    title: string;
+    handle: string;
+    images: { src: string }[];
+  };
+  transformed: {
+    title: string;
+    descriptionHtml: string;
+    tags: string[];
+    seo?: { title?: string; description?: string };
+    images: { src: string; altText?: string | null }[];
+    variants: { price?: string; compareAtPrice?: string; options?: string[] }[];
+  };
+  neutralized: boolean;
+  logoAppliedCount: number;
+  warnings: string[];
+}
+
 interface SourceCollection {
   id: number;
   title: string;
@@ -184,8 +203,97 @@ function parseInventoryQuantity(value: string) {
   return Math.max(0, Math.floor(numeric));
 }
 
+function parseAiMediaLimit(value: string) {
+  const numeric = Number(value || 1);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function stripPreviewHtml(value: string) {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function TransformedPreviewCard({
+  preview,
+}: {
+  preview: TransformedPreviewProduct;
+}) {
+  const firstImage = preview.transformed.images?.[0]?.src;
+  const firstPrice = preview.transformed.variants?.[0]?.price;
+  const description = stripPreviewHtml(preview.transformed.descriptionHtml || "");
+
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/8 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            Visualizacao IA
+          </p>
+          <h3 className="mt-1 text-sm font-semibold text-foreground">
+            Como este produto vai ficar
+          </h3>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1">
+          {preview.neutralized && (
+            <Badge variant="secondary" className="rounded-md">
+              Neutralizado
+            </Badge>
+          )}
+          {preview.logoAppliedCount > 0 && (
+            <Badge variant="secondary" className="rounded-md">
+              Logo aplicada
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+        <div className="h-24 w-24 overflow-hidden rounded-lg border border-border/60 bg-background/70">
+          {firstImage ? (
+            <img src={firstImage} alt="" className="h-full w-full object-cover" />
+          ) : null}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] text-muted-foreground">Original</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {preview.source.title}
+          </p>
+          <p className="mt-2 text-sm font-semibold leading-5 text-foreground">
+            {preview.transformed.title}
+          </p>
+          <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
+            {description || "Sem descricao gerada."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span>{preview.transformed.images.length} midia(s)</span>
+            <span>{preview.transformed.variants.length} variante(s)</span>
+            {firstPrice ? <span>Preco: {firstPrice}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      {preview.transformed.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {preview.transformed.tags.slice(0, 6).map((tag) => (
+            <Badge key={tag} variant="outline" className="rounded-md text-[11px]">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {preview.warnings.length > 0 && (
+        <p className="mt-3 text-xs leading-5 text-amber-500">
+          {preview.warnings.length} aviso(s) na transformacao. A importacao em massa
+          ainda pode continuar usando as midias originais quando a IA falhar.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function cloneSourceKey(sourceValue: string, limitValue: number) {
@@ -846,6 +954,8 @@ export default function ClonePage() {
     removeExternalReferencesCloneProducts,
     setRemoveExternalReferencesCloneProducts,
   ] = useState(false);
+  const [cloneAiMediaLimit, setCloneAiMediaLimit] = useState("1");
+  const [cloneGenericizeText, setCloneGenericizeText] = useState(true);
   const [cloneNeutralizationInstructions, setCloneNeutralizationInstructions] =
     useState("");
   const [cloneCustomPrompt, setCloneCustomPrompt] = useState("");
@@ -853,6 +963,9 @@ export default function ClonePage() {
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
   const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [transformPreviewLoading, setTransformPreviewLoading] = useState(false);
+  const [transformedPreview, setTransformedPreview] =
+    useState<TransformedPreviewProduct | null>(null);
   const [applyLoading, setApplyLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState<"json" | "csv" | null>(null);
   const [preview, setPreview] = useState<PreviewProduct[]>([]);
@@ -883,6 +996,8 @@ export default function ClonePage() {
     useState(false);
   const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
     useState(false);
+  const [destinationAiMediaLimit, setDestinationAiMediaLimit] = useState("1");
+  const [destinationGenericizeText, setDestinationGenericizeText] = useState(true);
   const [
     destinationNeutralizationInstructions,
     setDestinationNeutralizationInstructions,
@@ -1283,6 +1398,8 @@ export default function ClonePage() {
       translateVariantOptions,
       neutralizeProducts: neutralizeCloneProducts,
       removeExternalReferences: removeExternalReferencesCloneProducts,
+      aiMediaLimit: parseAiMediaLimit(cloneAiMediaLimit),
+      genericizeText: cloneGenericizeText,
       neutralizationInstructions: cloneNeutralizationInstructions,
       customPrompt: cloneCustomPrompt,
       applyLogoToImages: applyLogoToCloneImages,
@@ -1318,6 +1435,7 @@ export default function ClonePage() {
     }
 
     setPreviewLoading(true);
+    setTransformedPreview(null);
     const controller = new AbortController();
     cloneAbortRef.current = controller;
     try {
@@ -1338,6 +1456,62 @@ export default function ClonePage() {
     } finally {
       if (cloneAbortRef.current === controller) cloneAbortRef.current = null;
       setPreviewLoading(false);
+    }
+  }
+
+  async function handleTransformPreview() {
+    if (!source.trim()) {
+      toast.error("Informe a loja de origem.");
+      return;
+    }
+    if (!targetStoreId) {
+      toast.error("Selecione a loja de destino para visualizar.");
+      return;
+    }
+
+    setTransformPreviewLoading(true);
+    const controller = new AbortController();
+    cloneAbortRef.current = controller;
+    try {
+      const selectedHandle =
+        importMode === "bulk" && selectedProductHandles.length > 0
+          ? selectedProductHandles[0]
+          : undefined;
+      const data = await runClone("preview", controller.signal, {
+        transformPreview: true,
+        recordRun: false,
+        limit: 1,
+        pageSize: 1,
+        ...(selectedHandle ? { productHandles: [selectedHandle] } : {}),
+      });
+      const loadedProducts = (data.products || []) as PreviewProduct[];
+      if (loadedProducts.length > 0) {
+        setPreview((current) => (current.length > 0 ? current : loadedProducts));
+        setSelectedProductHandles((current) =>
+          current.length > 0
+            ? current
+            : loadedProducts.map((product) => product.handle)
+        );
+      }
+      setSourceDomain(data.sourceDomain || "");
+      setSourceCollections((data.collections || []) as SourceCollection[]);
+      setTransformedPreview(
+        (data.transformedPreview || null) as TransformedPreviewProduct | null
+      );
+      toast.success("Previa transformada gerada.");
+    } catch (error) {
+      if (isAbortError(error)) {
+        toast("Operacao cancelada.");
+      } else {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Falha ao gerar previa transformada."
+        );
+      }
+    } finally {
+      if (cloneAbortRef.current === controller) cloneAbortRef.current = null;
+      setTransformPreviewLoading(false);
     }
   }
 
@@ -1680,6 +1854,8 @@ export default function ClonePage() {
           inventoryMode,
           inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
           neutralizeProducts: neutralizeDestinationProducts,
+          aiMediaLimit: parseAiMediaLimit(destinationAiMediaLimit),
+          genericizeText: destinationGenericizeText,
           neutralizationInstructions: destinationNeutralizationInstructions,
           translateProducts: translateDestinationProducts,
           translateVariantOptions: translateDestinationVariantOptions,
@@ -2041,6 +2217,54 @@ export default function ClonePage() {
                   </label>
                 </div>
 
+                {(neutralizeCloneProducts || removeExternalReferencesCloneProducts) && (
+                  <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_180px]">
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="clone-ai-media-limit">
+                          Midias com IA por produto
+                        </Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Controle o custo: a IA processa so as primeiras midias; as outras seguem originais.
+                        </p>
+                      </div>
+                      {neutralizeCloneProducts && (
+                        <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={cloneGenericizeText}
+                            onChange={(event) => {
+                              setCloneGenericizeText(event.target.checked);
+                              setCloneMode("custom");
+                            }}
+                            className="mt-0.5 h-4 w-4 accent-primary"
+                          />
+                          <span>
+                            <span className="block font-medium text-foreground">
+                              Genericizar nome, descricao e SEO
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Ex.: Air Jordan shoes vira Tenis esportivo casual.
+                            </span>
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                    <Input
+                      id="clone-ai-media-limit"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={cloneAiMediaLimit}
+                      onChange={(event) => {
+                        setCloneAiMediaLimit(event.target.value);
+                        setCloneMode("custom");
+                      }}
+                      className="h-10 bg-background/70"
+                    />
+                  </div>
+                )}
+
                 {neutralizeCloneProducts && (
                   <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
                     <Label htmlFor="clone-neutralization-instructions">
@@ -2176,6 +2400,14 @@ export default function ClonePage() {
               </div>
 
               <aside className="space-y-4 overflow-auto border-t border-border/60 bg-muted/25 px-5 py-4 lg:border-l lg:border-t-0">
+                {transformedPreview ? (
+                  <TransformedPreviewCard preview={transformedPreview} />
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
+                    Clique em Visualizar para transformar 1 produto com os criterios atuais antes de importar tudo.
+                  </div>
+                )}
+
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
                     Coleções reconhecidas
@@ -2246,6 +2478,18 @@ export default function ClonePage() {
                 <Button variant="outline" onClick={handlePreview} disabled={previewLoading || !source.trim()}>
                   {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                   {importMode === "single" ? "Analisar produto" : "Analisar origem"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTransformPreview}
+                  disabled={transformPreviewLoading || !source.trim() || !targetStoreId}
+                >
+                  {transformPreviewLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SlidersHorizontal className="h-4 w-4" />
+                  )}
+                  Visualizar
                 </Button>
                 <Button
                   onClick={handleApply}
@@ -2613,11 +2857,23 @@ export default function ClonePage() {
                   {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                   Analisar origem
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleTransformPreview}
+                  disabled={transformPreviewLoading || storesLoading || !source.trim() || !targetStoreId}
+                >
+                  {transformPreviewLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SlidersHorizontal className="h-4 w-4" />
+                  )}
+                  Visualizar
+                </Button>
                 <Button onClick={handleApply} disabled={applyLoading || !targetStoreId}>
                   {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
                   Aplicar na loja
                 </Button>
-                {(previewLoading || applyLoading) && (
+                {(previewLoading || transformPreviewLoading || applyLoading) && (
                   <Button
                     type="button"
                     variant="outline"
@@ -2689,6 +2945,11 @@ export default function ClonePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {transformedPreview && (
+              <div className="mb-4">
+                <TransformedPreviewCard preview={transformedPreview} />
+              </div>
+            )}
             {preview.length === 0 ? (
               <EmptyState>
                 Depois de analisar, os primeiros produtos aparecem aqui com imagem,
@@ -3209,7 +3470,7 @@ export default function ClonePage() {
                     </p>
                     <p className="mt-2 text-xs leading-5 text-muted-foreground">
                       Por segurança de tempo, a neutralização processa até 10 produtos
-                      por execução e até 3 imagens por produto.
+                      por execucao e usa o limite de midias que voce escolher.
                     </p>
                   </div>
                   <Button
@@ -3231,6 +3492,44 @@ export default function ClonePage() {
                 </div>
                 {neutralizeDestinationProducts && (
                   <div className="mt-4 space-y-2 rounded-lg border border-primary/20 bg-background/60 p-3">
+                    <div className="grid gap-3 md:grid-cols-[1fr_180px]">
+                      <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={destinationGenericizeText}
+                          onChange={(event) =>
+                            setDestinationGenericizeText(event.target.checked)
+                          }
+                          className="mt-0.5 h-4 w-4 accent-primary"
+                          disabled={destinationCreating}
+                        />
+                        <span>
+                          <span className="block font-medium text-foreground">
+                            Genericizar nome, descricao e SEO
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Ex.: Air Jordan shoes vira Tenis esportivo casual.
+                          </span>
+                        </span>
+                      </label>
+                      <div className="space-y-1">
+                        <Label htmlFor="destination-ai-media-limit">
+                          Midias com IA/produto
+                        </Label>
+                        <Input
+                          id="destination-ai-media-limit"
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={destinationAiMediaLimit}
+                          onChange={(event) =>
+                            setDestinationAiMediaLimit(event.target.value)
+                          }
+                          className="h-10 bg-background/70"
+                          disabled={destinationCreating}
+                        />
+                      </div>
+                    </div>
                     <Label htmlFor="destination-neutralization-instructions">
                       Instruções extras para esta neutralização
                     </Label>

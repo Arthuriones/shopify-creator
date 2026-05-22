@@ -10,6 +10,12 @@ import type { AliExpressProduct } from "@/types";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+function clampAiMediaLimit(value: unknown, fallback = 1) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -21,7 +27,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { product, storeId, customInstructions, mode } = await request.json();
+    const {
+      product,
+      storeId,
+      customInstructions,
+      mode,
+      maxImages,
+      mediaLimit,
+      genericizeText,
+    } = await request.json();
     if (!product || !storeId) {
       return NextResponse.json(
         { error: "Missing product or storeId" },
@@ -59,17 +73,19 @@ export async function POST(request: NextRequest) {
 
     const cleanupMode =
       mode === "external-references" ? "external-references" : "stock-neutralize";
+    const requestedMediaLimit = clampAiMediaLimit(maxImages ?? mediaLimit, 1);
     const cleanup = {
       userId: user.id,
       title: typedProduct.title,
       descriptionHtml: typedProduct.description,
       images: sourceImages.map((url) => ({ url, altText: typedProduct.title })),
-      maxImages: 6,
+      maxImages: requestedMediaLimit,
       targetLanguage: store.target_language || "pt-BR",
       customInstructions:
         typeof customInstructions === "string"
           ? customInstructions.trim().slice(0, 1200)
           : "",
+      genericizeText: genericizeText !== false,
       storageClient: createAdminClient(),
     };
 

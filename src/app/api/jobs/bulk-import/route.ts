@@ -6,6 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
+function clampAiMediaLimit(value: unknown, fallback = 1) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.floor(numeric), 1), 20);
+}
+
 async function getAuthenticated() {
   const supabase = await createClient();
   const {
@@ -60,6 +66,8 @@ export async function POST(request: NextRequest) {
   const neutralize = body.neutralizeProducts === true;
   const removeExternalReferences =
     body.removeExternalReferences === true || body.neutralize === true;
+  const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
+  const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
@@ -126,6 +134,8 @@ export async function POST(request: NextRequest) {
           optimize,
           neutralize,
           removeExternalReferences,
+          aiMediaLimit,
+          genericizeText,
           neutralizationInstructions,
           customPrompt,
           applyLogo,

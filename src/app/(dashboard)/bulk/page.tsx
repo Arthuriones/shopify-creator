@@ -59,6 +59,7 @@ export default function BulkImportPage() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [optimize, setOptimize] = useState(false);
   const [neutralize, setNeutralize] = useState(false);
+  const [aiMediaLimit, setAiMediaLimit] = useState("1");
   const [neutralizationInstructions, setNeutralizationInstructions] = useState("");
   const [applyLogo, setApplyLogo] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
@@ -158,6 +159,7 @@ export default function BulkImportPage() {
           sources: sourceList,
           optimize,
           neutralize,
+          aiMediaLimit: Number(aiMediaLimit || 1),
           neutralizationInstructions,
           applyLogo,
           translateVariantOptions,
@@ -314,6 +316,24 @@ export default function BulkImportPage() {
                 placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
                 className="bg-background/70 text-sm"
               />
+              <div className="grid gap-2 pt-2 sm:grid-cols-[1fr_160px]">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Midias com IA por produto
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Use 1 para economizar IA; as outras midias seguem originais.
+                  </p>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={aiMediaLimit}
+                  onChange={(event) => setAiMediaLimit(event.target.value)}
+                  className="h-10 bg-background/70"
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
                 Essas instruções serão aplicadas em todos os produtos deste lote.
               </p>
