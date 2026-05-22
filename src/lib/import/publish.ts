@@ -1,5 +1,8 @@
 import { optimizeProduct } from "@/lib/gemini/client";
-import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import {
+  neutralizeProductForDestination,
+  removeExternalReferencesForDestination,
+} from "@/lib/ai/product-neutralizer";
 import { applyLogoToProductImages } from "@/lib/images/apply-logo";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createProduct, type ShopifyCredentials } from "@/lib/shopify/client";
@@ -145,6 +148,7 @@ export async function publishImportedProduct(input: {
   translateVariantOptions?: boolean;
   customPrompt?: string;
   neutralize?: boolean;
+  removeExternalReferences?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
   userId?: string;
@@ -162,11 +166,11 @@ export async function publishImportedProduct(input: {
   let neutralized = false;
   let logoAppliedCount = 0;
 
-  if (input.neutralize) {
+  if (input.neutralize || input.removeExternalReferences) {
     if (!input.userId || !input.storageClient) {
-      warnings.push("Neutralizacao ignorada: usuario ou storage ausente.");
+      warnings.push("Limpeza por IA ignorada: usuario ou storage ausente.");
     } else {
-      const neutralizedProduct = await neutralizeProductForDestination({
+      const cleanupInput = {
         userId: input.userId,
         title: optimized.title,
         descriptionHtml: optimized.description,
@@ -184,7 +188,10 @@ export async function publishImportedProduct(input: {
         targetLanguage: input.context?.targetLanguage || "pt-BR",
         customInstructions:
           input.neutralizationInstructions || input.customPrompt,
-      });
+      };
+      const neutralizedProduct = input.removeExternalReferences
+        ? await removeExternalReferencesForDestination(cleanupInput)
+        : await neutralizeProductForDestination(cleanupInput);
 
       optimized = {
         title: neutralizedProduct.title,

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import {
+  neutralizeProductForDestination,
+  removeExternalReferencesForDestination,
+} from "@/lib/ai/product-neutralizer";
 import type { AliExpressProduct } from "@/types";
 
 export const runtime = "nodejs";
@@ -18,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { product, storeId, customInstructions } = await request.json();
+    const { product, storeId, customInstructions, mode } = await request.json();
     if (!product || !storeId) {
       return NextResponse.json(
         { error: "Missing product or storeId" },
@@ -54,7 +57,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const neutralized = await neutralizeProductForDestination({
+    const cleanupMode =
+      mode === "external-references" ? "external-references" : "stock-neutralize";
+    const cleanup = {
       userId: user.id,
       title: typedProduct.title,
       descriptionHtml: typedProduct.description,
@@ -66,7 +71,12 @@ export async function POST(request: NextRequest) {
           ? customInstructions.trim().slice(0, 1200)
           : "",
       storageClient: createAdminClient(),
-    });
+    };
+
+    const neutralized =
+      cleanupMode === "external-references"
+        ? await removeExternalReferencesForDestination(cleanup)
+        : await neutralizeProductForDestination(cleanup);
 
     const mergedProduct: AliExpressProduct = {
       ...typedProduct,

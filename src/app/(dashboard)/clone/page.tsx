@@ -442,7 +442,7 @@ function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
       eyebrow: "IA opcional",
       title: "Neutralizar produtos antes de criar destino",
       description:
-        "Use para limpar marcas d'agua, logos de loja e artefatos externos sem apagar detalhes reais do produto.",
+        "Use para criar uma versao stock/unbranded, removendo marcas do proprio produto e tambem artefatos externos.",
       checklist: [
         "Escolha as lojas",
         "Ative neutralização",
@@ -842,6 +842,10 @@ export default function ClonePage() {
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
+  const [
+    removeExternalReferencesCloneProducts,
+    setRemoveExternalReferencesCloneProducts,
+  ] = useState(false);
   const [cloneNeutralizationInstructions, setCloneNeutralizationInstructions] =
     useState("");
   const [cloneCustomPrompt, setCloneCustomPrompt] = useState("");
@@ -1278,6 +1282,7 @@ export default function ClonePage() {
       translateProducts: translateCloneProducts,
       translateVariantOptions,
       neutralizeProducts: neutralizeCloneProducts,
+      removeExternalReferences: removeExternalReferencesCloneProducts,
       neutralizationInstructions: cloneNeutralizationInstructions,
       customPrompt: cloneCustomPrompt,
       applyLogoToImages: applyLogoToCloneImages,
@@ -1965,6 +1970,9 @@ export default function ClonePage() {
                       checked={neutralizeCloneProducts}
                       onChange={(event) => {
                         setNeutralizeCloneProducts(event.target.checked);
+                        if (event.target.checked) {
+                          setRemoveExternalReferencesCloneProducts(false);
+                        }
                         setCloneMode("custom");
                       }}
                       className="mt-0.5 h-4 w-4 accent-primary"
@@ -1975,7 +1983,30 @@ export default function ClonePage() {
                         Neutralizar produto (stock)
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Preserva estampas e escudos.
+                        Remove marcas inclusive quando fazem parte do produto.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={removeExternalReferencesCloneProducts}
+                      onChange={(event) => {
+                        setRemoveExternalReferencesCloneProducts(event.target.checked);
+                        if (event.target.checked) {
+                          setNeutralizeCloneProducts(false);
+                        }
+                        setCloneMode("custom");
+                      }}
+                      className="mt-0.5 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <WandSparkles className="h-3.5 w-3.5 text-primary" />
+                        Retirar referencias externas
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Mantem marcas reais do produto e limpa origem/vendedor.
                       </span>
                     </span>
                   </label>
@@ -3172,10 +3203,9 @@ export default function ClonePage() {
                       </h3>
                     </div>
                     <p className="mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
-                      Quando ativo, o app usa Gemini para limpar marcas de agua,
-                      logos de loja, textos externos e artefatos de marketplace. Nas
-                      imagens, detalhes que fazem parte do produto, como escudos,
-                      patches, estampas e costuras, devem ser preservados.
+                      Quando ativo, o app usa Gemini para gerar uma versao stock:
+                      remove logos, simbolos, marcas e textos do proprio produto,
+                      alem de marcas d&apos;agua, textos externos e artefatos de marketplace.
                     </p>
                     <p className="mt-2 text-xs leading-5 text-muted-foreground">
                       Por segurança de tempo, a neutralização processa até 10 produtos

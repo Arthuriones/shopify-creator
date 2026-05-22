@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     ? body.sources.map((source: unknown) => String(source).trim()).filter(Boolean)
     : [];
   const optimize = body.optimize === true || body.translateProduct === true;
-  const neutralize = body.neutralize === true || body.neutralizeProducts === true;
+  const neutralize = body.neutralizeProducts === true;
+  const removeExternalReferences =
+    body.removeExternalReferences === true || body.neutralize === true;
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
@@ -123,6 +125,7 @@ export async function POST(request: NextRequest) {
           sourceType,
           optimize,
           neutralize,
+          removeExternalReferences,
           neutralizationInstructions,
           customPrompt,
           applyLogo,

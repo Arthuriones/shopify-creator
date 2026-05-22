@@ -308,6 +308,8 @@ function ProductsPageContent() {
   const [materialsSaving, setMaterialsSaving] = useState(false);
   const [autoApplyLogoOnImport, setAutoApplyLogoOnImport] = useState(true);
   const [neutralizeOnImport, setNeutralizeOnImport] = useState(false);
+  const [removeExternalReferencesOnImport, setRemoveExternalReferencesOnImport] =
+    useState(false);
   const [customImportPrompt, setCustomImportPrompt] = useState("");
 
   const [catalogProducts, setCatalogProducts] = useState<ShopifyCatalogProduct[]>([]);
@@ -1252,8 +1254,14 @@ function ProductsPageContent() {
 
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault();
-    if (neutralizeOnImport && !selectedStore) {
-      toast.error("Selecione uma loja para usar neutralizacao.");
+    const cleanupMode = neutralizeOnImport
+      ? "stock-neutralize"
+      : removeExternalReferencesOnImport
+        ? "external-references"
+        : null;
+
+    if (cleanupMode && !selectedStore) {
+      toast.error("Selecione uma loja para processar as imagens com IA.");
       return;
     }
 
@@ -1321,7 +1329,7 @@ function ProductsPageContent() {
       let importedForPreview = normalizedProduct;
       let importedOptimization: OptimizationResult | null = null;
 
-      if (neutralizeOnImport) {
+      if (cleanupMode) {
         const neutralizeRes = await fetch("/api/product/neutralize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1329,13 +1337,14 @@ function ProductsPageContent() {
             storeId: selectedStore,
             product: normalizedProduct,
             customInstructions: customImportPrompt,
+            mode: cleanupMode,
           }),
         });
         const neutralizeData = await neutralizeRes.json();
 
         if (!neutralizeRes.ok) {
           toast.error(
-            neutralizeData.error || "Nao foi possivel neutralizar este produto."
+            neutralizeData.error || "Nao foi possivel processar este produto."
           );
           return;
         }
@@ -1367,10 +1376,14 @@ function ProductsPageContent() {
 
         if (warnings.length > 0) {
           toast.warning(
-            `Neutralizacao aplicada com ${warnings.length} aviso(s) nas imagens.`
+            `Processamento aplicado com ${warnings.length} aviso(s) nas imagens.`
           );
         } else {
-          toast.success("Produto neutralizado com sucesso.");
+          toast.success(
+            cleanupMode === "stock-neutralize"
+              ? "Produto neutralizado com sucesso."
+              : "Referencias externas removidas com sucesso."
+          );
         }
       }
 
@@ -1407,7 +1420,13 @@ function ProductsPageContent() {
       toast.success(
         `Produto importado! ${p.images.length} fotos` +
         (variantCount > 0 ? `, ${variantCount} variantes (${optionCount} opcoes)` : "") +
-        `${neutralizeOnImport ? ", neutralizado" : ""}. Preco atual: ${formatPrice(
+        `${
+          cleanupMode === "stock-neutralize"
+            ? ", neutralizado"
+            : cleanupMode === "external-references"
+              ? ", referencias externas removidas"
+              : ""
+        }. Preco atual: ${formatPrice(
           pricedProduct.price,
           activeStore?.currency_code || "USD"
         )}`
@@ -1803,6 +1822,8 @@ function ProductsPageContent() {
               handleScrape={handleScrape}
               neutralizeOnImport={neutralizeOnImport}
               setNeutralizeOnImport={setNeutralizeOnImport}
+              removeExternalReferencesOnImport={removeExternalReferencesOnImport}
+              setRemoveExternalReferencesOnImport={setRemoveExternalReferencesOnImport}
               customPrompt={customImportPrompt}
               setCustomPrompt={setCustomImportPrompt}
               hasSelectedStore={Boolean(selectedStore)}

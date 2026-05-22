@@ -10,6 +10,7 @@ interface BulkImportProgress {
   optimize?: boolean;
   customPrompt?: string;
   neutralize?: boolean;
+  removeExternalReferences?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
   translateVariantOptions?: boolean;
@@ -107,6 +108,7 @@ export async function processBulkImportJobs(input: {
     const optimize = progress.optimize === true;
     const customPrompt = String(progress.customPrompt || "").trim();
     const neutralize = progress.neutralize === true;
+    const removeExternalReferences = progress.removeExternalReferences === true;
     const neutralizationInstructions = String(
       progress.neutralizationInstructions || ""
     ).trim();
@@ -185,6 +187,8 @@ export async function processBulkImportJobs(input: {
             source,
             step: neutralize
               ? "Neutralizando e publicando"
+              : removeExternalReferences
+                ? "Retirando referencias externas e publicando"
               : applyLogo
                 ? "Aplicando logo e publicando"
                 : optimize
@@ -207,6 +211,7 @@ export async function processBulkImportJobs(input: {
           optimize,
           customPrompt,
           neutralize,
+          removeExternalReferences,
           neutralizationInstructions,
           applyLogo,
           translateVariantOptions,

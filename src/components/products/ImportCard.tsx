@@ -18,6 +18,8 @@ interface ImportCardProps {
   handleScrape: (e: React.FormEvent) => Promise<void>;
   neutralizeOnImport: boolean;
   setNeutralizeOnImport: (value: boolean) => void;
+  removeExternalReferencesOnImport: boolean;
+  setRemoveExternalReferencesOnImport: (value: boolean) => void;
   customPrompt: string;
   setCustomPrompt: (value: string) => void;
   hasSelectedStore: boolean;
@@ -30,6 +32,8 @@ export function ImportCard({
   handleScrape,
   neutralizeOnImport,
   setNeutralizeOnImport,
+  removeExternalReferencesOnImport,
+  setRemoveExternalReferencesOnImport,
   customPrompt,
   setCustomPrompt,
   hasSelectedStore,
@@ -75,7 +79,10 @@ export function ImportCard({
             <input
               type="checkbox"
               checked={neutralizeOnImport}
-              onChange={(e) => setNeutralizeOnImport(e.target.checked)}
+              onChange={(e) => {
+                setNeutralizeOnImport(e.target.checked);
+                if (e.target.checked) setRemoveExternalReferencesOnImport(false);
+              }}
               disabled={loading || !hasSelectedStore}
               className="mt-0.5 h-4 w-4 rounded border-border/70 bg-background accent-primary"
             />
@@ -84,7 +91,27 @@ export function ImportCard({
                 Neutralizar produto (stock)
               </span>
               <span className="text-xs text-muted-foreground">
-                Remove marcas d&apos;agua, logos externos e indicativos de marketplace.
+                Remove logos e marcas do proprio produto, alem de marcas externas.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={removeExternalReferencesOnImport}
+              onChange={(e) => {
+                setRemoveExternalReferencesOnImport(e.target.checked);
+                if (e.target.checked) setNeutralizeOnImport(false);
+              }}
+              disabled={loading || !hasSelectedStore}
+              className="mt-0.5 h-4 w-4 rounded border-border/70 bg-background accent-primary"
+            />
+            <span>
+              <span className="block font-medium text-foreground">
+                Retirar referencias externas
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Remove marca d&apos;agua, logo de vendedor e textos que nao fazem parte do produto.
               </span>
             </span>
           </label>

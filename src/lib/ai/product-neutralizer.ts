@@ -7,6 +7,8 @@ interface ProductImageInput {
   altText?: string | null;
 }
 
+type ProductCleanupMode = "stock-neutralize" | "external-references";
+
 interface ProductNeutralizeInput {
   userId: string;
   title: string;
@@ -17,6 +19,7 @@ interface ProductNeutralizeInput {
   maxImages?: number;
   targetLanguage?: string;
   customInstructions?: string;
+  mode?: ProductCleanupMode;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   storageClient: any;
 }
@@ -108,30 +111,36 @@ async function ensureProductImagesBucket() {
   }
 }
 
-async function neutralizeText(input: ProductNeutralizeInput) {
+function buildTextCleanupPrompt(
+  input: ProductNeutralizeInput,
+  mode: ProductCleanupMode
+) {
   const language = input.targetLanguage || "pt-BR";
   const customInstructions = input.customInstructions?.trim();
-  const prompt = `Voce e um especialista em catalogo de e-commerce.
-
-Limpe este produto para cadastro em loja, removendo apenas referencias externas de marketplace, fornecedor, vendedor ou loja de origem.
-
-Produto original:
+  const productBlock = `Produto original:
 Titulo: ${input.title}
 Descricao HTML: ${input.descriptionHtml || ""}
 Tags: ${(input.tags || []).join(", ")}
 SEO: ${JSON.stringify(input.seo || {})}
-Idioma final obrigatório: ${language}
+Idioma final obrigatorio: ${language}`;
+
+  if (mode === "external-references") {
+    return `Voce e um especialista em catalogo de e-commerce.
+
+Limpe este produto para cadastro em loja, removendo apenas referencias externas de marketplace, fornecedor, vendedor ou loja de origem.
+
+${productBlock}
 
 Regras obrigatorias:
 - Remova referencias a marketplace/fornecedor/loja de origem, como AliExpress, Shopee, Temu, Mercado Livre, dropshipping, vendedor, atacado ou codigo interno de anuncio.
 - Preserve marcas, times, escudos, modelos, fabricantes, patrocinadores, colecoes e qualquer identificador que seja parte real do produto anunciado.
 - Nao transforme um produto especifico em generico quando os detalhes forem comerciais do proprio produto.
 - Preserve material, cor, publico, uso, medidas e detalhes comerciais quando forem seguros.
-- Tudo no idioma final obrigatório "${language}".
+- Tudo no idioma final obrigatorio "${language}".
 - Titulo com no maximo 70 caracteres.
 - Descricao em HTML limpo, objetiva e vendavel.
 - Tags uteis para Shopify, sem termos de marketplace/fornecedor.
-${customInstructions ? `\nINSTRUCOES ESPECIFICAS DO USUARIO:\n${customInstructions}\n- Estas instrucoes especificas tem prioridade sobre a regra generica. Se o usuario pedir para remover, manter ou alterar um detalhe especifico do produto, obedeça.` : ""}
+${customInstructions ? `\nINSTRUCOES ESPECIFICAS DO USUARIO:\n${customInstructions}\n- Estas instrucoes especificas tem prioridade sobre a regra generica. Se o usuario pedir para remover, manter ou alterar um detalhe especifico do produto, obedeca.` : ""}
 
 Responda apenas JSON valido:
 {
@@ -140,6 +149,36 @@ Responda apenas JSON valido:
   "tags": ["..."],
   "seo": { "title": "...", "description": "..." }
 }`;
+  }
+
+  return `Voce e um especialista em catalogo de e-commerce e produtos stock/unbranded.
+
+Neutralize este produto para cadastro em loja propria, removendo marcas comerciais e identificadores de marca do proprio produto e tambem referencias externas de marketplace, fornecedor, vendedor ou loja de origem.
+
+${productBlock}
+
+Regras obrigatorias:
+- Remova nomes de marcas, fabricantes, times, personagens, colecoes protegidas, modelos proprietarios, patrocinadores, marketplaces e fornecedores quando aparecerem no titulo, descricao, tags ou SEO.
+- Transforme o produto em uma versao generica/stock preservando categoria, formato, material, cor, uso, publico, medidas e beneficios reais.
+- Nao mencione Nike, Adidas, Pokemon, Apple, Samsung, times, personagens, AliExpress, Shopee, Temu, Mercado Livre, dropshipping, vendedor, atacado ou codigo interno de anuncio.
+- Nao invente certificacoes, originalidade, garantia, estoque ou beneficios que nao existam.
+- Tudo no idioma final obrigatorio "${language}".
+- Titulo com no maximo 70 caracteres.
+- Descricao em HTML limpo, objetiva e vendavel.
+- Tags uteis para Shopify, sem marcas ou termos de marketplace/fornecedor.
+${customInstructions ? `\nINSTRUCOES ESPECIFICAS DO USUARIO:\n${customInstructions}\n- Estas instrucoes especificas tem prioridade quando forem compativeis com a neutralizacao stock.` : ""}
+
+Responda apenas JSON valido:
+{
+  "title": "...",
+  "descriptionHtml": "<p>...</p>",
+  "tags": ["..."],
+  "seo": { "title": "...", "description": "..." }
+}`;
+}
+
+async function neutralizeText(input: ProductNeutralizeInput) {
+  const prompt = buildTextCleanupPrompt(input, input.mode || "stock-neutralize");
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
@@ -153,8 +192,7 @@ Responda apenas JSON valido:
   }>(response.text || "");
 
   const title = stripExternalArtifacts(parsed.title || input.title) || "Produto";
-  const descriptionHtml =
-    parsed.descriptionHtml || `<p>${title}</p>`;
+  const descriptionHtml = parsed.descriptionHtml || `<p>${title}</p>`;
   const tags = Array.isArray(parsed.tags)
     ? parsed.tags.map(stripExternalArtifacts).filter(Boolean).slice(0, 10)
     : [];
@@ -232,13 +270,52 @@ Responda apenas JSON valido:
   };
 }
 
+function buildImageCleanupPrompt(
+  input: ProductNeutralizeInput,
+  title: string,
+  mode: ProductCleanupMode
+) {
+  const customInstructions = input.customInstructions?.trim();
+
+  if (mode === "external-references") {
+    return `Clean this e-commerce product image conservatively.
+
+Product: "${title}"
+Target language for any internal reasoning: "${input.targetLanguage || "pt-BR"}"
+
+Requirements:
+- Remove only external seller/store/marketplace artifacts: watermarks, store logos, marketplace badges, promotional text overlays, UI labels, screenshot/crop artifacts, and unrelated floating stickers.
+- Preserve every design detail that is physically part of the product: embroidered or printed crests, team badges, sponsor marks, manufacturer logos, certification patches, decorative patterns, graphics, seams, collar details, sleeve stripes, colors, texture, shape, fit, and angle.
+- Do not simplify the product, do not erase chest details, and do not replace the garment with a blank or generic version.
+- If unsure whether a mark is part of the product or just a watermark, keep it.
+- Do not add any new brand, text, symbol, watermark, or label.
+- If the user provides custom instructions below, follow them exactly, including requests to remove or preserve specific product details.
+- Use a clean marketplace-ready product photo style.
+- Keep the result realistic and ready for Shopify product media while preserving the original product faithfully.
+${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""}`;
+  }
+
+  return `Create an unbranded stock e-commerce product image.
+
+Product: "${title}"
+Target language for any internal reasoning: "${input.targetLanguage || "pt-BR"}"
+
+Requirements:
+- Remove all visible brand identifiers from the product itself and the image: logos, symbols, swooshes, badges, team crests, character marks, trademarked words, manufacturer marks, sponsor marks, labels, watermarks, marketplace badges, and promotional text.
+- Reconstruct the underlying material naturally where branding was removed, preserving product category, shape, angle, color palette, lighting, material, texture, fit, composition, and commercial usefulness.
+- Do not add any new brand, word, symbol, watermark, badge, or trademarked design.
+- Keep the product realistic and ready for Shopify product media as a generic stock version.
+- If user custom instructions conflict with removing all product branding, still remove product branding unless the user explicitly asks to preserve a non-brand physical detail.
+${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""}`;
+}
+
 async function neutralizeImage(
   image: ProductImageInput,
   title: string,
   input: ProductNeutralizeInput,
   index: number
 ) {
-  const customInstructions = input.customInstructions?.trim();
+  const mode = input.mode || "stock-neutralize";
   const imageResponse = await fetch(image.url, {
     signal: AbortSignal.timeout(20000),
   });
@@ -256,21 +333,7 @@ async function neutralizeImage(
         role: "user",
         parts: [
           {
-            text: `Clean this e-commerce product image conservatively.
-
-Product: "${title}"
-Target language for any internal reasoning: "${input.targetLanguage || "pt-BR"}"
-
-Requirements:
-- Remove only external seller/store/marketplace artifacts: watermarks, store logos, marketplace badges, promotional text overlays, UI labels, screenshot/crop artifacts, and unrelated floating stickers.
-- Preserve every design detail that is physically part of the product: embroidered or printed crests, team badges, sponsor marks, manufacturer logos, certification patches, decorative patterns, graphics, seams, collar details, sleeve stripes, colors, texture, shape, fit, and angle.
-- Do not simplify the product, do not erase chest details, and do not replace the garment with a blank or generic version.
-- If unsure whether a mark is part of the product or just a watermark, keep it.
-- Do not add any new brand, text, symbol, watermark, or label.
-- If the user provides custom instructions below, follow them exactly, including requests to remove or preserve specific product details.
-- Use a clean marketplace-ready product photo style.
-- Keep the result realistic and ready for Shopify product media while preserving the original product faithfully.
-${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""}`,
+            text: buildImageCleanupPrompt(input, title, mode),
           },
           {
             inlineData: {
@@ -291,14 +354,14 @@ ${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""
   ) as { inlineData?: { data?: string } } | undefined;
 
   if (!imagePart?.inlineData?.data) {
-    throw new Error("A IA nao retornou imagem neutralizada.");
+    throw new Error("A IA nao retornou imagem processada.");
   }
 
   const generatedBuffer = Buffer.from(imagePart.inlineData.data, "base64");
   const finalBuffer = await sharp(generatedBuffer).png().toBuffer();
   const fileName = `${input.userId}/${Date.now()}-${index}-${Math.random()
     .toString(36)
-    .slice(2, 8)}-neutral.png`;
+    .slice(2, 8)}-${mode === "external-references" ? "clean" : "neutral"}.png`;
 
   const { error } = await input.storageClient.storage
     .from("product-images")
@@ -307,7 +370,7 @@ ${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""
       upsert: false,
     });
 
-  if (error) throw new Error("Erro ao salvar imagem neutralizada.");
+  if (error) throw new Error("Erro ao salvar imagem processada.");
 
   const { data } = input.storageClient.storage
     .from("product-images")
@@ -319,24 +382,29 @@ ${customInstructions ? `\nUser custom instructions:\n${customInstructions}` : ""
   };
 }
 
-export async function neutralizeProductForDestination(
-  input: ProductNeutralizeInput
+async function cleanProductForDestination(
+  input: ProductNeutralizeInput,
+  mode: ProductCleanupMode
 ): Promise<ProductNeutralizeResult> {
-  ensureGeminiKey("neutralizar produtos");
+  ensureGeminiKey(
+    mode === "external-references"
+      ? "retirar referencias externas de produtos"
+      : "neutralizar produtos"
+  );
   await ensureProductImagesBucket();
 
-  const text = await neutralizeText(input);
+  const text = await neutralizeText({ ...input, mode });
   const warnings: string[] = [];
   const images: { src: string; altText: string }[] = [];
   const sourceImages = (input.images || []).slice(0, input.maxImages || 3);
 
   for (const [index, image] of sourceImages.entries()) {
     try {
-      images.push(await neutralizeImage(image, text.title, input, index));
+      images.push(await neutralizeImage(image, text.title, { ...input, mode }, index));
     } catch (error) {
       warnings.push(
         `${image.url}: ${
-          error instanceof Error ? error.message : "Falha ao neutralizar imagem."
+          error instanceof Error ? error.message : "Falha ao processar imagem."
         }`
       );
     }
@@ -347,4 +415,16 @@ export async function neutralizeProductForDestination(
     images,
     warnings,
   };
+}
+
+export async function removeExternalReferencesForDestination(
+  input: ProductNeutralizeInput
+): Promise<ProductNeutralizeResult> {
+  return cleanProductForDestination(input, "external-references");
+}
+
+export async function neutralizeProductForDestination(
+  input: ProductNeutralizeInput
+): Promise<ProductNeutralizeResult> {
+  return cleanProductForDestination(input, "stock-neutralize");
 }

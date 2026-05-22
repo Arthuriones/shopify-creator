@@ -6,7 +6,10 @@ import {
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
 import { optimizeProduct } from "@/lib/gemini/client";
-import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import {
+  neutralizeProductForDestination,
+  removeExternalReferencesForDestination,
+} from "@/lib/ai/product-neutralizer";
 import { applyLogoToProductImages } from "@/lib/images/apply-logo";
 import {
   attachCollectionsToProducts,
@@ -175,6 +178,7 @@ async function prepareCreateInputForImport(input: {
   productInput: TargetCreateInput;
   targetLanguage: string;
   neutralizeProducts: boolean;
+  removeExternalReferences: boolean;
   neutralizationInstructions: string;
   customPrompt: string;
   applyLogoToImages: boolean;
@@ -190,8 +194,8 @@ async function prepareCreateInputForImport(input: {
     return storageClient;
   }
 
-  if (input.neutralizeProducts) {
-    const neutralizedProduct = await neutralizeProductForDestination({
+  if (input.neutralizeProducts || input.removeExternalReferences) {
+    const cleanupInput = {
       userId: input.userId,
       title: productInput.title,
       descriptionHtml: productInput.descriptionHtml,
@@ -206,7 +210,10 @@ async function prepareCreateInputForImport(input: {
       targetLanguage: input.targetLanguage,
       customInstructions:
         input.neutralizationInstructions || input.customPrompt,
-    });
+    };
+    const neutralizedProduct = input.removeExternalReferences
+      ? await removeExternalReferencesForDestination(cleanupInput)
+      : await neutralizeProductForDestination(cleanupInput);
 
     productInput = {
       ...productInput,
@@ -390,6 +397,7 @@ export async function POST(request: NextRequest) {
   const translateProduct =
     body.translateProduct === true || body.translateProducts === true;
   const neutralizeProducts = body.neutralizeProducts === true;
+  const removeExternalReferences = body.removeExternalReferences === true;
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
@@ -619,6 +627,7 @@ export async function POST(request: NextRequest) {
           targetStoreId,
           targetLanguage: targetContext?.targetLanguage || "pt-BR",
           neutralizeProducts,
+          removeExternalReferences,
           neutralizationInstructions,
           customPrompt,
           applyLogoToImages,
