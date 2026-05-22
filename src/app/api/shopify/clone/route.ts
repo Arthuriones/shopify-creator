@@ -92,7 +92,8 @@ async function buildCreateInputForTarget(
   publishToStorefront: boolean,
   translateProduct: boolean,
   translateVariantOptions: boolean,
-  inventory: { tracked: boolean; quantity?: number }
+  inventory: { tracked: boolean; quantity?: number },
+  customPrompt?: string
 ) {
   let input = {
     ...toShopifyCreateProductInput(product),
@@ -150,7 +151,8 @@ async function buildCreateInputForTarget(
         stock: 0,
       })),
     },
-    context
+    context,
+    customPrompt
   );
 
   return {
@@ -174,6 +176,7 @@ async function prepareCreateInputForImport(input: {
   targetLanguage: string;
   neutralizeProducts: boolean;
   neutralizationInstructions: string;
+  customPrompt: string;
   applyLogoToImages: boolean;
 }) {
   let productInput = input.productInput;
@@ -201,7 +204,8 @@ async function prepareCreateInputForImport(input: {
       maxImages: 3,
       storageClient: getStorageClient(),
       targetLanguage: input.targetLanguage,
-      customInstructions: input.neutralizationInstructions,
+      customInstructions:
+        input.neutralizationInstructions || input.customPrompt,
     });
 
     productInput = {
@@ -389,6 +393,10 @@ export async function POST(request: NextRequest) {
   const neutralizationInstructions =
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
+      : "";
+  const customPrompt =
+    typeof body.customPrompt === "string"
+      ? body.customPrompt.trim().slice(0, 2000)
       : "";
   const applyLogoToImages = body.applyLogoToImages === true || body.applyLogo === true;
   const translateVariantOptions = body.translateVariantOptions === true;
@@ -612,6 +620,7 @@ export async function POST(request: NextRequest) {
           targetLanguage: targetContext?.targetLanguage || "pt-BR",
           neutralizeProducts,
           neutralizationInstructions,
+          customPrompt,
           applyLogoToImages,
           productInput: await buildCreateInputForTarget(
             product,
@@ -619,7 +628,8 @@ export async function POST(request: NextRequest) {
             publishToStorefront,
             translateProduct,
             translateVariantOptions,
-            inventory
+            inventory,
+            customPrompt
           ),
         });
         const result = await createProduct(targetCreds, prepared.productInput);

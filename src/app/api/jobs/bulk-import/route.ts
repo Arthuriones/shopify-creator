@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
     typeof body.neutralizationInstructions === "string"
       ? body.neutralizationInstructions.trim().slice(0, 1200)
       : "";
+  const customPrompt =
+    typeof body.customPrompt === "string"
+      ? body.customPrompt.trim().slice(0, 2000)
+      : "";
   const applyLogo = body.applyLogo === true || body.applyLogoToImages === true;
   const translateVariantOptions = body.translateVariantOptions === true;
   const publishToStorefront = body.publishToStorefront !== false;
@@ -120,6 +124,7 @@ export async function POST(request: NextRequest) {
           optimize,
           neutralize,
           neutralizationInstructions,
+          customPrompt,
           applyLogo,
           translateVariantOptions,
           publishToStorefront,

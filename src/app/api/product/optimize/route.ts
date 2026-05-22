@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { product, storeId } = await request.json();
+    const { product, storeId, customPrompt } = await request.json();
 
     if (!product || !storeId) {
       return NextResponse.json({ error: "Missing product or storeId" }, { status: 400 });
@@ -26,7 +26,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Store context not found or missing niche." }, { status: 400 });
     }
 
-    const optimized = await optimizeProduct(product, context);
+    const optimized = await optimizeProduct(
+      product,
+      context,
+      typeof customPrompt === "string" ? customPrompt.trim().slice(0, 2000) : undefined
+    );
 
     return NextResponse.json({ optimized });
   } catch (error) {

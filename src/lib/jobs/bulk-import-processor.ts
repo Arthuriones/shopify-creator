@@ -8,6 +8,7 @@ interface BulkImportProgress {
   sourceType?: "auto" | "aliexpress" | "shopify_public" | "generic_site";
   step?: string;
   optimize?: boolean;
+  customPrompt?: string;
   neutralize?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
@@ -104,6 +105,7 @@ export async function processBulkImportJobs(input: {
     const progress = job.progress || {};
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
+    const customPrompt = String(progress.customPrompt || "").trim();
     const neutralize = progress.neutralize === true;
     const neutralizationInstructions = String(
       progress.neutralizationInstructions || ""
@@ -203,6 +205,7 @@ export async function processBulkImportJobs(input: {
           product,
           context,
           optimize,
+          customPrompt,
           neutralize,
           neutralizationInstructions,
           applyLogo,

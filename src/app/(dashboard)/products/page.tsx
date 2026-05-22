@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -128,15 +128,15 @@ interface AvailableLogo {
 }
 
 const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
-  { value: "top-left", label: "↖ Topo esq" },
-  { value: "top-center", label: "↑ Topo" },
-  { value: "top-right", label: "↗ Topo dir" },
-  { value: "center-left", label: "← Centro esq" },
-  { value: "center", label: "● Centro" },
-  { value: "center-right", label: "→ Centro dir" },
-  { value: "bottom-left", label: "↙ Inf esq" },
-  { value: "bottom-center", label: "↓ Inferior" },
-  { value: "bottom-right", label: "↘ Inf dir" },
+  { value: "top-left", label: "â†– Topo esq" },
+  { value: "top-center", label: "â†‘ Topo" },
+  { value: "top-right", label: "â†— Topo dir" },
+  { value: "center-left", label: "â† Centro esq" },
+  { value: "center", label: "â— Centro" },
+  { value: "center-right", label: "â†’ Centro dir" },
+  { value: "bottom-left", label: "â†™ Inf esq" },
+  { value: "bottom-center", label: "â†“ Inferior" },
+  { value: "bottom-right", label: "â†˜ Inf dir" },
 ];
 
 function getLogoUrl(logoPath: string): string {
@@ -204,7 +204,7 @@ function normalizeImportedImages(images: string[]): string[] {
 }
 
 function sanitizeTitle(title: string): string {
-  return title.replace(/\s*[-|–]\s*AliExpress.*$/i, "").trim();
+  return title.replace(/\s*[-|â€“]\s*AliExpress.*$/i, "").trim();
 }
 
 function looksInvalidImportedProduct(title: string): boolean {
@@ -307,6 +307,8 @@ function ProductsPageContent() {
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsSaving, setMaterialsSaving] = useState(false);
   const [autoApplyLogoOnImport, setAutoApplyLogoOnImport] = useState(true);
+  const [neutralizeOnImport, setNeutralizeOnImport] = useState(false);
+  const [customImportPrompt, setCustomImportPrompt] = useState("");
 
   const [catalogProducts, setCatalogProducts] = useState<ShopifyCatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -1133,7 +1135,7 @@ function ProductsPageContent() {
           if (found) {
             openCatalogEditor(found);
           } else {
-            toast.error("Produto não encontrado.");
+            toast.error("Produto nÃ£o encontrado.");
           }
         }
       } catch (err) {
@@ -1250,6 +1252,11 @@ function ProductsPageContent() {
 
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault();
+    if (neutralizeOnImport && !selectedStore) {
+      toast.error("Selecione uma loja para usar neutralizacao.");
+      return;
+    }
+
     setLoading(true);
     setProduct(null);
     setBaseImportedProduct(null);
@@ -1311,37 +1318,99 @@ function ProductsPageContent() {
       }
 
       const activeStore = stores.find((store) => store.id === selectedStore);
-      const pricedProduct = applyStorePricingRules(normalizedProduct, activeStore);
+      let importedForPreview = normalizedProduct;
+      let importedOptimization: OptimizationResult | null = null;
 
-      setBaseImportedProduct(normalizedProduct);
+      if (neutralizeOnImport) {
+        const neutralizeRes = await fetch("/api/product/neutralize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: selectedStore,
+            product: normalizedProduct,
+            customInstructions: customImportPrompt,
+          }),
+        });
+        const neutralizeData = await neutralizeRes.json();
+
+        if (!neutralizeRes.ok) {
+          toast.error(
+            neutralizeData.error || "Nao foi possivel neutralizar este produto."
+          );
+          return;
+        }
+
+        importedForPreview = neutralizeData.product as AliExpressProduct;
+        importedOptimization = {
+          title:
+            neutralizeData.neutralized?.title || importedForPreview.title || "",
+          description:
+            neutralizeData.neutralized?.descriptionHtml ||
+            importedForPreview.description ||
+            "",
+          tags: Array.isArray(neutralizeData.neutralized?.tags)
+            ? neutralizeData.neutralized.tags
+            : [],
+          seoTitle:
+            neutralizeData.neutralized?.seo?.title ||
+            importedForPreview.title ||
+            "",
+          seoDescription:
+            neutralizeData.neutralized?.seo?.description ||
+            importedForPreview.description ||
+            "",
+        };
+
+        const warnings = Array.isArray(neutralizeData.neutralized?.warnings)
+          ? neutralizeData.neutralized.warnings
+          : [];
+
+        if (warnings.length > 0) {
+          toast.warning(
+            `Neutralizacao aplicada com ${warnings.length} aviso(s) nas imagens.`
+          );
+        } else {
+          toast.success("Produto neutralizado com sucesso.");
+        }
+      }
+
+      const pricedProduct = applyStorePricingRules(importedForPreview, activeStore);
+
+      setBaseImportedProduct(importedForPreview);
       setProduct(pricedProduct);
       const baseTitle = pricedProduct.title.trim();
-      const plainDescription = (normalizedProduct.description || "")
+      const plainDescription = (importedForPreview.description || "")
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim();
       setEditTitle(baseTitle);
-      setEditDescription(createDefaultDescriptionHtml(normalizedProduct.description));
-      setEditTags("");
-      setEditSeoTitle(baseTitle.slice(0, 60));
-      setEditSeoDescription(plainDescription.slice(0, 155));
+      setEditDescription(createDefaultDescriptionHtml(importedForPreview.description));
+      setEditTags(importedOptimization?.tags?.join(", ") || "");
+      setEditSeoTitle((importedOptimization?.seoTitle || baseTitle).slice(0, 60));
+      setEditSeoDescription(
+        (importedOptimization?.seoDescription || plainDescription).slice(0, 155)
+      );
+      setOptimized(importedOptimization);
       setActiveTab("optimized");
       if (autoApplyLogoOnImport && selectedStore) {
         const selectedStoreData = stores.find((store) => store.id === selectedStore);
         if (selectedStoreData?.logo_path) {
           void handleBrandAllImages({
-            sourceImages: normalizedProduct.images,
+            sourceImages: importedForPreview.images,
             showToast: false,
           });
         }
       }
-      const p = normalizedProduct;
+      const p = importedForPreview;
       const variantCount = p.variants?.length || 0;
       const optionCount = p.variantOptions?.length || 0;
       toast.success(
         `Produto importado! ${p.images.length} fotos` +
-        (variantCount > 0 ? `, ${variantCount} variantes (${optionCount} opções)` : "") +
-        `. Preco atual: ${formatPrice(pricedProduct.price, activeStore?.currency_code || "USD")}`
+        (variantCount > 0 ? `, ${variantCount} variantes (${optionCount} opcoes)` : "") +
+        `${neutralizeOnImport ? ", neutralizado" : ""}. Preco atual: ${formatPrice(
+          pricedProduct.price,
+          activeStore?.currency_code || "USD"
+        )}`
       );
     } catch {
       toast.error("Erro ao buscar produto");
@@ -1349,7 +1418,6 @@ function ProductsPageContent() {
       setLoading(false);
     }
   }
-
   async function handleOptimize() {
     if (!product) return;
     if (!selectedStore) {
@@ -1372,7 +1440,8 @@ function ProductsPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storeId: selectedStore,
-          product
+          product,
+          customPrompt: customImportPrompt,
         }),
       });
 
@@ -1388,7 +1457,7 @@ function ProductsPageContent() {
       setActiveTab("optimized");
       toast.success("Produto otimizado com sucesso!");
     } catch {
-      toast.error("Erro na comunicação com a IA");
+      toast.error("Erro na comunicaÃ§Ã£o com a IA");
     } finally {
       setOptimizing(false);
     }
@@ -1732,6 +1801,11 @@ function ProductsPageContent() {
               setUrl={setUrl}
               loading={loading}
               handleScrape={handleScrape}
+              neutralizeOnImport={neutralizeOnImport}
+              setNeutralizeOnImport={setNeutralizeOnImport}
+              customPrompt={customImportPrompt}
+              setCustomPrompt={setCustomImportPrompt}
+              hasSelectedStore={Boolean(selectedStore)}
             />
           </div>
         </CardContent>
@@ -2307,7 +2381,7 @@ function ProductsPageContent() {
                       ) : (
                         <>
                           <Stamp className="mr-1.5 h-3.5 w-3.5" />
-                          Só Aplicar Logo
+                          SÃ³ Aplicar Logo
                         </>
                       )}
                     </Button>
@@ -2824,3 +2898,4 @@ export default function ProductsPage() {
     </Suspense>
   );
 }
+

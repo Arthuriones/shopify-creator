@@ -70,13 +70,14 @@ function fallbackOptimization(product: UnifiedImportProduct): OptimizationResult
 export async function maybeOptimizeImportedProduct(
   product: UnifiedImportProduct,
   context: StoreContext | null,
-  shouldOptimize: boolean
+  shouldOptimize: boolean,
+  customPrompt?: string
 ) {
   if (!shouldOptimize || !context || !process.env.GEMINI_API_KEY) {
     return fallbackOptimization(product);
   }
 
-  return optimizeProduct(toAliExpressLikeProduct(product), context);
+  return optimizeProduct(toAliExpressLikeProduct(product), context, customPrompt);
 }
 
 export function toCreateProductInput(input: {
@@ -142,6 +143,7 @@ export async function publishImportedProduct(input: {
   publishToStorefront: boolean;
   inventory?: { tracked: boolean; quantity?: number };
   translateVariantOptions?: boolean;
+  customPrompt?: string;
   neutralize?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
@@ -153,7 +155,8 @@ export async function publishImportedProduct(input: {
   let optimized = await maybeOptimizeImportedProduct(
     input.product,
     input.context,
-    input.optimize
+    input.optimize,
+    input.customPrompt
   );
   const warnings: string[] = [];
   let neutralized = false;
@@ -179,7 +182,8 @@ export async function publishImportedProduct(input: {
         maxImages: 3,
         storageClient: input.storageClient,
         targetLanguage: input.context?.targetLanguage || "pt-BR",
-        customInstructions: input.neutralizationInstructions,
+        customInstructions:
+          input.neutralizationInstructions || input.customPrompt,
       });
 
       optimized = {

@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
+import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
 
 interface StoreOption {
   id: string;
@@ -843,6 +844,7 @@ export default function ClonePage() {
   const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
   const [cloneNeutralizationInstructions, setCloneNeutralizationInstructions] =
     useState("");
+  const [cloneCustomPrompt, setCloneCustomPrompt] = useState("");
   const [applyLogoToCloneImages, setApplyLogoToCloneImages] = useState(false);
   const [duplicatePolicy, setDuplicatePolicy] = useState("skip");
   const [createRoutingConfig, setCreateRoutingConfig] = useState(false);
@@ -1277,6 +1279,7 @@ export default function ClonePage() {
       translateVariantOptions,
       neutralizeProducts: neutralizeCloneProducts,
       neutralizationInstructions: cloneNeutralizationInstructions,
+      customPrompt: cloneCustomPrompt,
       applyLogoToImages: applyLogoToCloneImages,
       duplicatePolicy,
       createRoutingConfig,
@@ -1960,13 +1963,16 @@ export default function ClonePage() {
                     <input
                       type="checkbox"
                       checked={neutralizeCloneProducts}
-                      onChange={(event) => setNeutralizeCloneProducts(event.target.checked)}
+                      onChange={(event) => {
+                        setNeutralizeCloneProducts(event.target.checked);
+                        setCloneMode("custom");
+                      }}
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
                       <span className="flex items-center gap-1.5 font-medium text-foreground">
                         <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                        Limpar externos
+                        Neutralizar produto (stock)
                       </span>
                       <span className="text-xs text-muted-foreground">
                         Preserva estampas e escudos.
@@ -2013,9 +2019,10 @@ export default function ClonePage() {
                       id="clone-neutralization-instructions"
                       rows={3}
                       value={cloneNeutralizationInstructions}
-                      onChange={(event) =>
-                        setCloneNeutralizationInstructions(event.target.value)
-                      }
+                      onChange={(event) => {
+                        setCloneNeutralizationInstructions(event.target.value);
+                        setCloneMode("custom");
+                      }}
                       placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
                       className="bg-background/70 text-sm"
                     />
@@ -2024,6 +2031,20 @@ export default function ClonePage() {
                     </p>
                   </div>
                 )}
+
+                <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
+                  <CustomPromptDialog
+                    value={cloneCustomPrompt}
+                    onChange={(nextPrompt) => {
+                      setCloneCustomPrompt(nextPrompt);
+                      setCloneMode("custom");
+                    }}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Vale para os produtos selecionados nesta importacao.
+                  </p>
+                </div>
 
                 <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_160px]">
                   <div className="space-y-2">
