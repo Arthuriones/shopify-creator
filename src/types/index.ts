@@ -91,6 +91,16 @@ export interface OptimizationResult {
   seoDescription: string;
 }
 
+export interface ShopifyTaxonomySuggestion {
+  categorySearch: string;
+  productType: string;
+  attributes: {
+    name: string;
+    key: string;
+    value: string | string[];
+  }[];
+}
+
 export interface StorePolicy {
   type: "refund" | "privacy" | "terms" | "shipping";
   title: string;

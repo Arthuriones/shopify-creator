@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ExternalLink, ImageIcon, Loader2, Pencil, RefreshCw, Save } from "lucide-react";
+import { ExternalLink, ImageIcon, Loader2, Pencil, RefreshCw, Save, Sparkles } from "lucide-react";
 
 type ProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 type ProductStatusFilter = ProductStatus | "ALL";
@@ -48,6 +48,11 @@ interface ShopifyCatalogProduct {
   status: ProductStatus;
   descriptionHtml: string;
   tags: string[];
+  productType?: string | null;
+  category?: { id?: string; name?: string; fullName?: string } | null;
+  metafields?: {
+    nodes: { namespace: string; key: string; type: string; value: string }[];
+  };
   seo?: { title?: string; description?: string } | null;
   images: { nodes: { url: string; altText?: string | null }[] };
   variants: {
@@ -96,6 +101,9 @@ export default function CatalogPage() {
   const [loadingStores, setLoadingStores] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [taxonomyEnriching, setTaxonomyEnriching] = useState(false);
+  const [taxonomyUseAi, setTaxonomyUseAi] = useState(true);
+  const [taxonomyIncludeExisting, setTaxonomyIncludeExisting] = useState(false);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -221,6 +229,48 @@ export default function CatalogPage() {
 
   function openEditor(product: ShopifyCatalogProduct) {
     router.push(`/products?editId=${encodeURIComponent(product.id)}&storeId=${encodeURIComponent(selectedStore)}`);
+  }
+
+  async function handleEnrichTaxonomy() {
+    if (!selectedStore) {
+      toast.error("Selecione uma loja.");
+      return;
+    }
+    if (products.length === 0) {
+      toast.error("Carregue produtos antes de aplicar a correcao.");
+      return;
+    }
+
+    const productIds = products.slice(0, 50).map((product) => product.id);
+    setTaxonomyEnriching(true);
+    try {
+      const res = await fetch("/api/shopify/products/enrich-taxonomy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeId: selectedStore,
+          productIds,
+          useAiFallback: taxonomyUseAi,
+          includeAlreadyCategorized: taxonomyIncludeExisting,
+          limit: productIds.length,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel aplicar categorias.");
+        return;
+      }
+
+      const summary = data.summary || {};
+      toast.success(
+        `Categorias aplicadas: ${summary.updated || 0}. Ignorados: ${summary.skipped || 0}. Falhas: ${summary.failed || 0}.`
+      );
+      await loadProducts({ silent: true });
+    } catch {
+      toast.error("Erro ao aplicar categorias em massa.");
+    } finally {
+      setTaxonomyEnriching(false);
+    }
   }
 
   function updateVariantDraft(id: string, field: "price" | "compareAtPrice", value: string) {
@@ -381,6 +431,45 @@ export default function CatalogPage() {
               )}
             </Button>
           </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-border/50 bg-background/35 p-3">
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={taxonomyUseAi}
+                onChange={(event) => setTaxonomyUseAi(event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <Sparkles className="h-4 w-4 text-primary" />
+              IA quando faltar
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={taxonomyIncludeExisting}
+                onChange={(event) => setTaxonomyIncludeExisting(event.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              Sobrescrever categorizados
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 border-border/50"
+              disabled={!selectedStore || products.length === 0 || taxonomyEnriching}
+              onClick={handleEnrichTaxonomy}
+            >
+              {taxonomyEnriching ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Corrigir categorias em massa
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Aplica nos produtos carregados acima, ate 50 por vez.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -439,6 +528,12 @@ export default function CatalogPage() {
                       <span>{product.status}</span>
                       <span>•</span>
                       <span>{product.variants.nodes.length} variante(s)</span>
+                      {product.category?.fullName && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{product.category.fullName}</span>
+                        </>
+                      )}
                     </div>
                   </div>
 

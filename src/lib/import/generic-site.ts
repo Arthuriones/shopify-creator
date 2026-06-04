@@ -498,6 +498,32 @@ function productTags(sourceUrl: string, productJson: JsonRecord | null) {
   return Array.from(tags).slice(0, 8);
 }
 
+function collectSourceAttributes(
+  optionGroups: OptionGroup[],
+  productJson: JsonRecord | null
+) {
+  const attributes = new Map<string, string>();
+
+  function add(name: string, value: unknown) {
+    const normalizedName = cleanOptionName(name);
+    const normalizedValue = firstString(value);
+    if (!normalizedName || !normalizedValue) return;
+    attributes.set(normalizedName, normalizedValue.slice(0, 200));
+  }
+
+  optionGroups.forEach((group) => add(group.name, group.values.join(", ")));
+  add("Marca", asRecord(productJson?.brand)?.name || productJson?.brand);
+  add("Categoria", productJson?.category);
+  add("SKU", productJson?.sku);
+  add("MPN", productJson?.mpn);
+  add("GTIN", productJson?.gtin || productJson?.gtin13 || productJson?.gtin14);
+  add("Material", productJson?.material);
+  add("Cor", productJson?.color);
+  add("Tamanho", productJson?.size);
+
+  return Array.from(attributes, ([name, value]) => ({ name, value }));
+}
+
 function isLikelyProductUrl(sourceUrl: string) {
   try {
     const path = new URL(sourceUrl).pathname;
@@ -549,12 +575,15 @@ function normalizeGenericPage(
     price,
     compareAtPrice,
   });
+  const sourceCategory = firstString(productJson?.category);
 
   return {
     sourceType: "generic_site",
     sourceUrl,
     sourceProductId: firstString(productJson?.sku, productJson?.productID, productJson?.mpn),
     handle: new URL(sourceUrl).pathname.split("/").filter(Boolean).pop(),
+    sourceCategory: sourceCategory || null,
+    sourceAttributes: collectSourceAttributes(optionGroups, productJson),
     title,
     descriptionHtml,
     price,

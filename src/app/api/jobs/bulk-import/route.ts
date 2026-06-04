@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
       : "";
   const applyLogo = body.applyLogo === true || body.applyLogoToImages === true;
   const translateVariantOptions = body.translateVariantOptions === true;
+  const enrichShopifyTaxonomy = body.enrichShopifyTaxonomy === true;
+  const useAiTaxonomyFallback = body.useAiTaxonomyFallback === true;
   const publishToStorefront = body.publishToStorefront !== false;
   const perSourceLimit = Math.min(Math.max(Number(body.perSourceLimit || 1), 1), 250);
   const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
@@ -140,6 +142,8 @@ export async function POST(request: NextRequest) {
           customPrompt,
           applyLogo,
           translateVariantOptions,
+          enrichShopifyTaxonomy,
+          useAiTaxonomyFallback,
           publishToStorefront,
           perSourceLimit,
           inventoryMode,

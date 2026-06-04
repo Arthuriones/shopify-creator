@@ -4,6 +4,7 @@ import {
   removeExternalReferencesForDestination,
 } from "@/lib/ai/product-neutralizer";
 import { applyLogoToProductImages } from "@/lib/images/apply-logo";
+import { buildShopifyTaxonomyEnrichment } from "@/lib/products/shopify-taxonomy-enrichment";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createProduct, type ShopifyCredentials } from "@/lib/shopify/client";
 import type { AliExpressProduct, OptimizationResult, StoreContext } from "@/types";
@@ -95,6 +96,7 @@ export function toCreateProductInput(input: {
   publishToStorefront: boolean;
   inventory?: { tracked: boolean; quantity?: number };
   translateVariantOptions?: boolean;
+  taxonomy?: Awaited<ReturnType<typeof buildShopifyTaxonomyEnrichment>>;
 }) {
   const { product, optimized, publishToStorefront } = input;
   const inventory = input.inventory || { tracked: false };
@@ -104,6 +106,9 @@ export function toCreateProductInput(input: {
     title: optimized.title || product.title,
     descriptionHtml: optimized.description || product.descriptionHtml || "<p></p>",
     tags: optimized.tags?.length ? optimized.tags : product.tags,
+    categoryId: input.taxonomy?.category?.id || undefined,
+    productType: input.taxonomy?.productType || undefined,
+    metafields: input.taxonomy?.metafields || undefined,
     images: product.images.slice(0, 20),
     options: hasOptions ? product.options : undefined,
     variants: product.variants.length
@@ -159,6 +164,8 @@ export async function publishImportedProduct(input: {
   genericizeText?: boolean;
   neutralizationInstructions?: string;
   applyLogo?: boolean;
+  enrichShopifyTaxonomy?: boolean;
+  useAiTaxonomyFallback?: boolean;
   userId?: string;
   storeId?: string;
   storageClient?: SupabaseClient;
@@ -243,6 +250,15 @@ export async function publishImportedProduct(input: {
     }
   }
 
+  const taxonomy = await buildShopifyTaxonomyEnrichment({
+    creds: input.creds,
+    product,
+    context: input.context,
+    enabled: input.enrichShopifyTaxonomy === true,
+    useAiFallback: input.useAiTaxonomyFallback === true,
+  });
+  warnings.push(...taxonomy.warnings);
+
   const result = await createProduct(
     input.creds,
     toCreateProductInput({
@@ -251,8 +267,9 @@ export async function publishImportedProduct(input: {
       publishToStorefront: input.publishToStorefront,
       inventory: input.inventory,
       translateVariantOptions: input.translateVariantOptions,
+      taxonomy,
     })
   );
 
-  return { optimized, result, warnings, neutralized, logoAppliedCount };
+  return { optimized, result, warnings, neutralized, logoAppliedCount, taxonomy };
 }

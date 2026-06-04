@@ -16,6 +16,8 @@ interface BulkImportProgress {
   neutralizationInstructions?: string;
   applyLogo?: boolean;
   translateVariantOptions?: boolean;
+  enrichShopifyTaxonomy?: boolean;
+  useAiTaxonomyFallback?: boolean;
   publishToStorefront?: boolean;
   perSourceLimit?: number;
   inventoryMode?: "not_tracked" | "tracked";
@@ -121,6 +123,8 @@ export async function processBulkImportJobs(input: {
     ).trim();
     const applyLogo = progress.applyLogo === true;
     const translateVariantOptions = progress.translateVariantOptions === true;
+    const enrichShopifyTaxonomy = progress.enrichShopifyTaxonomy === true;
+    const useAiTaxonomyFallback = progress.useAiTaxonomyFallback === true;
     const publishToStorefront = progress.publishToStorefront !== false;
     const inventoryMode = progress.inventoryMode === "tracked" ? "tracked" : "not_tracked";
     const inventoryQuantityRaw = Number(progress.inventoryQuantity ?? 0);
@@ -224,6 +228,8 @@ export async function processBulkImportJobs(input: {
           neutralizationInstructions,
           applyLogo,
           translateVariantOptions,
+          enrichShopifyTaxonomy,
+          useAiTaxonomyFallback,
           publishToStorefront,
           inventory,
           userId: job.user_id,
@@ -241,6 +247,13 @@ export async function processBulkImportJobs(input: {
           publication: published.result?.storefrontPublication || null,
           neutralized: published.neutralized,
           logoAppliedCount: published.logoAppliedCount,
+          taxonomy: published.taxonomy
+            ? {
+                category: published.taxonomy.category || null,
+                source: published.taxonomy.source,
+                attributes: published.taxonomy.attributes,
+              }
+            : null,
           warnings: published.warnings,
         });
       }

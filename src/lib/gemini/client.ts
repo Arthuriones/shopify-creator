@@ -2,6 +2,7 @@
 import type {
   AliExpressProduct,
   OptimizationResult,
+  ShopifyTaxonomySuggestion,
   StoreContext,
   StorePolicy,
   StoreSetup,
@@ -307,6 +308,68 @@ Responda APENAS com o prompt de imagem, sem explicaÃ§Ãµes adicionais.`;
 
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
+}
+
+export async function suggestShopifyTaxonomy(
+  input: {
+    title: string;
+    descriptionHtml?: string;
+    tags?: string[];
+    options?: { name: string; values: string[] }[];
+    sourceCategory?: string | null;
+    sourceAttributes?: { name: string; value: string }[];
+  },
+  context?: StoreContext | null
+): Promise<ShopifyTaxonomySuggestion> {
+  const plainDescription = (input.descriptionHtml || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1200);
+  const prompt = `Voce e um especialista em cadastro Shopify e taxonomia de produtos.
+
+Classifique o produto para a Shopify Standard Product Taxonomy.
+
+Contexto da loja:
+- Nicho: ${context?.niche || "Nao informado"}
+- Publico: ${context?.targetAudience || "Nao informado"}
+- Idioma da loja: ${context?.targetLanguage || "pt-BR"}
+
+Produto:
+- Titulo: ${input.title}
+- Descricao: ${plainDescription || "Sem descricao"}
+- Tags: ${(input.tags || []).join(", ") || "Sem tags"}
+- Categoria na fonte: ${input.sourceCategory || "Nao informada"}
+- Opcoes/variantes: ${JSON.stringify(input.options || [])}
+- Atributos encontrados na fonte: ${JSON.stringify(input.sourceAttributes || [])}
+
+Responda APENAS JSON valido.
+
+Regras:
+1. "categorySearch" deve ser uma busca curta em ingles para a categoria mais especifica da Shopify, por exemplo "Women's Coats", "Women's Jackets", "Shirts", "Dog Beds".
+2. "productType" deve ser um tipo curto no idioma da loja, por exemplo "Casaco feminino".
+3. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: gender, size, color, material, age_group, pattern.
+4. Se um atributo existir na fonte, use o valor da fonte. Se faltar e for dedutivel com alta confianca, preencha pela IA. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
+5. Para valores multiplos, use array.
+
+Formato:
+{
+  "categorySearch": "...",
+  "productType": "...",
+  "attributes": [
+    { "name": "Genero", "key": "gender", "value": "Feminino" },
+    { "name": "Cor", "key": "color", "value": ["Preto", "Azul"] }
+  ]
+}`;
+
+  const result = await model.generateContent(prompt);
+  const parsed = parseJsonResponse<ShopifyTaxonomySuggestion>(result.response.text());
+
+  return {
+    categorySearch: String(parsed.categorySearch || "").trim(),
+    productType: String(parsed.productType || "").trim(),
+    attributes: Array.isArray(parsed.attributes) ? parsed.attributes : [],
+  };
 }
 
 function sanitizeJsonString(str: string): string {

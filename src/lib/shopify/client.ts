@@ -707,6 +707,14 @@ export async function createProduct(
     title: string;
     descriptionHtml: string;
     tags: string[];
+    categoryId?: string | null;
+    productType?: string | null;
+    metafields?: {
+      namespace: string;
+      key: string;
+      type: string;
+      value: string;
+    }[];
     images: { src: string; altText: string }[];
     variants: {
       price: string;
@@ -827,6 +835,15 @@ export async function createProduct(
     seo: input.seo,
     status: shouldPublishToStorefront ? "ACTIVE" : "DRAFT",
   };
+  if (input.categoryId) {
+    productInput.category = input.categoryId;
+  }
+  if (input.productType) {
+    productInput.productType = input.productType;
+  }
+  if (input.metafields?.length) {
+    productInput.metafields = input.metafields;
+  }
   const productOptions = buildProductOptions();
   if (productOptions) {
     productInput.productOptions = productOptions;
@@ -1067,6 +1084,16 @@ export async function getProducts(
           status
           descriptionHtml
           tags
+          productType
+          category { id name fullName }
+          metafields(first: 20, namespace: "custom") {
+            nodes {
+              namespace
+              key
+              type
+              value
+            }
+          }
           seo { title description }
           images(first: 12) { nodes { url altText } }
           options {
@@ -1103,6 +1130,16 @@ export async function getProductById(creds: ShopifyCredentials, productId: strin
         status
         descriptionHtml
         tags
+        productType
+        category { id name fullName }
+        metafields(first: 20, namespace: "custom") {
+          nodes {
+            namespace
+            key
+            type
+            value
+          }
+        }
         seo { title description }
         images(first: 20) { nodes { url altText } }
         options {
@@ -1127,6 +1164,122 @@ export async function getProductById(creds: ShopifyCredentials, productId: strin
   return data?.product || null;
 }
 
+export interface ShopifyTaxonomyCategoryMatch {
+  id: string;
+  name: string;
+  fullName: string;
+  isLeaf?: boolean;
+  isArchived?: boolean;
+}
+
+export interface ShopifyProductMetafieldInput {
+  namespace: string;
+  key: string;
+  type: string;
+  value: string;
+}
+
+export async function searchShopifyTaxonomyCategories(
+  creds: ShopifyCredentials,
+  search: string,
+  first = 5
+): Promise<ShopifyTaxonomyCategoryMatch[]> {
+  const queryText = search.trim();
+  if (!queryText) return [];
+
+  const query = `
+    query searchTaxonomyCategories($search: String!, $first: Int!) {
+      taxonomy {
+        categories(search: $search, first: $first) {
+          nodes {
+            id
+            name
+            fullName
+            isLeaf
+            isArchived
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query, {
+    search: queryText,
+    first: Math.min(Math.max(Math.floor(first), 1), 20),
+  });
+
+  const nodes = data?.taxonomy?.categories?.nodes || [];
+  return nodes
+    .map((node: Partial<ShopifyTaxonomyCategoryMatch>) => ({
+      id: String(node.id || ""),
+      name: String(node.name || ""),
+      fullName: String(node.fullName || node.name || ""),
+      isLeaf: node.isLeaf,
+      isArchived: node.isArchived,
+    }))
+    .filter(
+      (node: ShopifyTaxonomyCategoryMatch) =>
+        node.id && node.name && node.isArchived !== true
+    );
+}
+
+export async function updateProductTaxonomy(
+  creds: ShopifyCredentials,
+  input: {
+    productId: string;
+    categoryId?: string | null;
+    productType?: string | null;
+    metafields?: ShopifyProductMetafieldInput[];
+  }
+) {
+  if (!input.categoryId && !input.productType && !input.metafields?.length) {
+    return { skipped: true };
+  }
+
+  const mutation = `
+    mutation updateProductTaxonomy($input: ProductUpdateInput!) {
+      productUpdate(input: $input) {
+        product {
+          id
+          title
+          productType
+          category { id name fullName }
+        }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const payload: Record<string, unknown> = { id: input.productId };
+  if (input.categoryId) {
+    payload.category = input.categoryId;
+    payload.deleteConflictingConstrainedMetafields = true;
+  }
+  if (input.productType) {
+    payload.productType = input.productType;
+  }
+  if (input.metafields?.length) {
+    payload.metafields = input.metafields;
+  }
+
+  const result = await shopifyGraphQL(creds, mutation, { input: payload });
+  const userErrors = result?.productUpdate?.userErrors as
+    | { field?: string[]; message: string }[]
+    | undefined;
+
+  if (userErrors && userErrors.length > 0) {
+    throw new Error(
+      userErrors
+        .map((err) =>
+          err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
+        )
+        .join(" | ")
+    );
+  }
+
+  return result?.productUpdate?.product || null;
+}
+
 export async function updateShopifyProduct(
   creds: ShopifyCredentials,
   input: {
@@ -1136,6 +1289,14 @@ export async function updateShopifyProduct(
     tags: string[];
     seo?: { title?: string; description?: string };
     status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
+    categoryId?: string | null;
+    productType?: string | null;
+    metafields?: {
+      namespace: string;
+      key: string;
+      type: string;
+      value: string;
+    }[];
     variants?: {
       id: string;
       price: string;
@@ -1173,6 +1334,11 @@ export async function updateShopifyProduct(
       tags: input.tags,
       seo: input.seo,
       status: nextStatus,
+      ...(input.categoryId
+        ? { category: input.categoryId, deleteConflictingConstrainedMetafields: true }
+        : {}),
+      ...(input.productType ? { productType: input.productType } : {}),
+      ...(input.metafields?.length ? { metafields: input.metafields } : {}),
     },
   });
 

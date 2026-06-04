@@ -13,6 +13,8 @@ export interface UnifiedImportProduct {
   sourceUrl: string;
   sourceProductId?: string;
   handle?: string;
+  sourceCategory?: string | null;
+  sourceAttributes?: { name: string; value: string }[];
   title: string;
   descriptionHtml: string;
   price: string;
@@ -50,9 +52,17 @@ export function normalizeAliExpressProduct(
   product: AliExpressProduct,
   sourceUrl: string
 ): UnifiedImportProduct {
+  const sourceAttributes = Object.entries(product.specs || {})
+    .map(([name, value]) => ({ name, value: String(value || "") }))
+    .filter((attribute) => attribute.name && attribute.value);
+
   return {
     sourceType: "aliexpress",
     sourceUrl,
+    sourceCategory:
+      sourceAttributes.find((attribute) => /categor/i.test(attribute.name))?.value ||
+      null,
+    sourceAttributes,
     title: product.title,
     descriptionHtml: /<[a-z][\s\S]*>/i.test(product.description)
       ? product.description
@@ -82,6 +92,22 @@ export function normalizePublicShopifyProduct(
     sourceUrl: product.sourceUrl,
     sourceProductId: String(product.id),
     handle: product.handle,
+    sourceCategory: product.productType || product.collectionHandles?.[0] || null,
+    sourceAttributes: [
+      ...(product.productType ? [{ name: "Tipo", value: product.productType }] : []),
+      ...product.options
+        .map((optionName, index) => ({
+          name: optionName,
+          value: [
+            ...new Set(
+              product.variants
+                .map((variant) => variant.optionValues[index])
+                .filter(Boolean)
+            ),
+          ].join(", "),
+        }))
+        .filter((attribute) => attribute.name && attribute.value),
+    ],
     title: product.title,
     descriptionHtml: product.descriptionHtml || "<p></p>",
     price: product.variants[0]?.price || "0.00",
