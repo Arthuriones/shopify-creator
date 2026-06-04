@@ -10,7 +10,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
   const { data: store } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret, access_token")
+    .select("*")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();

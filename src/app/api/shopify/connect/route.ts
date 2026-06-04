@@ -19,6 +19,47 @@ function sanitizeErrorMessage(message: string): string {
     .slice(0, 220);
 }
 
+function isMissingAccessTokenColumn(error: { message?: string; code?: string } | null) {
+  if (!error) return false;
+  const message = (error.message || "").toLowerCase();
+  return (
+    error.code === "42703" ||
+    (message.includes("access_token") && message.includes("column"))
+  );
+}
+
+async function upsertStore(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  payload: {
+    user_id: string;
+    shop_domain: string;
+    client_id: string;
+    client_secret: string;
+    access_token?: string | null;
+    name: string;
+    theme_id?: string | null;
+  },
+  select = "*"
+) {
+  const result = await supabase
+    .from("stores")
+    .upsert(payload, { onConflict: "user_id,shop_domain" })
+    .select(select)
+    .single();
+
+  if (!isMissingAccessTokenColumn(result.error)) {
+    return result;
+  }
+
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload.access_token;
+  return supabase
+    .from("stores")
+    .upsert(fallbackPayload, { onConflict: "user_id,shop_domain" })
+    .select(select)
+    .single();
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -71,22 +112,15 @@ export async function POST(request: NextRequest) {
       (t: { role: string }) => t.role === "MAIN"
     );
 
-    const { data: store, error } = await supabase
-      .from("stores")
-      .upsert(
-        {
-          user_id: user.id,
-          shop_domain: shopDomain,
-          client_id: clientId,
-          client_secret: clientSecret,
-          access_token: null,
-          name: shopData.shop.name,
-          theme_id: activeTheme?.id || null,
-        },
-        { onConflict: "user_id,shop_domain" }
-      )
-      .select()
-      .single();
+    const { data: store, error } = await upsertStore(supabase, {
+      user_id: user.id,
+      shop_domain: shopDomain,
+      client_id: clientId,
+      client_secret: clientSecret,
+      access_token: null,
+      name: shopData.shop.name,
+      theme_id: activeTheme?.id || null,
+    });
 
     if (error) {
       return NextResponse.json(
@@ -109,23 +143,22 @@ export async function POST(request: NextRequest) {
       error.code === "INVALID_CREDENTIALS" &&
       /nao esta instalado|application_cannot_be_found/i.test(error.message)
     ) {
-      const { data: store, error: upsertError } = await supabase
-        .from("stores")
-        .upsert(
-          {
-            user_id: user.id,
-            shop_domain: shopDomain,
-            client_id: clientId,
-            client_secret: clientSecret,
-            access_token: null,
-            name: shopDomain,
-          },
-          { onConflict: "user_id,shop_domain" }
-        )
-        .select("id")
-        .single();
+      const { data: store, error: upsertError } = await upsertStore(
+        supabase,
+        {
+          user_id: user.id,
+          shop_domain: shopDomain,
+          client_id: clientId,
+          client_secret: clientSecret,
+          access_token: null,
+          name: shopDomain,
+        },
+        "id"
+      );
 
-      if (upsertError || !store) {
+      const savedStore = store as { id: string } | null;
+
+      if (upsertError || !savedStore) {
         return NextResponse.json(
           { error: "Falha ao salvar credenciais para iniciar a instalacao." },
           { status: 500 }
@@ -134,7 +167,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         needsInstall: true,
-        installUrl: `/api/shopify/auth?store_id=${store.id}`,
+        installUrl: `/api/shopify/auth?store_id=${savedStore.id}`,
         message:
           "App ainda nao instalado nessa loja. Vamos abrir a tela de autorizacao do Shopify.",
       });

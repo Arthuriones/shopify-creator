@@ -150,9 +150,7 @@ export async function processBulkImportJobs(input: {
 
       const { data: store, error: storeWithLanguageError } = await supabase
         .from("stores")
-        .select(
-          "id, user_id, name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description, target_language"
-        )
+        .select("*")
         .eq("id", job.store_id)
         .eq("user_id", job.user_id)
         .single();
@@ -161,9 +159,7 @@ export async function processBulkImportJobs(input: {
       if (storeWithLanguageError) {
         const { data: fallbackStore } = await supabase
           .from("stores")
-          .select(
-            "id, user_id, name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description"
-          )
+          .select("*")
           .eq("id", job.store_id)
           .eq("user_id", job.user_id)
           .single();

@@ -124,9 +124,7 @@ export async function POST(request: NextRequest) {
 
   const { data: store } = await supabase
     .from("stores")
-    .select(
-      "id, user_id, name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description, target_language"
-    )
+    .select("*")
     .eq("id", storeId)
     .eq("user_id", user.id)
     .single();
