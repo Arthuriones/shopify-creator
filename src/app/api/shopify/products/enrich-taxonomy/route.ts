@@ -42,6 +42,20 @@ interface CatalogProductForTaxonomy {
   };
 }
 
+interface TaxonomyProposalInput {
+  productId?: string;
+  title?: string;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  productType?: string | null;
+  metafields?: {
+    namespace: string;
+    key: string;
+    type: string;
+    value: string;
+  }[];
+}
+
 async function getAuthenticated() {
   const supabase = await createClient();
   const {
@@ -95,6 +109,10 @@ export async function POST(request: NextRequest) {
     ? body.productIds.map((id: unknown) => String(id)).filter(Boolean)
     : [];
   const search = typeof body.search === "string" ? body.search.trim() : "";
+  const mode = body.mode === "apply" ? "apply" : "preview";
+  const proposals: TaxonomyProposalInput[] = Array.isArray(body.proposals)
+    ? body.proposals
+    : [];
   const useAiFallback = body.useAiFallback === true;
   const includeAlreadyCategorized = body.includeAlreadyCategorized === true;
   const limit = Math.min(Math.max(Number(body.limit || productIds.length || 50), 1), 50);
@@ -125,6 +143,79 @@ export async function POST(request: NextRequest) {
   const context = toStoreContext(storeCredentials);
 
   try {
+    if (mode === "apply" && proposals.length > 0) {
+      const summary = {
+        requested: proposals.length,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        products: [] as {
+          id: string;
+          title: string;
+          status: "updated" | "skipped" | "failed";
+          category?: string | null;
+          source?: string;
+          warning?: string;
+        }[],
+      };
+
+      for (const proposal of proposals.slice(0, limit)) {
+        const productId = String(proposal.productId || "");
+        if (!productId) {
+          summary.skipped += 1;
+          continue;
+        }
+
+        const metafields = Array.isArray(proposal.metafields)
+          ? proposal.metafields.filter(
+              (field) => field.namespace && field.key && field.type && field.value
+            )
+          : [];
+
+        if (!proposal.categoryId && !proposal.productType && metafields.length === 0) {
+          summary.skipped += 1;
+          summary.products.push({
+            id: productId,
+            title: proposal.title || productId,
+            status: "skipped",
+            category: proposal.categoryName || null,
+            warning: "Sem alteracoes para aplicar.",
+          });
+          continue;
+        }
+
+        try {
+          await updateProductTaxonomy(creds, {
+            productId,
+            categoryId: proposal.categoryId || null,
+            productType: proposal.productType || null,
+            metafields,
+          });
+          summary.updated += 1;
+          summary.products.push({
+            id: productId,
+            title: proposal.title || productId,
+            status: "updated",
+            category: proposal.categoryName || null,
+          });
+        } catch (error) {
+          summary.failed += 1;
+          summary.products.push({
+            id: productId,
+            title: proposal.title || productId,
+            status: "failed",
+            category: proposal.categoryName || null,
+            warning:
+              error instanceof Error
+                ? error.message
+                : "Falha ao aplicar categoria/metacampos.",
+          });
+        }
+      }
+
+      return NextResponse.json({ summary });
+    }
+
     const products = productIds.length
       ? (
           await Promise.all(
@@ -142,11 +233,23 @@ export async function POST(request: NextRequest) {
       updated: 0,
       skipped: 0,
       failed: 0,
+      mode,
       products: [] as {
         id: string;
         title: string;
-        status: "updated" | "skipped" | "failed";
+        status: "preview" | "updated" | "skipped" | "failed";
         category?: string | null;
+        categoryId?: string | null;
+        currentCategory?: string | null;
+        productType?: string | null;
+        currentProductType?: string | null;
+        attributes?: { name: string; key: string; value: string | string[] }[];
+        metafields?: {
+          namespace: string;
+          key: string;
+          type: string;
+          value: string;
+        }[];
         source?: string;
         warning?: string;
       }[],
@@ -160,6 +263,8 @@ export async function POST(request: NextRequest) {
           title: product.title,
           status: "skipped",
           category: product.category.fullName || product.category.name || null,
+          currentCategory: product.category.fullName || product.category.name || null,
+          currentProductType: product.productType || null,
           warning: "Produto ja tinha categoria.",
         });
         continue;
@@ -193,25 +298,26 @@ export async function POST(request: NextRequest) {
             title: product.title,
             status: "skipped",
             category: null,
+            currentCategory: product.category?.fullName || product.category?.name || null,
+            currentProductType: product.productType || null,
             source: taxonomy.source,
             warning: taxonomy.warnings[0] || "Sem categoria ou atributo confiavel.",
           });
           continue;
         }
 
-        await updateProductTaxonomy(creds, {
-          productId: product.id,
-          categoryId: taxonomy.category?.id || null,
-          productType: taxonomy.productType || product.productType || null,
-          metafields: taxonomy.metafields,
-        });
-
         summary.updated += 1;
         summary.products.push({
           id: product.id,
           title: product.title,
-          status: "updated",
+          status: "preview",
           category: taxonomy.category?.fullName || taxonomy.categorySearch || null,
+          categoryId: taxonomy.category?.id || null,
+          currentCategory: product.category?.fullName || product.category?.name || null,
+          productType: taxonomy.productType || product.productType || null,
+          currentProductType: product.productType || null,
+          attributes: taxonomy.attributes,
+          metafields: taxonomy.metafields,
           source: taxonomy.source,
           warning: taxonomy.warnings[0],
         });

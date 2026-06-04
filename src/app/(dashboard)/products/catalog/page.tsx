@@ -73,6 +73,26 @@ interface VariantDraft {
   compareAtPrice: string;
 }
 
+interface TaxonomyPreviewItem {
+  id: string;
+  title: string;
+  status: "preview" | "updated" | "skipped" | "failed";
+  category?: string | null;
+  categoryId?: string | null;
+  currentCategory?: string | null;
+  productType?: string | null;
+  currentProductType?: string | null;
+  attributes?: { name: string; key: string; value: string | string[] }[];
+  metafields?: {
+    namespace: string;
+    key: string;
+    type: string;
+    value: string;
+  }[];
+  source?: string;
+  warning?: string;
+}
+
 function formatPrice(value: number, currencyCode: string): string {
   try {
     return new Intl.NumberFormat("pt-BR", {
@@ -104,6 +124,9 @@ export default function CatalogPage() {
   const [taxonomyEnriching, setTaxonomyEnriching] = useState(false);
   const [taxonomyUseAi, setTaxonomyUseAi] = useState(true);
   const [taxonomyIncludeExisting, setTaxonomyIncludeExisting] = useState(false);
+  const [taxonomyPreviewOpen, setTaxonomyPreviewOpen] = useState(false);
+  const [taxonomyPreview, setTaxonomyPreview] = useState<TaxonomyPreviewItem[]>([]);
+  const [taxonomyApplying, setTaxonomyApplying] = useState(false);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -248,6 +271,7 @@ export default function CatalogPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mode: "preview",
           storeId: selectedStore,
           productIds,
           useAiFallback: taxonomyUseAi,
@@ -262,14 +286,63 @@ export default function CatalogPage() {
       }
 
       const summary = data.summary || {};
+      const preview = (summary.products || []) as TaxonomyPreviewItem[];
+      setTaxonomyPreview(preview);
+      setTaxonomyPreviewOpen(true);
+      toast.success(
+        `Previa pronta: ${preview.filter((item) => item.status === "preview").length} produto(s) com alteracoes.`
+      );
+    } catch {
+      toast.error("Erro ao gerar previa de categorias.");
+    } finally {
+      setTaxonomyEnriching(false);
+    }
+  }
+
+  async function handleApplyTaxonomyPreview() {
+    if (!selectedStore) return;
+    const proposals = taxonomyPreview.filter((item) => item.status === "preview");
+    if (proposals.length === 0) {
+      toast.error("Nenhuma alteracao para aplicar.");
+      return;
+    }
+
+    setTaxonomyApplying(true);
+    try {
+      const res = await fetch("/api/shopify/products/enrich-taxonomy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "apply",
+          storeId: selectedStore,
+          proposals: proposals.map((item) => ({
+            productId: item.id,
+            title: item.title,
+            categoryId: item.categoryId || null,
+            categoryName: item.category || null,
+            productType: item.productType || null,
+            metafields: item.metafields || [],
+          })),
+          limit: proposals.length,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel aplicar categorias.");
+        return;
+      }
+
+      const summary = data.summary || {};
       toast.success(
         `Categorias aplicadas: ${summary.updated || 0}. Ignorados: ${summary.skipped || 0}. Falhas: ${summary.failed || 0}.`
       );
+      setTaxonomyPreviewOpen(false);
+      setTaxonomyPreview([]);
       await loadProducts({ silent: true });
     } catch {
       toast.error("Erro ao aplicar categorias em massa.");
     } finally {
-      setTaxonomyEnriching(false);
+      setTaxonomyApplying(false);
     }
   }
 
@@ -698,6 +771,147 @@ export default function CatalogPage() {
                     Salvar alteracoes
                   </>
                 )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={taxonomyPreviewOpen} onOpenChange={setTaxonomyPreviewOpen}>
+        <DialogContent className="border-border/50 bg-card max-w-5xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">
+              Prévia das categorias em massa
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border/50 bg-background/35 p-3 text-sm text-muted-foreground">
+              Confira as mudanças antes de aplicar. Produtos marcados como ignorados ou com falha não serão alterados.
+            </div>
+
+            <div className="space-y-2">
+              {taxonomyPreview.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma prévia carregada.</p>
+              ) : (
+                taxonomyPreview.map((item) => {
+                  const canApply = item.status === "preview";
+                  const attributes = item.attributes || [];
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-border/50 bg-background/35 p-3"
+                    >
+                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {item.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Fonte: {item.source || "fonte"} · {canApply ? "pronto para aplicar" : item.status}
+                          </p>
+                        </div>
+                        <span
+                          className="w-fit rounded-md px-2 py-1 text-[11px] font-semibold uppercase"
+                          style={{
+                            background: canApply
+                              ? "oklch(0.72 0.19 155 / 16%)"
+                              : item.status === "failed"
+                                ? "oklch(0.65 0.2 25 / 16%)"
+                                : "oklch(0.7 0.13 250 / 16%)",
+                            color: canApply
+                              ? "oklch(0.72 0.19 155)"
+                              : item.status === "failed"
+                                ? "oklch(0.65 0.2 25)"
+                                : "oklch(0.7 0.13 250)",
+                          }}
+                        >
+                          {canApply ? "prévia" : item.status}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-md border border-border/40 bg-background/45 p-2.5">
+                          <p className="text-[11px] font-medium uppercase text-muted-foreground">
+                            Atual
+                          </p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {item.currentCategory || "Sem categoria"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Tipo: {item.currentProductType || "Sem tipo"}
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-border/40 bg-background/45 p-2.5">
+                          <p className="text-[11px] font-medium uppercase text-muted-foreground">
+                            Proposto
+                          </p>
+                          <p className="mt-1 text-sm text-foreground">
+                            {item.category || "Sem categoria proposta"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Tipo: {item.productType || "Sem tipo"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="text-[11px] font-medium uppercase text-muted-foreground">
+                          Metacampos
+                        </p>
+                        {attributes.length === 0 ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Nenhum metacampo proposto.
+                          </p>
+                        ) : (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {attributes.slice(0, 10).map((attribute) => (
+                              <span
+                                key={`${item.id}-${attribute.key}`}
+                                className="rounded-md border border-border/50 bg-background/55 px-2 py-1 text-xs text-muted-foreground"
+                              >
+                                {attribute.name}:{" "}
+                                {Array.isArray(attribute.value)
+                                  ? attribute.value.join(", ")
+                                  : attribute.value}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {item.warning && (
+                        <p className="mt-3 text-xs text-amber-500">{item.warning}</p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTaxonomyPreviewOpen(false)}
+                disabled={taxonomyApplying}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={handleApplyTaxonomyPreview}
+                disabled={
+                  taxonomyApplying ||
+                  !taxonomyPreview.some((item) => item.status === "preview")
+                }
+              >
+                {taxonomyApplying ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Aplicar prévia
               </Button>
             </div>
           </div>

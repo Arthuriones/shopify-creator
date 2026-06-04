@@ -1179,6 +1179,132 @@ export interface ShopifyProductMetafieldInput {
   value: string;
 }
 
+function metafieldDefinitionName(field: ShopifyProductMetafieldInput) {
+  return field.key
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .slice(0, 80);
+}
+
+export async function ensureProductMetafieldDefinitions(
+  creds: ShopifyCredentials,
+  fields: ShopifyProductMetafieldInput[]
+) {
+  const uniqueFields = Array.from(
+    new Map(fields.map((field) => [`${field.namespace}.${field.key}`, field])).values()
+  );
+  const warnings: string[] = [];
+
+  for (const field of uniqueFields) {
+    const existingQuery = `
+      query getMetafieldDefinition($ownerType: MetafieldOwnerType!, $namespace: String, $key: String) {
+        metafieldDefinitions(ownerType: $ownerType, namespace: $namespace, key: $key, first: 1) {
+          nodes { id namespace key type { name } }
+        }
+      }
+    `;
+
+    try {
+      const existing = await shopifyGraphQL(creds, existingQuery, {
+        ownerType: "PRODUCT",
+        namespace: field.namespace,
+        key: field.key,
+      });
+      if (existing?.metafieldDefinitions?.nodes?.[0]?.id) continue;
+
+      const createMutation = `
+        mutation createProductMetafieldDefinition($definition: MetafieldDefinitionInput!) {
+          metafieldDefinitionCreate(definition: $definition) {
+            createdDefinition { id namespace key }
+            userErrors { field message }
+          }
+        }
+      `;
+      const created = await shopifyGraphQL(creds, createMutation, {
+        definition: {
+          ownerType: "PRODUCT",
+          namespace: field.namespace,
+          key: field.key,
+          name: metafieldDefinitionName(field),
+          type: field.type,
+          pin: true,
+        },
+      });
+      const userErrors = created?.metafieldDefinitionCreate?.userErrors as
+        | { field?: string[]; message: string }[]
+        | undefined;
+      if (userErrors?.length) {
+        const alreadyExists = userErrors.some((error) =>
+          /already exists|taken|ja existe|já existe/i.test(error.message)
+        );
+        if (!alreadyExists) {
+          warnings.push(
+            `${field.namespace}.${field.key}: ${userErrors
+              .map((error) => error.message)
+              .join(" | ")}`
+          );
+        }
+      }
+    } catch (error) {
+      warnings.push(
+        `${field.namespace}.${field.key}: ${
+          error instanceof Error ? error.message : "falha ao criar definicao"
+        }`
+      );
+    }
+  }
+
+  return warnings;
+}
+
+export async function setProductMetafields(
+  creds: ShopifyCredentials,
+  productId: string,
+  fields: ShopifyProductMetafieldInput[]
+) {
+  if (fields.length === 0) return { metafields: [], userErrors: [] };
+
+  const definitionWarnings = await ensureProductMetafieldDefinitions(creds, fields);
+  const mutation = `
+    mutation setProductMetafields($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields { id namespace key type value }
+        userErrors { field message code }
+      }
+    }
+  `;
+  const result = await shopifyGraphQL(creds, mutation, {
+    metafields: fields.map((field) => ({
+      ownerId: productId,
+      namespace: field.namespace,
+      key: field.key,
+      type: field.type,
+      value: field.value,
+    })),
+  });
+  const userErrors = result?.metafieldsSet?.userErrors as
+    | { field?: string[]; message: string; code?: string }[]
+    | undefined;
+
+  if (userErrors?.length) {
+    throw new Error(
+      [
+        ...definitionWarnings,
+        ...userErrors.map((err) =>
+          err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
+        ),
+      ].join(" | ")
+    );
+  }
+
+  return {
+    ...result?.metafieldsSet,
+    definitionWarnings,
+  };
+}
+
 export async function searchShopifyTaxonomyCategories(
   creds: ShopifyCredentials,
   search: string,
@@ -1258,9 +1384,6 @@ export async function updateProductTaxonomy(
   if (input.productType) {
     payload.productType = input.productType;
   }
-  if (input.metafields?.length) {
-    payload.metafields = input.metafields;
-  }
 
   const result = await shopifyGraphQL(creds, mutation, { input: payload });
   const userErrors = result?.productUpdate?.userErrors as
@@ -1277,7 +1400,14 @@ export async function updateProductTaxonomy(
     );
   }
 
-  return result?.productUpdate?.product || null;
+  const metafieldsResult = input.metafields?.length
+    ? await setProductMetafields(creds, input.productId, input.metafields)
+    : null;
+
+  return {
+    ...(result?.productUpdate?.product || {}),
+    metafieldsResult,
+  };
 }
 
 export async function updateShopifyProduct(
