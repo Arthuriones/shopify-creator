@@ -154,6 +154,14 @@ export default function CatalogPage() {
     [selectedStore, stores]
   );
   const activeCurrency = selectedStoreData?.currency_code || "USD";
+  const taxonomySampleProduct = useMemo(
+    () => products.find((product) => product.id === taxonomySampleProductId),
+    [products, taxonomySampleProductId]
+  );
+  const taxonomyProductOptions = useMemo(
+    () => products.slice(0, 50),
+    [products]
+  );
 
   const loadStores = useCallback(async () => {
     setLoadingStores(true);
@@ -903,20 +911,20 @@ export default function CatalogPage() {
       </Dialog>
 
       <Dialog open={taxonomyPreviewOpen} onOpenChange={setTaxonomyPreviewOpen}>
-        <DialogContent className="border-border/50 bg-card max-w-5xl max-h-[88vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] border-border/50 bg-card sm:max-w-[960px] max-h-[88vh] overflow-x-hidden overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               Categorizar produtos
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <div className="rounded-lg border border-border/50 bg-background/35 p-3 text-sm text-muted-foreground">
               Primeiro gere uma prévia de um produto. Depois aplique só nele ou rode a correção nos produtos carregados, em pequenas etapas.
             </div>
 
-            <div className="grid gap-3 rounded-lg border border-border/50 bg-background/35 p-3 md:grid-cols-[1fr_auto]">
-              <div className="space-y-1.5">
+            <div className="grid min-w-0 gap-3 rounded-lg border border-border/50 bg-background/35 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0 space-y-1.5">
                 <Label className="text-[13px] text-muted-foreground">
                   Produto de exemplo
                 </Label>
@@ -930,12 +938,18 @@ export default function CatalogPage() {
                     }
                   }}
                 >
-                  <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                    <SelectValue placeholder="Escolha um produto para a prévia" />
+                  <SelectTrigger className="h-10 w-full min-w-0 bg-background/50 border-border/50 text-sm">
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {taxonomySampleProduct?.title || "Escolha um produto para a prévia"}
+                    </span>
                   </SelectTrigger>
-                  <SelectContent>
-                    {products.slice(0, 50).map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
+                  <SelectContent className="max-w-[calc(100vw-3rem)]">
+                    {taxonomyProductOptions.map((product) => (
+                      <SelectItem
+                        key={product.id}
+                        value={product.id}
+                        className="min-w-0 [&_[data-slot=select-item-text]]:min-w-0 [&_[data-slot=select-item-text]]:truncate [&_[data-slot=select-item-text]]:whitespace-normal"
+                      >
                         {product.title}
                       </SelectItem>
                     ))}
@@ -960,7 +974,7 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               {taxonomyEnriching ? (
                 <div className="rounded-lg border border-border/50 bg-background/35 p-8 text-center text-sm text-muted-foreground">
                   <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
@@ -975,7 +989,7 @@ export default function CatalogPage() {
                   return (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-border/50 bg-background/35 p-3"
+                      className="min-w-0 rounded-lg border border-border/50 bg-background/35 p-3"
                     >
                       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
@@ -1005,23 +1019,23 @@ export default function CatalogPage() {
                         </span>
                       </div>
 
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-md border border-border/40 bg-background/45 p-2.5">
+                      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
+                        <div className="min-w-0 rounded-md border border-border/40 bg-background/45 p-2.5">
                           <p className="text-[11px] font-medium uppercase text-muted-foreground">
                             Atual
                           </p>
-                          <p className="mt-1 text-sm text-foreground">
+                          <p className="mt-1 break-words text-sm text-foreground">
                             {item.currentCategory || "Sem categoria"}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
                             Tipo: {item.currentProductType || "Sem tipo"}
                           </p>
                         </div>
-                        <div className="rounded-md border border-border/40 bg-background/45 p-2.5">
+                        <div className="min-w-0 rounded-md border border-border/40 bg-background/45 p-2.5">
                           <p className="text-[11px] font-medium uppercase text-muted-foreground">
                             Proposto
                           </p>
-                          <p className="mt-1 text-sm text-foreground">
+                          <p className="mt-1 break-words text-sm text-foreground">
                             {item.category || "Sem categoria proposta"}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -1094,10 +1108,11 @@ export default function CatalogPage() {
               </div>
             )}
 
-            <div className="flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:justify-end">
+            <div className="grid gap-2 border-t border-border/50 pt-4 sm:flex sm:flex-wrap sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
+                className="w-full sm:w-auto"
                 onClick={() => setTaxonomyPreviewOpen(false)}
                 disabled={taxonomyApplying}
               >
@@ -1112,6 +1127,7 @@ export default function CatalogPage() {
                   !taxonomyPreview.some((item) => item.status === "preview")
                 }
                 variant="outline"
+                className="w-full sm:w-auto"
               >
                 {taxonomyApplying ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1128,6 +1144,7 @@ export default function CatalogPage() {
                   taxonomyEnriching ||
                   taxonomyTargetProducts().length === 0
                 }
+                className="w-full sm:w-auto"
               >
                 {taxonomyApplying ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
