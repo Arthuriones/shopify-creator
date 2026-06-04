@@ -127,6 +127,15 @@ export default function CatalogPage() {
   const [taxonomyPreviewOpen, setTaxonomyPreviewOpen] = useState(false);
   const [taxonomyPreview, setTaxonomyPreview] = useState<TaxonomyPreviewItem[]>([]);
   const [taxonomyApplying, setTaxonomyApplying] = useState(false);
+  const [taxonomySampleProductId, setTaxonomySampleProductId] = useState("");
+  const [taxonomyBulkProgress, setTaxonomyBulkProgress] = useState<{
+    done: number;
+    total: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    current?: string;
+  } | null>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -254,7 +263,47 @@ export default function CatalogPage() {
     router.push(`/products?editId=${encodeURIComponent(product.id)}&storeId=${encodeURIComponent(selectedStore)}`);
   }
 
-  async function handleEnrichTaxonomy() {
+  function taxonomyTargetProducts() {
+    return products
+      .filter((product) => taxonomyIncludeExisting || !product.category?.id)
+      .slice(0, 50);
+  }
+
+  async function loadTaxonomyPreview(productId: string) {
+    if (!selectedStore || !productId) return;
+
+    setTaxonomyEnriching(true);
+    setTaxonomyPreview([]);
+    setTaxonomyBulkProgress(null);
+    try {
+      const res = await fetch("/api/shopify/products/enrich-taxonomy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "preview",
+          storeId: selectedStore,
+          productIds: [productId],
+          useAiFallback: taxonomyUseAi,
+          includeAlreadyCategorized: taxonomyIncludeExisting,
+          limit: 1,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Nao foi possivel gerar a previa.");
+        return;
+      }
+
+      const summary = data.summary || {};
+      setTaxonomyPreview((summary.products || []) as TaxonomyPreviewItem[]);
+    } catch {
+      toast.error("Erro ao gerar previa de categoria.");
+    } finally {
+      setTaxonomyEnriching(false);
+    }
+  }
+
+  function handleEnrichTaxonomy() {
     if (!selectedStore) {
       toast.error("Selecione uma loja.");
       return;
@@ -264,39 +313,12 @@ export default function CatalogPage() {
       return;
     }
 
-    const productIds = products.slice(0, 50).map((product) => product.id);
-    setTaxonomyEnriching(true);
-    try {
-      const res = await fetch("/api/shopify/products/enrich-taxonomy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "preview",
-          storeId: selectedStore,
-          productIds,
-          useAiFallback: taxonomyUseAi,
-          includeAlreadyCategorized: taxonomyIncludeExisting,
-          limit: productIds.length,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Nao foi possivel aplicar categorias.");
-        return;
-      }
-
-      const summary = data.summary || {};
-      const preview = (summary.products || []) as TaxonomyPreviewItem[];
-      setTaxonomyPreview(preview);
-      setTaxonomyPreviewOpen(true);
-      toast.success(
-        `Previa pronta: ${preview.filter((item) => item.status === "preview").length} produto(s) com alteracoes.`
-      );
-    } catch {
-      toast.error("Erro ao gerar previa de categorias.");
-    } finally {
-      setTaxonomyEnriching(false);
-    }
+    const sample = taxonomyTargetProducts()[0] || products[0];
+    setTaxonomySampleProductId(sample.id);
+    setTaxonomyPreview([]);
+    setTaxonomyBulkProgress(null);
+    setTaxonomyPreviewOpen(true);
+    void loadTaxonomyPreview(sample.id);
   }
 
   async function handleApplyTaxonomyPreview() {
@@ -338,6 +360,113 @@ export default function CatalogPage() {
       );
       setTaxonomyPreviewOpen(false);
       setTaxonomyPreview([]);
+      await loadProducts({ silent: true });
+    } catch {
+      toast.error("Erro ao aplicar categorias em massa.");
+    } finally {
+      setTaxonomyApplying(false);
+    }
+  }
+
+  async function handleApplyTaxonomyBulk() {
+    if (!selectedStore) return;
+    const targets = taxonomyTargetProducts();
+    if (targets.length === 0) {
+      toast.error("Nenhum produto elegivel para categorizar.");
+      return;
+    }
+
+    setTaxonomyApplying(true);
+    setTaxonomyBulkProgress({
+      done: 0,
+      total: targets.length,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+    });
+
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    try {
+      for (const [index, product] of targets.entries()) {
+        setTaxonomyBulkProgress({
+          done: index,
+          total: targets.length,
+          updated,
+          skipped,
+          failed,
+          current: product.title,
+        });
+
+        const previewRes = await fetch("/api/shopify/products/enrich-taxonomy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "preview",
+            storeId: selectedStore,
+            productIds: [product.id],
+            useAiFallback: taxonomyUseAi,
+            includeAlreadyCategorized: taxonomyIncludeExisting,
+            limit: 1,
+          }),
+        });
+        const previewData = await previewRes.json();
+        if (!previewRes.ok) {
+          failed += 1;
+          continue;
+        }
+
+        const proposal = (
+          (previewData.summary?.products || []) as TaxonomyPreviewItem[]
+        ).find((item) => item.status === "preview");
+
+        if (!proposal) {
+          skipped += 1;
+          continue;
+        }
+
+        const applyRes = await fetch("/api/shopify/products/enrich-taxonomy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "apply",
+            storeId: selectedStore,
+            proposals: [
+              {
+                productId: proposal.id,
+                title: proposal.title,
+                categoryId: proposal.categoryId || null,
+                categoryName: proposal.category || null,
+                productType: proposal.productType || null,
+                metafields: proposal.metafields || [],
+              },
+            ],
+            limit: 1,
+          }),
+        });
+        const applyData = await applyRes.json();
+        if (!applyRes.ok) {
+          failed += 1;
+          continue;
+        }
+
+        updated += Number(applyData.summary?.updated || 0);
+        skipped += Number(applyData.summary?.skipped || 0);
+        failed += Number(applyData.summary?.failed || 0);
+      }
+
+      setTaxonomyBulkProgress({
+        done: targets.length,
+        total: targets.length,
+        updated,
+        skipped,
+        failed,
+      });
+      toast.success(
+        `Categorias aplicadas: ${updated}. Ignorados: ${skipped}. Falhas: ${failed}.`
+      );
       await loadProducts({ silent: true });
     } catch {
       toast.error("Erro ao aplicar categorias em massa.");
@@ -529,18 +658,14 @@ export default function CatalogPage() {
               type="button"
               variant="outline"
               className="h-9 border-border/50"
-              disabled={!selectedStore || products.length === 0 || taxonomyEnriching}
+              disabled={!selectedStore || products.length === 0}
               onClick={handleEnrichTaxonomy}
             >
-              {taxonomyEnriching ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              Corrigir categorias em massa
+              <Sparkles className="h-3.5 w-3.5" />
+              Categorizar produtos
             </Button>
             <p className="text-xs text-muted-foreground">
-              Aplica nos produtos carregados acima, ate 50 por vez.
+              Abre uma prévia de 1 produto antes de aplicar em massa.
             </p>
           </div>
         </CardContent>
@@ -781,17 +906,67 @@ export default function CatalogPage() {
         <DialogContent className="border-border/50 bg-card max-w-5xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
-              Prévia das categorias em massa
+              Categorizar produtos
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="rounded-lg border border-border/50 bg-background/35 p-3 text-sm text-muted-foreground">
-              Confira as mudanças antes de aplicar. Produtos marcados como ignorados ou com falha não serão alterados.
+              Primeiro gere uma prévia de um produto. Depois aplique só nele ou rode a correção nos produtos carregados, em pequenas etapas.
+            </div>
+
+            <div className="grid gap-3 rounded-lg border border-border/50 bg-background/35 p-3 md:grid-cols-[1fr_auto]">
+              <div className="space-y-1.5">
+                <Label className="text-[13px] text-muted-foreground">
+                  Produto de exemplo
+                </Label>
+                <Select
+                  value={taxonomySampleProductId}
+                  onValueChange={(value) => {
+                    const nextValue = value ?? "";
+                    setTaxonomySampleProductId(nextValue);
+                    if (nextValue) {
+                      void loadTaxonomyPreview(nextValue);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
+                    <SelectValue placeholder="Escolha um produto para a prévia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.slice(0, 50).map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10"
+                  disabled={!taxonomySampleProductId || taxonomyEnriching}
+                  onClick={() => loadTaxonomyPreview(taxonomySampleProductId)}
+                >
+                  {taxonomyEnriching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Gerar prévia
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
-              {taxonomyPreview.length === 0 ? (
+              {taxonomyEnriching ? (
+                <div className="rounded-lg border border-border/50 bg-background/35 p-8 text-center text-sm text-muted-foreground">
+                  <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
+                  Gerando prévia do produto escolhido...
+                </div>
+              ) : taxonomyPreview.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhuma prévia carregada.</p>
               ) : (
                 taxonomyPreview.map((item) => {
@@ -889,6 +1064,36 @@ export default function CatalogPage() {
               )}
             </div>
 
+            {taxonomyBulkProgress && (
+              <div className="rounded-lg border border-border/50 bg-background/35 p-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <p className="font-medium text-foreground">
+                    Progresso da aplicação em massa
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {taxonomyBulkProgress.done}/{taxonomyBulkProgress.total}
+                  </p>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width: `${Math.round(
+                        (taxonomyBulkProgress.done /
+                          Math.max(taxonomyBulkProgress.total, 1)) *
+                          100
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {taxonomyBulkProgress.current
+                    ? `Processando: ${taxonomyBulkProgress.current}`
+                    : `Aplicados: ${taxonomyBulkProgress.updated}. Ignorados: ${taxonomyBulkProgress.skipped}. Falhas: ${taxonomyBulkProgress.failed}.`}
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:justify-end">
               <Button
                 type="button"
@@ -903,7 +1108,25 @@ export default function CatalogPage() {
                 onClick={handleApplyTaxonomyPreview}
                 disabled={
                   taxonomyApplying ||
+                  taxonomyEnriching ||
                   !taxonomyPreview.some((item) => item.status === "preview")
+                }
+                variant="outline"
+              >
+                {taxonomyApplying ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Aplicar este produto
+              </Button>
+              <Button
+                type="button"
+                onClick={handleApplyTaxonomyBulk}
+                disabled={
+                  taxonomyApplying ||
+                  taxonomyEnriching ||
+                  taxonomyTargetProducts().length === 0
                 }
               >
                 {taxonomyApplying ? (
@@ -911,7 +1134,7 @@ export default function CatalogPage() {
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                Aplicar prévia
+                Aplicar nos carregados
               </Button>
             </div>
           </div>
