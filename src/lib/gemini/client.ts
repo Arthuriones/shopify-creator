@@ -348,7 +348,7 @@ Responda APENAS JSON valido.
 Regras:
 1. "categorySearch" deve ser uma busca curta em ingles para a categoria mais especifica da Shopify, por exemplo "Women's Coats", "Women's Jackets", "Shirts", "Dog Beds".
 2. "productType" deve ser um tipo curto no idioma da loja, por exemplo "Casaco feminino".
-3. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: gender, size, color, material, age_group, pattern.
+3. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: product_subtype, gender, size, color, material, age_group, pattern.
 4. Se um atributo existir na fonte, use o valor da fonte. Se faltar e for dedutivel com alta confianca, preencha pela IA. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
 5. Para valores multiplos, use array.
 
@@ -357,6 +357,7 @@ Formato:
   "categorySearch": "...",
   "productType": "...",
   "attributes": [
+    { "name": "Subtipo", "key": "product_subtype", "value": "Pulseira" },
     { "name": "Genero", "key": "gender", "value": "Feminino" },
     { "name": "Cor", "key": "color", "value": ["Preto", "Azul"] }
   ]

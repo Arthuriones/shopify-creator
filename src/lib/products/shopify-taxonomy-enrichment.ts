@@ -56,6 +56,24 @@ const ATTRIBUTE_ALIASES: Record<string, { key: string; name: string }> = {
   tipo: { key: "product_type_hint", name: "Tipo sugerido" },
 };
 
+const CATEGORY_PRODUCT_TYPE_HINTS: { pattern: RegExp; value: string }[] = [
+  { pattern: /\bbracelets?\b|pulseiras?/i, value: "Pulseira" },
+  { pattern: /\bnecklaces?\b|colares?/i, value: "Colar" },
+  { pattern: /\brings?\b|aneis|an[eé]is/i, value: "Anel" },
+  { pattern: /\bearrings?\b|brincos?/i, value: "Brinco" },
+  { pattern: /\bwatches?\b|rel[oó]gios?/i, value: "Relogio" },
+  { pattern: /\bshirts?\b|camisas?/i, value: "Camisa" },
+  { pattern: /\bt-?shirts?\b|camisetas?/i, value: "Camiseta" },
+  { pattern: /\bcoats?\b|casacos?/i, value: "Casaco" },
+  { pattern: /\bjackets?\b|jaquetas?/i, value: "Jaqueta" },
+  { pattern: /\bdresses?\b|vestidos?/i, value: "Vestido" },
+  { pattern: /\b(shorts?)\b/i, value: "Shorts" },
+  { pattern: /\bpants?\b|\btrousers?\b|cal[cç]as?/i, value: "Calca" },
+  { pattern: /\bsneakers?\b|t[eê]nis/i, value: "Tenis" },
+  { pattern: /\bshoes?\b|cal[cç]ados?/i, value: "Calcado" },
+  { pattern: /\bhandbags?\b|\bbags?\b|bolsas?/i, value: "Bolsa" },
+];
+
 function normalizeKey(input: string) {
   return input
     .normalize("NFD")
@@ -176,6 +194,59 @@ function sourceCategorySearch(product: ProductForTaxonomyEnrichment) {
   ).trim();
 }
 
+function categoryLeaf(input?: string | null) {
+  return String(input || "")
+    .split(">")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .pop() || "";
+}
+
+function inferProductType(product: ProductForTaxonomyEnrichment, sourceCategory: string) {
+  const existingType = String(product.productType || "").trim();
+  if (existingType && existingType !== sourceCategory) return existingType;
+
+  const text = `${product.title || ""} ${sourceCategory || ""}`;
+  const match = CATEGORY_PRODUCT_TYPE_HINTS.find((hint) => hint.pattern.test(text));
+  if (match) return match.value;
+
+  return categoryLeaf(sourceCategory) || "";
+}
+
+function inferAudienceAttributes(product: ProductForTaxonomyEnrichment, sourceCategory: string) {
+  const text = `${product.title || ""} ${sourceCategory || ""} ${(product.tags || []).join(" ")}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const attributes: { name: string; key: string; value: string }[] = [];
+
+  if (/\b(women|womens|female|feminino|feminina|mulher|dama)\b/.test(text)) {
+    attributes.push({ name: "Genero", key: "gender", value: "Feminino" });
+  } else if (/\b(men|mens|male|masculino|homem)\b/.test(text)) {
+    attributes.push({ name: "Genero", key: "gender", value: "Masculino" });
+  } else if (/\b(unisex|unissex)\b/.test(text)) {
+    attributes.push({ name: "Genero", key: "gender", value: "Unissex" });
+  }
+
+  if (/\b(kids|children|child|infantil|crianca|criancas|junior)\b/.test(text)) {
+    attributes.push({ name: "Faixa etaria", key: "age_group", value: "Infantil" });
+  } else if (/\b(baby|beb[eê])\b/.test(text)) {
+    attributes.push({ name: "Faixa etaria", key: "age_group", value: "Bebe" });
+  }
+
+  return attributes;
+}
+
+function fallbackAttributes(product: ProductForTaxonomyEnrichment, sourceCategory: string) {
+  const productType = inferProductType(product, sourceCategory);
+  return mergeAttributes(
+    productType
+      ? [{ name: "Subtipo", key: "product_subtype", value: productType }]
+      : [],
+    inferAudienceAttributes(product, sourceCategory)
+  );
+}
+
 function metafieldValue(value: string | string[]) {
   return Array.isArray(value) ? JSON.stringify(value) : value;
 }
@@ -256,14 +327,14 @@ export async function buildShopifyTaxonomyEnrichment(input: {
   );
 
   let categorySearch = sourceCategory;
-  let productType = input.product.productType || sourceCategory || null;
+  let productType = input.product.productType || null;
   let aiAttributes: { name: string; key: string; value: string | string[] }[] = [];
   let usedAi = false;
 
   if (
     input.useAiFallback &&
     process.env.GEMINI_API_KEY &&
-    (!categorySearch || sourceAttributes.length === 0)
+    (!categorySearch || !productType || sourceAttributes.length === 0)
   ) {
     try {
       const suggestion = await suggestShopifyTaxonomy(
@@ -295,7 +366,13 @@ export async function buildShopifyTaxonomyEnrichment(input: {
     }
   }
 
-  const attributes = mergeAttributes(sourceAttributes, aiAttributes);
+  productType = productType || inferProductType(input.product, sourceCategory) || null;
+
+  const attributes = mergeAttributes(
+    sourceAttributes,
+    aiAttributes,
+    fallbackAttributes(input.product, sourceCategory)
+  );
   let category: ShopifyTaxonomyCategoryMatch | null = null;
 
   if (categorySearch) {

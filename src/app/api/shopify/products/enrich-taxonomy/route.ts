@@ -255,8 +255,10 @@ export async function POST(request: NextRequest) {
       }[],
     };
 
+    const forceSingleProductPreview = mode === "preview" && productIds.length === 1;
+
     for (const product of products.slice(0, limit)) {
-      if (product.category?.id && !includeAlreadyCategorized) {
+      if (product.category?.id && !includeAlreadyCategorized && !forceSingleProductPreview) {
         summary.skipped += 1;
         summary.products.push({
           id: product.id,
