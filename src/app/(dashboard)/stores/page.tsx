@@ -753,11 +753,13 @@ export default function StoresPage() {
   async function handleRemove(storeId: string, storeName: string) {
     if (!confirm(`Remover a loja "${storeName}"?`)) return;
 
-    const supabase = createClient();
-    const { error } = await supabase.from("stores").delete().eq("id", storeId);
+    const res = await fetch(`/api/stores/${encodeURIComponent(storeId)}`, {
+      method: "DELETE",
+    });
+    const data = await res.json().catch(() => ({}));
 
-    if (error) {
-      toast.error("Erro ao remover loja");
+    if (!res.ok) {
+      toast.error(data.error || "Erro ao remover loja");
       return;
     }
 

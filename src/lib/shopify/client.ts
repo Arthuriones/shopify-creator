@@ -33,6 +33,7 @@ export interface ShopifyCredentials {
   shopDomain: string;
   clientId: string;
   clientSecret: string;
+  accessToken?: string | null;
 }
 
 function getOperationName(query: string): string {
@@ -103,6 +104,14 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
   }
 
   const cacheKey = `${normalizedShopDomain}:${creds.clientId}`;
+  if (creds.accessToken) {
+    tokenCache.set(cacheKey, {
+      accessToken: creds.accessToken,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    });
+    return creds.accessToken;
+  }
+
   const cached = tokenCache.get(cacheKey);
 
   // Renova 5 min antes de expirar

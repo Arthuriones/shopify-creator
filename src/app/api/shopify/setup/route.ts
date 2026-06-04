@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   const { data: store } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret")
+    .select("shop_domain, client_id, client_secret, access_token")
     .eq("id", storeId)
     .eq("user_id", user.id)
     .single();
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
     shopDomain: store.shop_domain,
     clientId: store.client_id,
     clientSecret: store.client_secret,
+    accessToken: store.access_token,
   };
 
   const results: Record<string, unknown> = {};

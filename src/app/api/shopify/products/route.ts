@@ -10,7 +10,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
   const { data: store } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret")
+    .select("shop_domain, client_id, client_secret, access_token")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
         shopDomain: store.shop_domain,
         clientId: store.client_id,
         clientSecret: store.client_secret,
+        accessToken: store.access_token,
       },
       {
         first: Number.isFinite(firstRaw) ? firstRaw : 50,
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest) {
         shopDomain: store.shop_domain,
         clientId: store.client_id,
         clientSecret: store.client_secret,
+        accessToken: store.access_token,
       },
       product
     );
@@ -155,6 +157,7 @@ export async function PUT(request: NextRequest) {
         shopDomain: store.shop_domain,
         clientId: store.client_id,
         clientSecret: store.client_secret,
+        accessToken: store.access_token,
       },
       {
         productId,

@@ -72,7 +72,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
   const { data: store, error } = await supabase
     .from("stores")
-    .select("shop_domain, client_id, client_secret, target_language")
+    .select("shop_domain, client_id, client_secret, access_token, target_language")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();
@@ -80,7 +80,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   if (error) {
     const { data: fallbackStore } = await supabase
       .from("stores")
-      .select("shop_domain, client_id, client_secret")
+      .select("shop_domain, client_id, client_secret, access_token")
       .eq("id", storeId)
       .eq("user_id", userId)
       .single();
@@ -401,11 +401,13 @@ export async function POST(request: NextRequest) {
     shopDomain: sourceStore.shop_domain,
     clientId: sourceStore.client_id,
     clientSecret: sourceStore.client_secret,
+    accessToken: sourceStore.access_token,
   };
   const targetCreds = {
     shopDomain: targetStore.shop_domain,
     clientId: targetStore.client_id,
     clientSecret: targetStore.client_secret,
+    accessToken: targetStore.access_token,
   };
 
   const sourceData = await getProducts(sourceCreds, { first: limit });

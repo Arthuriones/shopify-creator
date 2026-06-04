@@ -41,6 +41,7 @@ interface StoreCredentials {
   shop_domain: string;
   client_id: string;
   client_secret: string;
+  access_token?: string | null;
   niche: string | null;
   target_audience: string | null;
   brand_voice: string | null;
@@ -150,7 +151,7 @@ export async function processBulkImportJobs(input: {
       const { data: store, error: storeWithLanguageError } = await supabase
         .from("stores")
         .select(
-          "id, user_id, name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description, target_language"
+          "id, user_id, name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description, target_language"
         )
         .eq("id", job.store_id)
         .eq("user_id", job.user_id)
@@ -161,7 +162,7 @@ export async function processBulkImportJobs(input: {
         const { data: fallbackStore } = await supabase
           .from("stores")
           .select(
-            "id, user_id, name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description"
+            "id, user_id, name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description"
           )
           .eq("id", job.store_id)
           .eq("user_id", job.user_id)
@@ -216,6 +217,7 @@ export async function processBulkImportJobs(input: {
             shopDomain: storeCredentials.shop_domain,
             clientId: storeCredentials.client_id,
             clientSecret: storeCredentials.client_secret,
+            accessToken: storeCredentials.access_token,
           },
           product,
           context,

@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
           shop_domain: shopDomain,
           client_id: clientId,
           client_secret: clientSecret,
+          access_token: null,
           name: shopData.shop.name,
           theme_id: activeTheme?.id || null,
         },
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
             shop_domain: shopDomain,
             client_id: clientId,
             client_secret: clientSecret,
+            access_token: null,
             name: shopDomain,
           },
           { onConflict: "user_id,shop_domain" }

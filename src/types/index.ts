@@ -4,6 +4,7 @@ export interface Store {
   shop_domain: string;
   client_id: string;
   client_secret: string;
+  access_token: string | null;
   name: string;
   theme_id: string | null;
   niche: string | null;

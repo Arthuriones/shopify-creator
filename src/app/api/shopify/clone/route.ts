@@ -57,7 +57,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   const supabase = await createClient();
   const { data: store, error } = await supabase
     .from("stores")
-    .select("name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description, target_language")
+    .select("name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description, target_language")
     .eq("id", storeId)
     .eq("user_id", userId)
     .single();
@@ -65,7 +65,7 @@ async function getStoreCredentials(storeId: string, userId: string) {
   if (error) {
     const { data: fallbackStore } = await supabase
       .from("stores")
-      .select("name, shop_domain, client_id, client_secret, niche, target_audience, brand_voice, store_description")
+      .select("name, shop_domain, client_id, client_secret, access_token, niche, target_audience, brand_voice, store_description")
       .eq("id", storeId)
       .eq("user_id", userId)
       .single();
@@ -665,6 +665,7 @@ export async function POST(request: NextRequest) {
       shopDomain: targetStore.shop_domain,
       clientId: targetStore.client_id,
       clientSecret: targetStore.client_secret,
+      accessToken: targetStore.access_token,
     };
     const targetContext = toStoreContext(targetStore);
     const created: { sourceHandle: string; result: unknown }[] = [];

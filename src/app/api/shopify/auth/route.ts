@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
 
     // Step 2a: Trocar o authorization code por um access token
     // (obrigatório para completar a instalação do app na loja)
+    let accessToken = "";
     try {
       const tokenRes = await fetch(
         `https://${store.shop_domain}/admin/oauth/access_token`,
@@ -161,6 +162,25 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      const tokenPayload = (await tokenRes.json()) as {
+        access_token?: string;
+      };
+      if (!tokenPayload.access_token) {
+        console.error("[shopify/auth] code exchange without access_token");
+        return NextResponse.redirect(
+          dashboardUrl(
+            request,
+            `error=${encodeURIComponent("Shopify nao retornou token de acesso. Tente conectar novamente.")}`
+          )
+        );
+      }
+
+      accessToken = tokenPayload.access_token;
+      await supabase
+        .from("stores")
+        .update({ access_token: accessToken })
+        .eq("id", store.id);
+
       // Code exchange succeeded — app is now installed
       console.log("[shopify/auth] code exchange OK for", store.shop_domain);
     } catch (exchangeErr) {
@@ -178,6 +198,7 @@ export async function GET(request: NextRequest) {
       shopDomain: store.shop_domain,
       clientId: store.client_id,
       clientSecret: store.client_secret,
+      accessToken,
     };
 
     try {
