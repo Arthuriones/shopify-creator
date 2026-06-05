@@ -368,12 +368,23 @@ function categorySearchTerms(input: {
   addUniqueSearchTerm(terms, input.productType);
 
   const signal = productCategorySignal(input);
+  const isWomen = hasAny(signal, ["women", "womens", "female", "feminino", "feminina", "mulher"]);
+  const isMen = hasAny(signal, ["men", "mens", "male", "masculino", "homem"]);
   const isSnow =
     hasAny(signal, ["snow", "snowboard", "ski", "inverno", "insulated"]) &&
     hasAny(signal, ["jacket", "jaqueta", "coat", "casaco", "pants", "calca", "trousers"]);
 
   if (hasAny(signal, ["jacket", "jaqueta", "coat", "casaco"])) {
+    if (isWomen) {
+      addUniqueSearchTerm(terms, "Women's Jackets");
+      addUniqueSearchTerm(terms, "Women's Coats & Jackets");
+    } else if (isMen) {
+      addUniqueSearchTerm(terms, "Men's Jackets");
+      addUniqueSearchTerm(terms, "Men's Coats & Jackets");
+    }
     if (isSnow) {
+      if (isWomen) addUniqueSearchTerm(terms, "Women's Snow Jackets");
+      if (isMen) addUniqueSearchTerm(terms, "Men's Snow Jackets");
       addUniqueSearchTerm(terms, "Snow Jackets");
       addUniqueSearchTerm(terms, "Ski Jackets");
       addUniqueSearchTerm(terms, "Winter Jackets");
@@ -383,7 +394,11 @@ function categorySearchTerms(input: {
   }
 
   if (hasAny(signal, ["pants", "trousers", "calca", "calcas"])) {
+    if (isWomen) addUniqueSearchTerm(terms, "Women's Pants");
+    if (isMen) addUniqueSearchTerm(terms, "Men's Pants");
     if (isSnow) {
+      if (isWomen) addUniqueSearchTerm(terms, "Women's Snow Pants");
+      if (isMen) addUniqueSearchTerm(terms, "Men's Snow Pants");
       addUniqueSearchTerm(terms, "Snow Pants");
       addUniqueSearchTerm(terms, "Ski Pants");
       addUniqueSearchTerm(terms, "Snowboard Pants");
@@ -455,6 +470,47 @@ function categoryCompatibilityScore(
 
   if (underwearCategory && clothingSignal && !underwearSignal) score -= 140;
 
+  const childCategory = hasAny(categoryText, [
+    "baby",
+    "babies",
+    "children",
+    "childrens",
+    "child",
+    "kids",
+    "kid",
+    "toddler",
+    "toddlers",
+    "infant",
+    "infants",
+  ]);
+  const childSignal = hasAny(signal, [
+    "baby",
+    "bebe",
+    "infant",
+    "infantil",
+    "children",
+    "child",
+    "kids",
+    "kid",
+    "crianca",
+    "criancas",
+    "toddler",
+    "junior",
+  ]);
+  const adultSignal = hasAny(signal, ["adult", "adults", "adulto", "adultos"]);
+  const womenSignal = hasAny(signal, ["women", "womens", "female", "feminino", "feminina", "mulher"]);
+  const menSignal = hasAny(signal, ["men", "mens", "male", "masculino", "homem"]);
+
+  if (childCategory && !childSignal) {
+    score -= adultSignal ? 220 : 120;
+    if (womenSignal || menSignal) score -= 90;
+    if (clothingSignal) score -= 40;
+  }
+
+  if (!childCategory && childSignal) {
+    score -= 30;
+  }
+
   if (hasAny(signal, ["jacket", "jaqueta", "coat", "casaco"])) {
     if (hasAny(categoryText, ["jacket", "jackets", "coat", "coats", "outerwear"])) {
       score += 90;
@@ -475,19 +531,107 @@ function categoryCompatibilityScore(
     if (hasAny(categoryText, ["shirt", "shirts", "jacket", "coat"])) score -= 35;
   }
 
-  if (hasAny(signal, ["women", "womens", "female", "feminino", "feminina", "mulher"])) {
+  if (womenSignal) {
     if (hasAny(categoryText, ["women", "womens", "female"])) score += 10;
     if (hasAny(categoryText, ["men", "mens", "male"]) && !hasAny(categoryText, ["women"])) {
       score -= 45;
     }
   }
 
-  if (hasAny(signal, ["men", "mens", "male", "masculino", "homem"])) {
+  if (menSignal) {
     if (hasAny(categoryText, ["men", "mens", "male"])) score += 10;
     if (hasAny(categoryText, ["women", "womens", "female"])) score -= 45;
   }
 
   return score;
+}
+
+function hasAudienceConflict(
+  category: ShopifyTaxonomyCategoryMatch,
+  input: {
+    product: ProductForTaxonomyEnrichment;
+    categorySearch?: string;
+    productType?: string | null;
+    attributes: { name: string; key: string; value: string | string[] }[];
+  }
+) {
+  const signal = productCategorySignal(input);
+  const categoryText = normalizedToken(`${category.fullName} ${category.name}`);
+  const childCategory = hasAny(categoryText, [
+    "baby",
+    "babies",
+    "children",
+    "childrens",
+    "child",
+    "kids",
+    "kid",
+    "toddler",
+    "toddlers",
+    "infant",
+    "infants",
+  ]);
+  const childSignal = hasAny(signal, [
+    "baby",
+    "bebe",
+    "infant",
+    "infantil",
+    "children",
+    "child",
+    "kids",
+    "kid",
+    "crianca",
+    "criancas",
+    "toddler",
+    "junior",
+  ]);
+  const adultSignal = hasAny(signal, ["adult", "adults", "adulto", "adultos"]);
+  const womenSignal = hasAny(signal, [
+    "women",
+    "womens",
+    "female",
+    "feminino",
+    "feminina",
+    "mulher",
+  ]);
+  const menSignal = hasAny(signal, ["men", "mens", "male", "masculino", "homem"]);
+  const clothingSignal = hasAny(signal, [
+    "jacket",
+    "jaqueta",
+    "coat",
+    "casaco",
+    "pants",
+    "trousers",
+    "calca",
+    "shirt",
+    "camisa",
+    "dress",
+    "vestido",
+    "outerwear",
+    "clothing",
+    "roupa",
+  ]);
+
+  if (
+    childCategory &&
+    !childSignal &&
+    (adultSignal || womenSignal || menSignal || clothingSignal)
+  ) {
+    return true;
+  }
+
+  if (
+    womenSignal &&
+    hasAny(categoryText, ["men", "mens", "male"]) &&
+    !hasAny(categoryText, ["women", "womens", "female"])
+  ) {
+    return true;
+  }
+
+  if (menSignal && hasAny(categoryText, ["women", "womens", "female"])) {
+    return true;
+  }
+
+  return false;
 }
 
 async function findBestShopifyCategory(input: {
@@ -507,7 +651,11 @@ async function findBestShopifyCategory(input: {
     }
   }
 
-  const scored = Array.from(byId.values())
+  const allCandidates = Array.from(byId.values());
+  const compatibleCandidates = allCandidates.filter(
+    (category) => !hasAudienceConflict(category, input)
+  );
+  const scored = compatibleCandidates
     .map((category) => ({
       category,
       score: categoryCompatibilityScore(category, input),
@@ -518,6 +666,7 @@ async function findBestShopifyCategory(input: {
     category: scored[0]?.category || null,
     score: scored[0]?.score ?? 0,
     searched: searches,
+    audienceConflictCount: allCandidates.length - compatibleCandidates.length,
     rejected:
       scored[0]?.score !== undefined && scored[0].score < 0
         ? scored[0].category.fullName
@@ -838,7 +987,11 @@ export async function buildShopifyTaxonomyEnrichment(input: {
       });
       category = matchResult.category;
       if (!category) {
-        warnings.push(`Categoria Shopify nao encontrada para "${categorySearch}".`);
+        warnings.push(
+          matchResult.audienceConflictCount > 0
+            ? `Categoria Shopify nao encontrada sem conflito de publico para "${categorySearch}". ${matchResult.audienceConflictCount} candidato(s) infantil/masculino/feminino foram descartados.`
+            : `Categoria Shopify nao encontrada para "${categorySearch}".`
+        );
       } else if (matchResult.score < 0) {
         category = null;
         warnings.push(

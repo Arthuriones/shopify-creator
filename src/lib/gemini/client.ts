@@ -383,12 +383,13 @@ Regras:
 2. "productType" deve ser um tipo curto no idioma da loja, por exemplo "Casaco feminino".
 3. Se a categoria na fonte nao for confiavel, trate-a apenas como contexto fraco. Se conflitar com titulo, descricao, tags ou opcoes, ignore a categoria na fonte e reclassifique pelo produto real.
 4. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: product_subtype, gender, size, color, material, age_group, pattern.
-5. Para roupas, calcados, acessorios e joias, sempre tente preencher gender e age_group quando dedutivel. Se for produto adulto sem indicio infantil/bebe, use age_group "Adulto". Se for feminino/masculino/unissex pelo titulo/categoria, preencha gender.
+5. Para roupas, calcados, acessorios e joias, sempre preencha age_group quando a imagem/texto permitir. Se a imagem nao mostra claramente produto de bebe/crianca, use age_group "Adulto". So use "Bebe" ou "Infantil" quando texto OU imagem indicarem claramente tamanho/uso infantil.
 6. Se um atributo existir na fonte, use o valor da fonte somente se ele for coerente com o produto. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
 7. Se o titulo tiver "snow jacket", "ski jacket", "insulated jacket", "snowboard jacket" ou equivalente, classifique como outerwear/coats/jackets. Nunca use lingerie, underwear, undershirts ou roupas intimas.
 8. Se o titulo tiver "snow pants", "ski pants", "snowboard pants" ou equivalente, classifique como pants/bottoms/outerwear. Nunca use lingerie, underwear ou ceroulas.
-9. Quando a imagem foi enviada, use a imagem para confirmar o tipo visual do produto, cor dominante, genero aparente e se e roupa externa, roupa intima, calcado, joia etc. Se texto e imagem conflitarem, privilegie a imagem para tipo/categoria visual.
-10. Para valores multiplos, use array.
+9. Quando a imagem foi enviada, use a imagem para confirmar o tipo visual do produto, cor dominante, genero aparente, faixa etaria visual e se e roupa externa, roupa intima, calcado, joia etc. Se texto e imagem conflitarem, privilegie a imagem para tipo/categoria visual.
+10. Nunca classifique em Baby, Children's, Kids, Toddler ou Infant se a imagem/texto nao indicarem claramente produto infantil. Na duvida, escolha uma categoria adulta/generica de Apparel & Accessories.
+11. Para valores multiplos, use array.
 
 Formato:
 {
