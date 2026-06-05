@@ -998,14 +998,20 @@ export default function CatalogPage() {
 
           <div className="min-w-0 space-y-4">
             <div className="rounded-lg border border-border/50 bg-background/35 p-3 text-sm text-muted-foreground">
-              Primeiro gere uma prévia de um produto. Depois aplique só nele ou rode a correção nos produtos carregados, em pequenas etapas.
+              Selecione um produto para ver a prévia da categoria e dos metacampos antes de aplicar. Depois você pode aplicar só nele ou rodar nos produtos carregados.
             </div>
 
             <div className="grid min-w-0 gap-3 rounded-lg border border-border/50 bg-background/35 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0 space-y-1.5">
                 <Label className="text-[13px] text-muted-foreground">
-                  Produto de exemplo
+                  Selecione o produto para ver a prévia
                 </Label>
+                <p className="text-xs text-muted-foreground/80">
+                  A prévia abaixo muda conforme o produto escolhido.
+                </p>
+                <p className="text-xs text-muted-foreground/80">
+                  A prévia abaixo muda conforme o produto escolhido.
+                </p>
                 <Select
                   value={taxonomySampleProductId}
                   onValueChange={(value) => {
@@ -1018,7 +1024,7 @@ export default function CatalogPage() {
                 >
                   <SelectTrigger className="h-10 w-full min-w-0 bg-background/50 border-border/50 text-sm">
                     <span className="min-w-0 flex-1 truncate text-left">
-                      {taxonomySampleProduct?.title || "Escolha um produto para a prévia"}
+                      {taxonomySampleProduct?.title || "Escolha um produto para visualizar"}
                     </span>
                   </SelectTrigger>
                   <SelectContent className="max-w-[calc(100vw-3rem)]">
@@ -1047,7 +1053,7 @@ export default function CatalogPage() {
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  Gerar prévia
+                  Visualizar prévia
                 </Button>
               </div>
             </div>
