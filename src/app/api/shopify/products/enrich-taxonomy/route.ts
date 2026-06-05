@@ -185,30 +185,51 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          await updateProductTaxonomy(creds, {
+          const result = await updateProductTaxonomy(creds, {
             productId,
             categoryId: proposal.categoryId || null,
             productType: proposal.productType || null,
             metafields,
-          });
+          }) as { metafieldsWarning?: string | null };
+
+          if (result.metafieldsWarning) {
+            console.warn("[shopify.taxonomy.apply] partial success", {
+              storeId,
+              productId,
+              title: proposal.title || productId,
+              warning: result.metafieldsWarning,
+            });
+          }
+
           summary.updated += 1;
           summary.products.push({
             id: productId,
             title: proposal.title || productId,
             status: "updated",
             category: proposal.categoryName || null,
+            warning: result.metafieldsWarning || undefined,
           });
         } catch (error) {
+          const warning =
+            error instanceof Error
+              ? error.message
+              : "Falha ao aplicar categoria/metacampos.";
+          console.error("[shopify.taxonomy.apply] failed", {
+            storeId,
+            productId,
+            title: proposal.title || productId,
+            categoryId: proposal.categoryId || null,
+            productType: proposal.productType || null,
+            metafieldsCount: metafields.length,
+            warning,
+          });
           summary.failed += 1;
           summary.products.push({
             id: productId,
             title: proposal.title || productId,
             status: "failed",
             category: proposal.categoryName || null,
-            warning:
-              error instanceof Error
-                ? error.message
-                : "Falha ao aplicar categoria/metacampos.",
+            warning,
           });
         }
       }

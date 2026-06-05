@@ -135,6 +135,7 @@ export default function CatalogPage() {
     skipped: number;
     failed: number;
     current?: string;
+    failures?: string[];
   } | null>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
@@ -277,6 +278,13 @@ export default function CatalogPage() {
       .slice(0, 50);
   }
 
+  function taxonomyFailureMessages(items: TaxonomyPreviewItem[], max = 5) {
+    return items
+      .filter((item) => item.status === "failed" && item.warning)
+      .map((item) => `${item.title}: ${item.warning}`)
+      .slice(0, max);
+  }
+
   async function loadTaxonomyPreview(productId: string) {
     if (!selectedStore || !productId) return;
 
@@ -363,11 +371,22 @@ export default function CatalogPage() {
       }
 
       const summary = data.summary || {};
-      toast.success(
-        `Categorias aplicadas: ${summary.updated || 0}. Ignorados: ${summary.skipped || 0}. Falhas: ${summary.failed || 0}.`
-      );
-      setTaxonomyPreviewOpen(false);
-      setTaxonomyPreview([]);
+      const resultProducts = ((summary.products || []) as TaxonomyPreviewItem[]);
+      const failures = taxonomyFailureMessages(resultProducts);
+
+      if ((summary.failed || 0) > 0) {
+        setTaxonomyPreview(resultProducts);
+        toast.error(
+          failures[0] ||
+            `Categorias aplicadas: ${summary.updated || 0}. Falhas: ${summary.failed || 0}.`
+        );
+      } else {
+        toast.success(
+          `Categorias aplicadas: ${summary.updated || 0}. Ignorados: ${summary.skipped || 0}. Falhas: ${summary.failed || 0}.`
+        );
+        setTaxonomyPreviewOpen(false);
+        setTaxonomyPreview([]);
+      }
       await loadProducts({ silent: true });
     } catch {
       toast.error("Erro ao aplicar categorias em massa.");
@@ -396,6 +415,7 @@ export default function CatalogPage() {
     let updated = 0;
     let skipped = 0;
     let failed = 0;
+    const failureMessages: string[] = [];
 
     try {
       for (const [index, product] of targets.entries()) {
@@ -406,6 +426,7 @@ export default function CatalogPage() {
           skipped,
           failed,
           current: product.title,
+          failures: failureMessages.slice(0, 5),
         });
 
         const previewRes = await fetch("/api/shopify/products/enrich-taxonomy", {
@@ -422,6 +443,9 @@ export default function CatalogPage() {
         });
         const previewData = await previewRes.json();
         if (!previewRes.ok) {
+          failureMessages.push(
+            `${product.title}: ${previewData.error || "Falha ao gerar previa."}`
+          );
           failed += 1;
           continue;
         }
@@ -431,6 +455,10 @@ export default function CatalogPage() {
         ).find((item) => item.status === "preview");
 
         if (!proposal) {
+          const skippedItem = ((previewData.summary?.products || []) as TaxonomyPreviewItem[])[0];
+          if (skippedItem?.warning) {
+            failureMessages.push(`${product.title}: ${skippedItem.warning}`);
+          }
           skipped += 1;
           continue;
         }
@@ -456,13 +484,21 @@ export default function CatalogPage() {
         });
         const applyData = await applyRes.json();
         if (!applyRes.ok) {
+          failureMessages.push(
+            `${product.title}: ${applyData.error || "Falha ao aplicar categoria."}`
+          );
           failed += 1;
           continue;
         }
 
-        updated += Number(applyData.summary?.updated || 0);
-        skipped += Number(applyData.summary?.skipped || 0);
-        failed += Number(applyData.summary?.failed || 0);
+        const applySummary = applyData.summary || {};
+        const applyProducts = (applySummary.products || []) as TaxonomyPreviewItem[];
+        const applyFailures = taxonomyFailureMessages(applyProducts);
+        failureMessages.push(...applyFailures);
+
+        updated += Number(applySummary.updated || 0);
+        skipped += Number(applySummary.skipped || 0);
+        failed += Number(applySummary.failed || 0);
       }
 
       setTaxonomyBulkProgress({
@@ -471,10 +507,18 @@ export default function CatalogPage() {
         updated,
         skipped,
         failed,
+        failures: failureMessages.slice(0, 5),
       });
-      toast.success(
-        `Categorias aplicadas: ${updated}. Ignorados: ${skipped}. Falhas: ${failed}.`
-      );
+      if (failed > 0) {
+        toast.error(
+          failureMessages[0] ||
+            `Categorias aplicadas: ${updated}. Ignorados: ${skipped}. Falhas: ${failed}.`
+        );
+      } else {
+        toast.success(
+          `Categorias aplicadas: ${updated}. Ignorados: ${skipped}. Falhas: ${failed}.`
+        );
+      }
       await loadProducts({ silent: true });
     } catch {
       toast.error("Erro ao aplicar categorias em massa.");
@@ -1105,6 +1149,23 @@ export default function CatalogPage() {
                     ? `Processando: ${taxonomyBulkProgress.current}`
                     : `Aplicados: ${taxonomyBulkProgress.updated}. Ignorados: ${taxonomyBulkProgress.skipped}. Falhas: ${taxonomyBulkProgress.failed}.`}
                 </p>
+                {taxonomyBulkProgress.failures?.length ? (
+                  <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2">
+                    <p className="text-[11px] font-semibold uppercase text-amber-500">
+                      Primeiras falhas
+                    </p>
+                    <div className="mt-1 space-y-1">
+                      {taxonomyBulkProgress.failures.map((failure) => (
+                        <p
+                          key={failure}
+                          className="break-words text-xs text-amber-200"
+                        >
+                          {failure}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
 

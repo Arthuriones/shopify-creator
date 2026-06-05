@@ -1372,8 +1372,8 @@ export async function updateProductTaxonomy(
   }
 
   const mutation = `
-    mutation updateProductTaxonomy($input: ProductUpdateInput!) {
-      productUpdate(input: $input) {
+    mutation updateProductTaxonomy($product: ProductUpdateInput!) {
+      productUpdate(product: $product) {
         product {
           id
           title
@@ -1394,7 +1394,7 @@ export async function updateProductTaxonomy(
     payload.productType = input.productType;
   }
 
-  const result = await shopifyGraphQL(creds, mutation, { input: payload });
+  const result = await shopifyGraphQL(creds, mutation, { product: payload });
   const userErrors = result?.productUpdate?.userErrors as
     | { field?: string[]; message: string }[]
     | undefined;
@@ -1409,13 +1409,32 @@ export async function updateProductTaxonomy(
     );
   }
 
-  const metafieldsResult = input.metafields?.length
-    ? await setProductMetafields(creds, input.productId, input.metafields)
-    : null;
+  let metafieldsResult = null;
+  let metafieldsWarning: string | null = null;
+
+  if (input.metafields?.length) {
+    try {
+      metafieldsResult = await setProductMetafields(
+        creds,
+        input.productId,
+        input.metafields
+      );
+    } catch (error) {
+      if (!input.categoryId && !input.productType) {
+        throw error;
+      }
+
+      metafieldsWarning =
+        error instanceof Error
+          ? `Categoria aplicada, mas metacampos nao foram salvos: ${error.message}`
+          : "Categoria aplicada, mas metacampos nao foram salvos.";
+    }
+  }
 
   return {
     ...(result?.productUpdate?.product || {}),
     metafieldsResult,
+    metafieldsWarning,
   };
 }
 
@@ -1449,8 +1468,8 @@ export async function updateShopifyProduct(
     input.status ?? (input.publishToStorefront === false ? "DRAFT" : "ACTIVE");
 
   const mutation = `
-    mutation productUpdate($input: ProductUpdateInput!) {
-      productUpdate(input: $input) {
+    mutation productUpdate($product: ProductUpdateInput!) {
+      productUpdate(product: $product) {
         product {
           id
           title
@@ -1466,7 +1485,7 @@ export async function updateShopifyProduct(
   `;
 
   const result = await shopifyGraphQL(creds, mutation, {
-    input: {
+    product: {
       id: input.productId,
       title: input.title,
       descriptionHtml: input.descriptionHtml,
