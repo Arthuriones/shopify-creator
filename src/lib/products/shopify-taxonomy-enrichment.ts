@@ -248,11 +248,11 @@ function fallbackAttributes(product: ProductForTaxonomyEnrichment, sourceCategor
 }
 
 function metafieldValue(value: string | string[]) {
-  return Array.isArray(value) ? JSON.stringify(value) : value;
+  return Array.isArray(value) ? value.join(", ") : value;
 }
 
-function metafieldType(value: string | string[]) {
-  return Array.isArray(value) ? "list.single_line_text_field" : "single_line_text_field";
+function metafieldType() {
+  return "single_line_text_field";
 }
 
 function buildMetafields(input: {
@@ -293,7 +293,7 @@ function buildMetafields(input: {
     fields.push({
       namespace: "custom",
       key: attribute.key,
-      type: metafieldType(attribute.value),
+      type: metafieldType(),
       value: metafieldValue(attribute.value),
     });
   }
