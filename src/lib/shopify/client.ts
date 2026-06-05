@@ -1173,6 +1173,58 @@ export async function getProductById(creds: ShopifyCredentials, productId: strin
   return data?.product || null;
 }
 
+export async function getProductsByIds(
+  creds: ShopifyCredentials,
+  productIds: string[]
+) {
+  const ids = [...new Set(productIds)].filter(Boolean).slice(0, 50);
+  if (ids.length === 0) return [];
+
+  const query = `
+    query getProductsByIds($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        ... on Product {
+          id
+          title
+          handle
+          status
+          descriptionHtml
+          tags
+          productType
+          category { id name fullName }
+          metafields(first: 20, namespace: "custom") {
+            nodes {
+              namespace
+              key
+              type
+              value
+            }
+          }
+          seo { title description }
+          images(first: 20) { nodes { url altText } }
+          options {
+            name
+            values
+          }
+          variants(first: 100) {
+            nodes {
+              id
+              title
+              sku
+              price
+              compareAtPrice
+              selectedOptions { name value }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query, { ids });
+  return (data?.nodes || []).filter(Boolean);
+}
+
 export interface ShopifyTaxonomyCategoryMatch {
   id: string;
   name: string;
@@ -1186,6 +1238,21 @@ export interface ShopifyProductMetafieldInput {
   key: string;
   type: string;
   value: string;
+}
+
+const SHOPIFY_CLIENT_CACHE_TTL_MS = 10 * 60 * 1000;
+const metafieldDefinitionCache = new Map<string, number>();
+const taxonomyCategoryCache = new Map<
+  string,
+  { expiresAt: number; value: ShopifyTaxonomyCategoryMatch[] }
+>();
+
+function cachedShopKey(creds: ShopifyCredentials) {
+  return normalizeShopDomain(creds.shopDomain) || creds.shopDomain;
+}
+
+function isCacheFresh(expiresAt?: number) {
+  return typeof expiresAt === "number" && expiresAt > Date.now();
 }
 
 function metafieldDefinitionName(field: ShopifyProductMetafieldInput) {
@@ -1207,6 +1274,9 @@ export async function ensureProductMetafieldDefinitions(
   const warnings: string[] = [];
 
   for (const field of uniqueFields) {
+    const cacheKey = `${cachedShopKey(creds)}:product:${field.namespace}.${field.key}:${field.type}`;
+    if (isCacheFresh(metafieldDefinitionCache.get(cacheKey))) continue;
+
     const existingQuery = `
       query getMetafieldDefinition($ownerType: MetafieldOwnerType!, $namespace: String, $key: String) {
         metafieldDefinitions(ownerType: $ownerType, namespace: $namespace, key: $key, first: 1) {
@@ -1221,7 +1291,13 @@ export async function ensureProductMetafieldDefinitions(
         namespace: field.namespace,
         key: field.key,
       });
-      if (existing?.metafieldDefinitions?.nodes?.[0]?.id) continue;
+      if (existing?.metafieldDefinitions?.nodes?.[0]?.id) {
+        metafieldDefinitionCache.set(
+          cacheKey,
+          Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS
+        );
+        continue;
+      }
 
       const createMutation = `
         mutation createProductMetafieldDefinition($definition: MetafieldDefinitionInput!) {
@@ -1248,13 +1324,23 @@ export async function ensureProductMetafieldDefinitions(
         const alreadyExists = userErrors.some((error) =>
           /already exists|taken|ja existe|já existe/i.test(error.message)
         );
-        if (!alreadyExists) {
+        if (alreadyExists) {
+          metafieldDefinitionCache.set(
+            cacheKey,
+            Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS
+          );
+        } else {
           warnings.push(
             `${field.namespace}.${field.key}: ${userErrors
               .map((error) => error.message)
               .join(" | ")}`
           );
         }
+      } else {
+        metafieldDefinitionCache.set(
+          cacheKey,
+          Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS
+        );
       }
     } catch (error) {
       warnings.push(
@@ -1321,6 +1407,11 @@ export async function searchShopifyTaxonomyCategories(
 ): Promise<ShopifyTaxonomyCategoryMatch[]> {
   const queryText = search.trim();
   if (!queryText) return [];
+  const cacheKey = `${cachedShopKey(creds)}:${first}:${queryText.toLowerCase()}`;
+  const cached = taxonomyCategoryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
 
   const query = `
     query searchTaxonomyCategories($search: String!, $first: Int!) {
@@ -1344,7 +1435,7 @@ export async function searchShopifyTaxonomyCategories(
   });
 
   const nodes = data?.taxonomy?.categories?.nodes || [];
-  return nodes
+  const matches = nodes
     .map((node: Partial<ShopifyTaxonomyCategoryMatch>) => ({
       id: String(node.id || ""),
       name: String(node.name || ""),
@@ -1356,6 +1447,13 @@ export async function searchShopifyTaxonomyCategories(
       (node: ShopifyTaxonomyCategoryMatch) =>
         node.id && node.name && node.isArchived !== true
     );
+
+  taxonomyCategoryCache.set(cacheKey, {
+    expiresAt: Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS,
+    value: matches,
+  });
+
+  return matches;
 }
 
 export async function updateProductTaxonomy(
@@ -1371,41 +1469,47 @@ export async function updateProductTaxonomy(
     return { skipped: true };
   }
 
-  const mutation = `
-    mutation updateProductTaxonomy($product: ProductUpdateInput!) {
-      productUpdate(product: $product) {
-        product {
-          id
-          title
-          productType
-          category { id name fullName }
+  let productResult = null;
+
+  if (input.categoryId || input.productType) {
+    const mutation = `
+      mutation updateProductTaxonomy($product: ProductUpdateInput!) {
+        productUpdate(product: $product) {
+          product {
+            id
+            title
+            productType
+            category { id name fullName }
+          }
+          userErrors { field message }
         }
-        userErrors { field message }
       }
+    `;
+
+    const payload: Record<string, unknown> = { id: input.productId };
+    if (input.categoryId) {
+      payload.category = input.categoryId;
     }
-  `;
+    if (input.productType) {
+      payload.productType = input.productType;
+    }
 
-  const payload: Record<string, unknown> = { id: input.productId };
-  if (input.categoryId) {
-    payload.category = input.categoryId;
-  }
-  if (input.productType) {
-    payload.productType = input.productType;
-  }
+    const result = await shopifyGraphQL(creds, mutation, { product: payload });
+    const userErrors = result?.productUpdate?.userErrors as
+      | { field?: string[]; message: string }[]
+      | undefined;
 
-  const result = await shopifyGraphQL(creds, mutation, { product: payload });
-  const userErrors = result?.productUpdate?.userErrors as
-    | { field?: string[]; message: string }[]
-    | undefined;
+    if (userErrors && userErrors.length > 0) {
+      throw new Error(
+        userErrors
+          .map((err) =>
+            err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
+          )
+          .join(" | ")
+      );
+    }
 
-  if (userErrors && userErrors.length > 0) {
-    throw new Error(
-      userErrors
-        .map((err) =>
-          err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
-        )
-        .join(" | ")
-    );
+    productResult = result?.productUpdate?.product || null;
   }
 
   let metafieldsResult = null;
@@ -1431,7 +1535,7 @@ export async function updateProductTaxonomy(
   }
 
   return {
-    ...(result?.productUpdate?.product || {}),
+    ...(productResult || {}),
     metafieldsResult,
     metafieldsWarning,
   };

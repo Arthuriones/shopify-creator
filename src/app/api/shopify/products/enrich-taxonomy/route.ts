@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildShopifyTaxonomyEnrichment } from "@/lib/products/shopify-taxonomy-enrichment";
 import {
-  getProductById,
+  ensureProductMetafieldDefinitions,
+  getProductsByIds,
   getProducts,
   updateProductTaxonomy,
   type ShopifyCredentials,
@@ -11,6 +12,9 @@ import type { StoreContext } from "@/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const TAXONOMY_APPLY_CONCURRENCY = 6;
+const TAXONOMY_PREVIEW_CONCURRENCY = 6;
 
 interface StoreCredentials {
   id: string;
@@ -100,6 +104,28 @@ function variantOptionAttributes(product: CatalogProductForTaxonomy) {
   }));
 }
 
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(Math.max(concurrency, 1), items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await worker(items[index], index);
+      }
+    }
+  );
+
+  await Promise.all(workers);
+  return results;
+}
+
 export async function POST(request: NextRequest) {
   const { supabase, user } = await getAuthenticated();
   if (!user) {
@@ -161,11 +187,34 @@ export async function POST(request: NextRequest) {
         }[],
       };
 
-      for (const proposal of proposals.slice(0, limit)) {
+      const proposalsToApply = proposals.slice(0, limit);
+      const batchedMetafields = proposalsToApply.flatMap((proposal) =>
+        Array.isArray(proposal.metafields)
+          ? proposal.metafields.filter(
+              (field) => field.namespace && field.key && field.type && field.value
+            )
+          : []
+      );
+      if (batchedMetafields.length > 0) {
+        const definitionWarnings = await ensureProductMetafieldDefinitions(
+          creds,
+          batchedMetafields
+        );
+        if (definitionWarnings.length > 0) {
+          console.warn("[shopify.taxonomy.apply] metafield definition warnings", {
+            storeId,
+            warnings: definitionWarnings.slice(0, 5),
+          });
+        }
+      }
+
+      const applyResults = await runWithConcurrency(
+        proposalsToApply,
+        TAXONOMY_APPLY_CONCURRENCY,
+        async (proposal) => {
         const productId = String(proposal.productId || "");
         if (!productId) {
-          summary.skipped += 1;
-          continue;
+          return { status: "skipped" as const };
         }
 
         const metafields = Array.isArray(proposal.metafields)
@@ -183,15 +232,16 @@ export async function POST(request: NextRequest) {
             : null;
 
         if (!categoryId && !productType && metafields.length === 0) {
-          summary.skipped += 1;
-          summary.products.push({
-            id: productId,
-            title: proposal.title || productId,
-            status: "skipped",
-            category: proposal.categoryName || null,
-            warning: "Sem alteracoes para aplicar.",
-          });
-          continue;
+          return {
+            status: "skipped" as const,
+            item: {
+              id: productId,
+              title: proposal.title || productId,
+              status: "skipped" as const,
+              category: proposal.categoryName || null,
+              warning: "Sem alteracoes para aplicar.",
+            },
+          };
         }
 
         try {
@@ -211,14 +261,16 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          summary.updated += 1;
-          summary.products.push({
-            id: productId,
-            title: proposal.title || productId,
-            status: "updated",
-            category: proposal.categoryName || null,
-            warning: result.metafieldsWarning || undefined,
-          });
+          return {
+            status: "updated" as const,
+            item: {
+              id: productId,
+              title: proposal.title || productId,
+              status: "updated" as const,
+              category: proposal.categoryName || null,
+              warning: result.metafieldsWarning || undefined,
+            },
+          };
         } catch (error) {
           const warning =
             error instanceof Error
@@ -233,26 +285,35 @@ export async function POST(request: NextRequest) {
             metafieldsCount: metafields.length,
             warning,
           });
-          summary.failed += 1;
-          summary.products.push({
-            id: productId,
-            title: proposal.title || productId,
-            status: "failed",
-            category: proposal.categoryName || null,
-            warning,
-          });
+          return {
+            status: "failed" as const,
+            item: {
+              id: productId,
+              title: proposal.title || productId,
+              status: "failed" as const,
+              category: proposal.categoryName || null,
+              warning,
+            },
+          };
         }
+        }
+      );
+
+      for (const result of applyResults) {
+        if (result.status === "updated") summary.updated += 1;
+        if (result.status === "skipped") summary.skipped += 1;
+        if (result.status === "failed") summary.failed += 1;
+        if (result.item) summary.products.push(result.item);
       }
 
       return NextResponse.json({ summary });
     }
 
     const products = productIds.length
-      ? (
-          await Promise.all(
-            productIds.slice(0, limit).map((id) => getProductById(creds, id).catch(() => null))
-          )
-        ).filter((product): product is CatalogProductForTaxonomy => Boolean(product))
+      ? ((await getProductsByIds(
+          creds,
+          productIds.slice(0, limit)
+        )) as CatalogProductForTaxonomy[])
       : (((await getProducts(creds, {
           first: limit,
           status: "ACTIVE",
@@ -289,20 +350,24 @@ export async function POST(request: NextRequest) {
 
     const forceSingleProductPreview = mode === "preview" && productIds.length === 1;
 
-    for (const product of products.slice(0, limit)) {
+    const previewResults = await runWithConcurrency(
+      products.slice(0, limit),
+      TAXONOMY_PREVIEW_CONCURRENCY,
+      async (product) => {
       if (product.category?.id && !includeAlreadyCategorized && !forceSingleProductPreview) {
-        summary.skipped += 1;
-        summary.products.push({
-          id: product.id,
-          title: product.title,
-          status: "skipped",
-          category: product.category.fullName || product.category.name || null,
-          currentCategoryId: product.category.id || null,
-          currentCategory: product.category.fullName || product.category.name || null,
-          currentProductType: product.productType || null,
-          warning: "Produto ja tinha categoria.",
-        });
-        continue;
+        return {
+          status: "skipped" as const,
+          item: {
+            id: product.id,
+            title: product.title,
+            status: "skipped" as const,
+            category: product.category.fullName || product.category.name || null,
+            currentCategoryId: product.category.id || null,
+            currentCategory: product.category.fullName || product.category.name || null,
+            currentProductType: product.productType || null,
+            warning: "Produto ja tinha categoria.",
+          },
+        };
       }
 
       try {
@@ -327,49 +392,62 @@ export async function POST(request: NextRequest) {
         });
 
         if (!taxonomy.category?.id && taxonomy.metafields.length === 0) {
-          summary.skipped += 1;
-          summary.products.push({
-            id: product.id,
-            title: product.title,
-            status: "skipped",
-          category: null,
-          currentCategoryId: product.category?.id || null,
-          currentCategory: product.category?.fullName || product.category?.name || null,
-          currentProductType: product.productType || null,
-            source: taxonomy.source,
-            warning: taxonomy.warnings[0] || "Sem categoria ou atributo confiavel.",
-          });
-          continue;
+          return {
+            status: "skipped" as const,
+            item: {
+              id: product.id,
+              title: product.title,
+              status: "skipped" as const,
+              category: null,
+              currentCategoryId: product.category?.id || null,
+              currentCategory: product.category?.fullName || product.category?.name || null,
+              currentProductType: product.productType || null,
+              source: taxonomy.source,
+              warning: taxonomy.warnings[0] || "Sem categoria ou atributo confiavel.",
+            },
+          };
         }
 
-        summary.updated += 1;
-        summary.products.push({
-          id: product.id,
-          title: product.title,
-          status: "preview",
-          category: taxonomy.category?.fullName || taxonomy.categorySearch || null,
-          categoryId: taxonomy.category?.id || null,
-          currentCategoryId: product.category?.id || null,
-          currentCategory: product.category?.fullName || product.category?.name || null,
-          productType: taxonomy.productType || product.productType || null,
-          currentProductType: product.productType || null,
-          attributes: taxonomy.attributes,
-          metafields: taxonomy.metafields,
-          source: taxonomy.source,
-          warning: taxonomy.warnings[0],
-        });
+        return {
+          status: "updated" as const,
+          item: {
+            id: product.id,
+            title: product.title,
+            status: "preview" as const,
+            category: taxonomy.category?.fullName || taxonomy.categorySearch || null,
+            categoryId: taxonomy.category?.id || null,
+            currentCategoryId: product.category?.id || null,
+            currentCategory: product.category?.fullName || product.category?.name || null,
+            productType: taxonomy.productType || product.productType || null,
+            currentProductType: product.productType || null,
+            attributes: taxonomy.attributes,
+            metafields: taxonomy.metafields,
+            source: taxonomy.source,
+            warning: taxonomy.warnings[0],
+          },
+        };
       } catch (error) {
-        summary.failed += 1;
-        summary.products.push({
-          id: product.id,
-          title: product.title,
-          status: "failed",
-          warning:
-            error instanceof Error
-              ? error.message
-              : "Falha ao enriquecer produto.",
-        });
+        return {
+          status: "failed" as const,
+          item: {
+            id: product.id,
+            title: product.title,
+            status: "failed" as const,
+            warning:
+              error instanceof Error
+                ? error.message
+                : "Falha ao enriquecer produto.",
+          },
+        };
       }
+      }
+    );
+
+    for (const result of previewResults) {
+      if (result.status === "updated") summary.updated += 1;
+      if (result.status === "skipped") summary.skipped += 1;
+      if (result.status === "failed") summary.failed += 1;
+      summary.products.push(result.item);
     }
 
     return NextResponse.json({ summary });
