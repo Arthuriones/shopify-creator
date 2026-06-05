@@ -1505,7 +1505,7 @@ export async function getShopifyCategoryMetafieldData(
   }
 
   const query = `
-    query getCategoryMetafieldData($categoryId: ID!) {
+    query getCategoryMetafieldData($categoryId: ID!, $categoryConstraintValue: String!) {
       node(id: $categoryId) {
         ... on TaxonomyCategory {
           attributes(first: 50) {
@@ -1533,7 +1533,7 @@ export async function getShopifyCategoryMetafieldData(
       standardMetafieldDefinitionTemplates(
         first: 100
         constraintStatus: CONSTRAINED_ONLY
-        constraintSubtype: { key: "category", value: $categoryId }
+        constraintSubtype: { key: "category", value: $categoryConstraintValue }
       ) {
         nodes {
           id
@@ -1547,7 +1547,10 @@ export async function getShopifyCategoryMetafieldData(
     }
   `;
 
-  const data = await shopifyGraphQL(creds, query, { categoryId });
+  const data = await shopifyGraphQL(creds, query, {
+    categoryId,
+    categoryConstraintValue: categoryId,
+  });
   const attributes =
     data?.node?.attributes?.nodes?.map(
       (node: {

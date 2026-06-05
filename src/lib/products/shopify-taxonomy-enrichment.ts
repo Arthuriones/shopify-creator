@@ -17,6 +17,14 @@ export interface ProductForTaxonomyEnrichment {
   productType?: string | null;
   sourceCategory?: string | null;
   sourceAttributes?: { name: string; value: string }[];
+  images?: (
+    | string
+    | {
+        url?: string | null;
+        src?: string | null;
+        altText?: string | null;
+      }
+  )[];
   options?: string[] | { name: string; values?: string[] }[];
   variants?: {
     title?: string;
@@ -255,6 +263,18 @@ function fallbackAttributes(product: ProductForTaxonomyEnrichment, sourceCategor
   );
 }
 
+function primaryProductImageUrl(product: ProductForTaxonomyEnrichment) {
+  const firstImage = product.images?.find((image) => {
+    if (typeof image === "string") return Boolean(image.trim());
+    return Boolean(image?.url || image?.src);
+  });
+
+  if (!firstImage) return null;
+  return typeof firstImage === "string"
+    ? firstImage
+    : firstImage.url || firstImage.src || null;
+}
+
 function mergeTaxonomyAttributes(input: {
   preferAi: boolean;
   sourceAttributes: { name: string; key: string; value: string | string[] }[];
@@ -293,6 +313,216 @@ function normalizedToken(input: string) {
 
 function normalizedCompact(input: string) {
   return normalizedToken(input).replace(/\s+/g, "");
+}
+
+function productCategorySignal(input: {
+  product: ProductForTaxonomyEnrichment;
+  categorySearch?: string;
+  productType?: string | null;
+  attributes?: { name: string; key: string; value: string | string[] }[];
+}) {
+  return normalizedToken(
+    [
+      input.product.title,
+      input.product.descriptionHtml?.replace(/<[^>]+>/g, " "),
+      input.product.productType,
+      input.product.sourceCategory,
+      input.categorySearch,
+      input.productType,
+      input.product.tags?.join(" "),
+      ...(input.attributes || []).flatMap((attribute) => [
+        attribute.name,
+        Array.isArray(attribute.value)
+          ? attribute.value.join(" ")
+          : String(attribute.value || ""),
+      ]),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function hasAny(text: string, terms: string[]) {
+  return terms.some((term) => text.includes(term));
+}
+
+function addUniqueSearchTerm(terms: string[], value?: string | null) {
+  const clean = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return;
+  const key = normalizedCompact(clean);
+  if (key && !terms.some((term) => normalizedCompact(term) === key)) {
+    terms.push(clean);
+  }
+}
+
+function categorySearchTerms(input: {
+  product: ProductForTaxonomyEnrichment;
+  categorySearch?: string;
+  productType?: string | null;
+  attributes: { name: string; key: string; value: string | string[] }[];
+}) {
+  const terms: string[] = [];
+  addUniqueSearchTerm(terms, input.categorySearch);
+  addUniqueSearchTerm(terms, input.productType);
+
+  const signal = productCategorySignal(input);
+  const isSnow =
+    hasAny(signal, ["snow", "snowboard", "ski", "inverno", "insulated"]) &&
+    hasAny(signal, ["jacket", "jaqueta", "coat", "casaco", "pants", "calca", "trousers"]);
+
+  if (hasAny(signal, ["jacket", "jaqueta", "coat", "casaco"])) {
+    if (isSnow) {
+      addUniqueSearchTerm(terms, "Snow Jackets");
+      addUniqueSearchTerm(terms, "Ski Jackets");
+      addUniqueSearchTerm(terms, "Winter Jackets");
+    }
+    addUniqueSearchTerm(terms, "Coats & Jackets");
+    addUniqueSearchTerm(terms, "Jackets");
+  }
+
+  if (hasAny(signal, ["pants", "trousers", "calca", "calcas"])) {
+    if (isSnow) {
+      addUniqueSearchTerm(terms, "Snow Pants");
+      addUniqueSearchTerm(terms, "Ski Pants");
+      addUniqueSearchTerm(terms, "Snowboard Pants");
+    }
+    addUniqueSearchTerm(terms, "Pants");
+  }
+
+  if (hasAny(signal, ["bracelet", "pulseira"])) addUniqueSearchTerm(terms, "Bracelets");
+  if (hasAny(signal, ["necklace", "colar"])) addUniqueSearchTerm(terms, "Necklaces");
+  if (hasAny(signal, ["ring", "anel", "aneis"])) addUniqueSearchTerm(terms, "Rings");
+  if (hasAny(signal, ["shoes", "sneakers", "tenis", "calcado", "calcados"])) {
+    addUniqueSearchTerm(terms, "Shoes");
+  }
+
+  return terms.slice(0, 7);
+}
+
+function categoryCompatibilityScore(
+  category: ShopifyTaxonomyCategoryMatch,
+  input: {
+    product: ProductForTaxonomyEnrichment;
+    categorySearch?: string;
+    productType?: string | null;
+    attributes: { name: string; key: string; value: string | string[] }[];
+  }
+) {
+  const signal = productCategorySignal(input);
+  const categoryText = normalizedToken(`${category.fullName} ${category.name}`);
+  let score = category.isLeaf ? 10 : 0;
+
+  const categoryTokens = normalizedToken(input.categorySearch || "")
+    .split(" ")
+    .filter((token) => token.length > 2);
+  for (const token of categoryTokens) {
+    if (categoryText.includes(token)) score += 3;
+  }
+
+  const clothingSignal = hasAny(signal, [
+    "jacket",
+    "jaqueta",
+    "coat",
+    "casaco",
+    "pants",
+    "trousers",
+    "calca",
+    "shirt",
+    "camisa",
+    "dress",
+    "vestido",
+  ]);
+  const underwearCategory = hasAny(categoryText, [
+    "lingerie",
+    "underwear",
+    "undershirt",
+    "underpants",
+    "panties",
+    "bras",
+  ]);
+  const underwearSignal = hasAny(signal, [
+    "lingerie",
+    "underwear",
+    "undershirt",
+    "underpants",
+    "panties",
+    "sutia",
+    "calcinha",
+    "cueca",
+  ]);
+
+  if (underwearCategory && clothingSignal && !underwearSignal) score -= 140;
+
+  if (hasAny(signal, ["jacket", "jaqueta", "coat", "casaco"])) {
+    if (hasAny(categoryText, ["jacket", "jackets", "coat", "coats", "outerwear"])) {
+      score += 90;
+    }
+    if (hasAny(categoryText, ["shirt", "shirts", "tops", "blouse"])) score -= 55;
+    if (hasAny(categoryText, ["pants", "trousers", "shorts"])) score -= 35;
+  }
+
+  if (hasAny(signal, ["snow", "snowboard", "ski", "inverno", "insulated"])) {
+    if (hasAny(categoryText, ["snow", "ski", "winter", "outerwear", "jacket", "coat"])) {
+      score += 30;
+    }
+    if (underwearCategory) score -= 80;
+  }
+
+  if (hasAny(signal, ["pants", "trousers", "calca", "calcas"])) {
+    if (hasAny(categoryText, ["pants", "trousers", "bottoms"])) score += 85;
+    if (hasAny(categoryText, ["shirt", "shirts", "jacket", "coat"])) score -= 35;
+  }
+
+  if (hasAny(signal, ["women", "womens", "female", "feminino", "feminina", "mulher"])) {
+    if (hasAny(categoryText, ["women", "womens", "female"])) score += 10;
+    if (hasAny(categoryText, ["men", "mens", "male"]) && !hasAny(categoryText, ["women"])) {
+      score -= 45;
+    }
+  }
+
+  if (hasAny(signal, ["men", "mens", "male", "masculino", "homem"])) {
+    if (hasAny(categoryText, ["men", "mens", "male"])) score += 10;
+    if (hasAny(categoryText, ["women", "womens", "female"])) score -= 45;
+  }
+
+  return score;
+}
+
+async function findBestShopifyCategory(input: {
+  creds: ShopifyCredentials;
+  product: ProductForTaxonomyEnrichment;
+  categorySearch?: string;
+  productType?: string | null;
+  attributes: { name: string; key: string; value: string | string[] }[];
+}) {
+  const searches = categorySearchTerms(input);
+  const byId = new Map<string, ShopifyTaxonomyCategoryMatch>();
+
+  for (const search of searches) {
+    const matches = await searchShopifyTaxonomyCategories(input.creds, search, 15);
+    for (const match of matches) {
+      if (!byId.has(match.id)) byId.set(match.id, match);
+    }
+  }
+
+  const scored = Array.from(byId.values())
+    .map((category) => ({
+      category,
+      score: categoryCompatibilityScore(category, input),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  return {
+    category: scored[0]?.category || null,
+    score: scored[0]?.score ?? 0,
+    searched: searches,
+    rejected:
+      scored[0]?.score !== undefined && scored[0].score < 0
+        ? scored[0].category.fullName
+        : null,
+  };
 }
 
 const VALUE_SYNONYMS: Record<string, string[]> = {
@@ -570,6 +800,7 @@ export async function buildShopifyTaxonomyEnrichment(input: {
               : attribute.value,
           })),
           sourceCategoryTrusted: !preferAiCategory,
+          imageUrl: primaryProductImageUrl(input.product),
         },
         input.context
       );
@@ -598,15 +829,21 @@ export async function buildShopifyTaxonomyEnrichment(input: {
 
   if (categorySearch) {
     try {
-      const matches = await searchShopifyTaxonomyCategories(
-        input.creds,
+      const matchResult = await findBestShopifyCategory({
+        creds: input.creds,
+        product: input.product,
         categorySearch,
-        8
-      );
-      category =
-        matches.find((match) => match.isLeaf) || matches[0] || null;
+        productType,
+        attributes,
+      });
+      category = matchResult.category;
       if (!category) {
         warnings.push(`Categoria Shopify nao encontrada para "${categorySearch}".`);
+      } else if (matchResult.score < 0) {
+        category = null;
+        warnings.push(
+          `Categoria Shopify suspeita ignorada/revisar: "${matchResult.rejected}". Buscas: ${matchResult.searched.join(", ")}.`
+        );
       }
     } catch (error) {
       warnings.push(

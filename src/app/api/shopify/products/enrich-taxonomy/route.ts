@@ -38,6 +38,7 @@ interface CatalogProductForTaxonomy {
   tags?: string[];
   productType?: string | null;
   category?: { id?: string; name?: string; fullName?: string } | null;
+  images?: { nodes?: { url?: string | null; altText?: string | null }[] };
   options?: { name: string; values: string[] }[];
   variants?: {
     nodes?: {
@@ -380,6 +381,7 @@ export async function POST(request: NextRequest) {
             productType: product.productType,
             sourceCategory: product.category?.fullName || product.productType || null,
             sourceAttributes: variantOptionAttributes(product),
+            images: product.images?.nodes || [],
             options: product.options || [],
             variants: product.variants?.nodes?.map((variant) => ({
               title: variant.title,

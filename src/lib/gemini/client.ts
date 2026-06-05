@@ -1,4 +1,4 @@
-﻿import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import type {
   AliExpressProduct,
   OptimizationResult,
@@ -310,6 +310,35 @@ Responda APENAS com o prompt de imagem, sem explicaÃ§Ãµes adicionais.`;
   return result.response.text().trim();
 }
 
+async function imagePartFromUrl(url?: string | null): Promise<Part | null> {
+  const imageUrl = String(url || "").trim();
+  if (!imageUrl) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(imageUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const mimeType = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    if (!mimeType.startsWith("image/")) return null;
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 7 * 1024 * 1024) return null;
+
+    return {
+      inlineData: {
+        mimeType,
+        data: bytes.toString("base64"),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function suggestShopifyTaxonomy(
   input: {
     title: string;
@@ -319,6 +348,7 @@ export async function suggestShopifyTaxonomy(
     sourceCategory?: string | null;
     sourceAttributes?: { name: string; value: string }[];
     sourceCategoryTrusted?: boolean;
+    imageUrl?: string | null;
   },
   context?: StoreContext | null
 ): Promise<ShopifyTaxonomySuggestion> {
@@ -344,6 +374,7 @@ Produto:
 - Categoria na fonte e confiavel?: ${input.sourceCategoryTrusted === false ? "Nao, pode estar errada" : "Sim, use como pista forte"}
 - Opcoes/variantes: ${JSON.stringify(input.options || [])}
 - Atributos encontrados na fonte: ${JSON.stringify(input.sourceAttributes || [])}
+- Imagem principal enviada para analise visual?: ${input.imageUrl ? "Sim" : "Nao"}
 
 Responda APENAS JSON valido.
 
@@ -354,7 +385,10 @@ Regras:
 4. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: product_subtype, gender, size, color, material, age_group, pattern.
 5. Para roupas, calcados, acessorios e joias, sempre tente preencher gender e age_group quando dedutivel. Se for produto adulto sem indicio infantil/bebe, use age_group "Adulto". Se for feminino/masculino/unissex pelo titulo/categoria, preencha gender.
 6. Se um atributo existir na fonte, use o valor da fonte somente se ele for coerente com o produto. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
-7. Para valores multiplos, use array.
+7. Se o titulo tiver "snow jacket", "ski jacket", "insulated jacket", "snowboard jacket" ou equivalente, classifique como outerwear/coats/jackets. Nunca use lingerie, underwear, undershirts ou roupas intimas.
+8. Se o titulo tiver "snow pants", "ski pants", "snowboard pants" ou equivalente, classifique como pants/bottoms/outerwear. Nunca use lingerie, underwear ou ceroulas.
+9. Quando a imagem foi enviada, use a imagem para confirmar o tipo visual do produto, cor dominante, genero aparente e se e roupa externa, roupa intima, calcado, joia etc. Se texto e imagem conflitarem, privilegie a imagem para tipo/categoria visual.
+10. Para valores multiplos, use array.
 
 Formato:
 {
@@ -367,7 +401,10 @@ Formato:
   ]
 }`;
 
-  const result = await model.generateContent(prompt);
+  const imagePart = await imagePartFromUrl(input.imageUrl);
+  const result = await model.generateContent(
+    imagePart ? [{ text: prompt }, imagePart] : prompt
+  );
   const parsed = parseJsonResponse<ShopifyTaxonomySuggestion>(result.response.text());
 
   return {
@@ -405,5 +442,3 @@ function parseJsonResponse<T>(text: string): T {
     throw new Error("A IA nÃ£o retornou JSON vÃ¡lido. Tente novamente.");
   }
 }
-
-
