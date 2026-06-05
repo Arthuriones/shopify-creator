@@ -391,18 +391,8 @@ export default function CatalogPage() {
         setTaxonomyPreview([]);
       }
       await loadProducts({ silent: true });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Erro ao aplicar categorias em massa.";
-      setTaxonomyBulkProgress({
-        done: targets.length,
-        total: targets.length,
-        updated,
-        skipped,
-        failed: Math.max(failed, targets.length - updated - skipped),
-        failures: [message, ...failureMessages].slice(0, 5),
-      });
-      toast.error(message);
+    } catch {
+      toast.error("Erro ao aplicar categorias em massa.");
     } finally {
       setTaxonomyApplying(false);
     }
@@ -526,8 +516,18 @@ export default function CatalogPage() {
         );
       }
       await loadProducts({ silent: true });
-    } catch {
-      toast.error("Erro ao aplicar categorias em massa.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro ao aplicar categorias em massa.";
+      setTaxonomyBulkProgress({
+        done: targets.length,
+        total: targets.length,
+        updated,
+        skipped,
+        failed: Math.max(failed, targets.length - updated - skipped),
+        failures: [message, ...failureMessages].slice(0, 5),
+      });
+      toast.error(message);
     } finally {
       setTaxonomyApplying(false);
     }
