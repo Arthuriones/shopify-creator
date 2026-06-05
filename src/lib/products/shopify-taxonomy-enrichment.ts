@@ -748,6 +748,15 @@ function valueCandidates(value: string) {
   return [normalized, compact, ...synonyms.map(normalizedToken), ...synonyms.map(normalizedCompact)];
 }
 
+function attributeValues(attribute: { value: string | string[] }) {
+  return Array.isArray(attribute.value)
+    ? attribute.value
+    : String(attribute.value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
 function matchTaxonomyValue(
   attribute: ShopifyTaxonomyAttributeMatch | undefined,
   value: string
@@ -813,14 +822,16 @@ async function buildStandardCategoryMetafields(input: {
     const taxonomyAttribute = taxonomyAttributes.find((candidate) =>
       taxonomyAttributeMatchesTemplate(candidate, template)
     );
-    const values = Array.isArray(attribute.value)
-      ? attribute.value
-      : String(attribute.value).split(",").map((item) => item.trim()).filter(Boolean);
+    const values = attributeValues(attribute);
 
     if (template.type.includes("product_taxonomy_value_reference")) {
-      const matchedIds = values
-        .map((value) => matchTaxonomyValue(taxonomyAttribute, value)?.id)
-        .filter((id): id is string => Boolean(id));
+      const matchedValues = values
+        .map((value) => matchTaxonomyValue(taxonomyAttribute, value))
+        .filter(
+          (value): value is { id: string; name: string } =>
+            Boolean(value?.id && value.name)
+        );
+      const matchedIds = matchedValues.map((value) => value.id);
       if (matchedIds.length === 0) continue;
 
       fields.push({
@@ -830,6 +841,9 @@ async function buildStandardCategoryMetafields(input: {
         value: template.type.startsWith("list.")
           ? JSON.stringify([...new Set(matchedIds)])
           : matchedIds[0],
+        label: template.name || attribute.name,
+        displayValue: [...new Set(matchedValues.map((value) => value.name))].join(", "),
+        definitionTemplateId: template.id,
       });
       continue;
     }
@@ -839,6 +853,9 @@ async function buildStandardCategoryMetafields(input: {
       key: template.key,
       type: template.type || "single_line_text_field",
       value: values.join(", "),
+      label: template.name || attribute.name,
+      displayValue: values.join(", "),
+      definitionTemplateId: template.id,
     });
   }
 
@@ -865,6 +882,8 @@ function buildMetafields(input: {
       key: "shopify_category",
       type: "single_line_text_field",
       value: input.category.fullName,
+      label: "Categoria Shopify",
+      displayValue: input.category.fullName,
     });
   } else if (input.categorySearch) {
     fields.push({
@@ -872,6 +891,8 @@ function buildMetafields(input: {
       key: "shopify_category_hint",
       type: "single_line_text_field",
       value: input.categorySearch,
+      label: "Categoria sugerida",
+      displayValue: input.categorySearch,
     });
   }
 
@@ -881,6 +902,8 @@ function buildMetafields(input: {
       key: "product_type_hint",
       type: "single_line_text_field",
       value: input.productType,
+      label: "Tipo sugerido",
+      displayValue: input.productType,
     });
   }
 
@@ -891,6 +914,8 @@ function buildMetafields(input: {
       key: attribute.key,
       type: metafieldType(),
       value: metafieldValue(attribute.value),
+      label: attribute.name,
+      displayValue: metafieldValue(attribute.value),
     });
   }
 

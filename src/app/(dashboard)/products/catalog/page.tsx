@@ -89,6 +89,9 @@ interface TaxonomyPreviewItem {
     key: string;
     type: string;
     value: string;
+    label?: string;
+    displayValue?: string;
+    definitionTemplateId?: string;
   }[];
   source?: string;
   warning?: string;
@@ -110,6 +113,31 @@ function normalizeDecimal(value: string): string {
   const parsed = Number(value.replace(",", ".").trim());
   if (!Number.isFinite(parsed) || parsed < 0) return "";
   return parsed.toFixed(2);
+}
+
+function readableMetafieldName(field: NonNullable<TaxonomyPreviewItem["metafields"]>[number]) {
+  if (field.label) return field.label;
+  return field.key
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function readableMetafieldValue(field: NonNullable<TaxonomyPreviewItem["metafields"]>[number]) {
+  if (field.displayValue) return field.displayValue;
+  if (field.value.startsWith("gid://")) return "Valor da taxonomia mapeado";
+
+  try {
+    const parsed = JSON.parse(field.value) as unknown;
+    if (Array.isArray(parsed) && parsed.every((item) => String(item).startsWith("gid://"))) {
+      return `${parsed.length} valor(es) da taxonomia mapeado(s)`;
+    }
+  } catch {
+    // Valor simples, segue abaixo.
+  }
+
+  return field.value;
 }
 
 export default function CatalogPage() {
@@ -1036,6 +1064,10 @@ export default function CatalogPage() {
                 taxonomyPreview.map((item) => {
                   const canApply = item.status === "preview";
                   const attributes = item.attributes || [];
+                  const metafields = item.metafields || [];
+                  const standardMetafields = metafields.filter(
+                    (field) => field.namespace === "shopify"
+                  );
                   return (
                     <div
                       key={item.id}
@@ -1094,13 +1126,48 @@ export default function CatalogPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3">
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[11px] font-medium uppercase text-muted-foreground">
+                              Metacampos padrão da Shopify
+                            </p>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                              {standardMetafields.length} para aplicar
+                            </span>
+                          </div>
+                          {standardMetafields.length === 0 ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Nenhum metacampo padrão mapeado para esta categoria.
+                            </p>
+                          ) : (
+                            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                              {standardMetafields.map((field) => (
+                                <div
+                                  key={`${item.id}-${field.namespace}-${field.key}`}
+                                  className="rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2"
+                                >
+                                  <p className="text-xs font-semibold text-foreground">
+                                    {readableMetafieldName(field)}
+                                  </p>
+                                  <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                                    {readableMetafieldValue(field)}
+                                  </p>
+                                  <p className="mt-1 break-words text-[10px] text-muted-foreground/70">
+                                    {field.namespace}.{field.key} · {field.type}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         <p className="text-[11px] font-medium uppercase text-muted-foreground">
-                          Metacampos
+                          Atributos detectados pela IA
                         </p>
                         {attributes.length === 0 ? (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Nenhum metacampo proposto.
+                            Nenhum atributo detectado.
                           </p>
                         ) : (
                           <div className="mt-2 flex flex-wrap gap-1.5">

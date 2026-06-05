@@ -61,6 +61,9 @@ interface TaxonomyProposalInput {
     key: string;
     type: string;
     value: string;
+    label?: string;
+    displayValue?: string;
+    definitionTemplateId?: string;
   }[];
 }
 
@@ -343,6 +346,9 @@ export async function POST(request: NextRequest) {
           key: string;
           type: string;
           value: string;
+          label?: string;
+          displayValue?: string;
+          definitionTemplateId?: string;
         }[];
         source?: string;
         warning?: string;

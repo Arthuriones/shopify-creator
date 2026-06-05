@@ -1259,6 +1259,9 @@ export interface ShopifyProductMetafieldInput {
   key: string;
   type: string;
   value: string;
+  label?: string;
+  displayValue?: string;
+  definitionTemplateId?: string;
 }
 
 const SHOPIFY_CLIENT_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -1295,6 +1298,64 @@ function metafieldDefinitionName(field: ShopifyProductMetafieldInput) {
     .slice(0, 80);
 }
 
+async function ensureStandardProductMetafieldDefinition(
+  creds: ShopifyCredentials,
+  field: ShopifyProductMetafieldInput
+) {
+  const cacheKey = `${cachedShopKey(creds)}:standard-product:${field.definitionTemplateId || `${field.namespace}.${field.key}`}`;
+  if (isCacheFresh(metafieldDefinitionCache.get(cacheKey))) return null;
+
+  const mutation = field.definitionTemplateId
+    ? `
+      mutation enableStandardMetafieldDefinition($id: ID!, $ownerType: MetafieldOwnerType!, $pin: Boolean!) {
+        standardMetafieldDefinitionEnable(id: $id, ownerType: $ownerType, pin: $pin) {
+          createdDefinition { id namespace key }
+          userErrors { field message }
+        }
+      }
+    `
+    : `
+      mutation enableStandardMetafieldDefinition($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!, $pin: Boolean!) {
+        standardMetafieldDefinitionEnable(namespace: $namespace, key: $key, ownerType: $ownerType, pin: $pin) {
+          createdDefinition { id namespace key }
+          userErrors { field message }
+        }
+      }
+    `;
+
+  const variables = field.definitionTemplateId
+    ? {
+        id: field.definitionTemplateId,
+        ownerType: "PRODUCT",
+        pin: true,
+      }
+    : {
+        namespace: field.namespace,
+        key: field.key,
+        ownerType: "PRODUCT",
+        pin: true,
+      };
+
+  const enabled = await shopifyGraphQL(creds, mutation, variables);
+  const userErrors = enabled?.standardMetafieldDefinitionEnable?.userErrors as
+    | { field?: string[]; message: string }[]
+    | undefined;
+
+  if (userErrors?.length) {
+    const alreadyExists = userErrors.some((error) =>
+      /already exists|taken|ja existe|jÃ¡ existe|enabled|active/i.test(error.message)
+    );
+    if (!alreadyExists) {
+      return `${field.namespace}.${field.key}: ${userErrors
+        .map((error) => error.message)
+        .join(" | ")}`;
+    }
+  }
+
+  metafieldDefinitionCache.set(cacheKey, Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS);
+  return null;
+}
+
 export async function ensureProductMetafieldDefinitions(
   creds: ShopifyCredentials,
   fields: ShopifyProductMetafieldInput[]
@@ -1305,7 +1366,19 @@ export async function ensureProductMetafieldDefinitions(
   const warnings: string[] = [];
 
   for (const field of uniqueFields) {
-    if (field.namespace === "shopify") continue;
+    if (field.namespace === "shopify") {
+      try {
+        const warning = await ensureStandardProductMetafieldDefinition(creds, field);
+        if (warning) warnings.push(warning);
+      } catch (error) {
+        warnings.push(
+          `${field.namespace}.${field.key}: ${
+            error instanceof Error ? error.message : "falha ao ativar definicao padrao"
+          }`
+        );
+      }
+      continue;
+    }
 
     const cacheKey = `${cachedShopKey(creds)}:product:${field.namespace}.${field.key}:${field.type}`;
     if (isCacheFresh(metafieldDefinitionCache.get(cacheKey))) continue;
