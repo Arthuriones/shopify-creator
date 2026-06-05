@@ -318,6 +318,7 @@ export async function suggestShopifyTaxonomy(
     options?: { name: string; values: string[] }[];
     sourceCategory?: string | null;
     sourceAttributes?: { name: string; value: string }[];
+    sourceCategoryTrusted?: boolean;
   },
   context?: StoreContext | null
 ): Promise<ShopifyTaxonomySuggestion> {
@@ -340,17 +341,20 @@ Produto:
 - Descricao: ${plainDescription || "Sem descricao"}
 - Tags: ${(input.tags || []).join(", ") || "Sem tags"}
 - Categoria na fonte: ${input.sourceCategory || "Nao informada"}
+- Categoria na fonte e confiavel?: ${input.sourceCategoryTrusted === false ? "Nao, pode estar errada" : "Sim, use como pista forte"}
 - Opcoes/variantes: ${JSON.stringify(input.options || [])}
 - Atributos encontrados na fonte: ${JSON.stringify(input.sourceAttributes || [])}
 
 Responda APENAS JSON valido.
 
 Regras:
-1. "categorySearch" deve ser uma busca curta em ingles para a categoria mais especifica da Shopify, por exemplo "Women's Coats", "Women's Jackets", "Shirts", "Dog Beds".
+1. "categorySearch" deve ser uma busca curta em ingles para a categoria mais especifica da Shopify, por exemplo "Women's Coats", "Women's Jackets", "Ski Pants", "Dog Beds".
 2. "productType" deve ser um tipo curto no idioma da loja, por exemplo "Casaco feminino".
-3. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: product_subtype, gender, size, color, material, age_group, pattern.
-4. Se um atributo existir na fonte, use o valor da fonte. Se faltar e for dedutivel com alta confianca, preencha pela IA. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
-5. Para valores multiplos, use array.
+3. Se a categoria na fonte nao for confiavel, trate-a apenas como contexto fraco. Se conflitar com titulo, descricao, tags ou opcoes, ignore a categoria na fonte e reclassifique pelo produto real.
+4. "attributes" deve conter apenas atributos relevantes e confiaveis para o produto. Priorize: product_subtype, gender, size, color, material, age_group, pattern.
+5. Para roupas, calcados, acessorios e joias, sempre tente preencher gender e age_group quando dedutivel. Se for produto adulto sem indicio infantil/bebe, use age_group "Adulto". Se for feminino/masculino/unissex pelo titulo/categoria, preencha gender.
+6. Se um atributo existir na fonte, use o valor da fonte somente se ele for coerente com o produto. Nao chute tamanho/cor especifica se nao aparecer no titulo, descricao, opcoes ou imagens textuais.
+7. Para valores multiplos, use array.
 
 Formato:
 {
@@ -375,7 +379,6 @@ Formato:
 
 function sanitizeJsonString(str: string): string {
   // Remove control characters (except \n, \r, \t which are valid in JSON strings)
-  // eslint-disable-next-line no-control-regex
   return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 

@@ -1233,6 +1233,27 @@ export interface ShopifyTaxonomyCategoryMatch {
   isArchived?: boolean;
 }
 
+export interface ShopifyTaxonomyAttributeValue {
+  id: string;
+  name: string;
+}
+
+export interface ShopifyTaxonomyAttributeMatch {
+  id: string;
+  name: string;
+  type: string;
+  values: ShopifyTaxonomyAttributeValue[];
+}
+
+export interface ShopifyStandardMetafieldTemplate {
+  id: string;
+  name: string;
+  namespace: string;
+  key: string;
+  ownerTypes: string[];
+  type: string;
+}
+
 export interface ShopifyProductMetafieldInput {
   namespace: string;
   key: string;
@@ -1245,6 +1266,16 @@ const metafieldDefinitionCache = new Map<string, number>();
 const taxonomyCategoryCache = new Map<
   string,
   { expiresAt: number; value: ShopifyTaxonomyCategoryMatch[] }
+>();
+const categoryMetafieldDataCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: {
+      attributes: ShopifyTaxonomyAttributeMatch[];
+      templates: ShopifyStandardMetafieldTemplate[];
+    };
+  }
 >();
 
 function cachedShopKey(creds: ShopifyCredentials) {
@@ -1274,6 +1305,8 @@ export async function ensureProductMetafieldDefinitions(
   const warnings: string[] = [];
 
   for (const field of uniqueFields) {
+    if (field.namespace === "shopify") continue;
+
     const cacheKey = `${cachedShopKey(creds)}:product:${field.namespace}.${field.key}:${field.type}`;
     if (isCacheFresh(metafieldDefinitionCache.get(cacheKey))) continue;
 
@@ -1454,6 +1487,126 @@ export async function searchShopifyTaxonomyCategories(
   });
 
   return matches;
+}
+
+export async function getShopifyCategoryMetafieldData(
+  creds: ShopifyCredentials,
+  categoryId: string
+): Promise<{
+  attributes: ShopifyTaxonomyAttributeMatch[];
+  templates: ShopifyStandardMetafieldTemplate[];
+}> {
+  if (!categoryId) return { attributes: [], templates: [] };
+
+  const cacheKey = `${cachedShopKey(creds)}:${categoryId}:category-metafields`;
+  const cached = categoryMetafieldDataCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const query = `
+    query getCategoryMetafieldData($categoryId: ID!) {
+      node(id: $categoryId) {
+        ... on TaxonomyCategory {
+          attributes(first: 50) {
+            nodes {
+              __typename
+              ... on TaxonomyChoiceListAttribute {
+                id
+                name
+                values(first: 250) {
+                  nodes { id name }
+                }
+              }
+              ... on TaxonomyMeasurementAttribute {
+                id
+                name
+                options { key value }
+              }
+              ... on TaxonomyAttribute {
+                id
+              }
+            }
+          }
+        }
+      }
+      standardMetafieldDefinitionTemplates(
+        first: 100
+        constraintStatus: CONSTRAINED_ONLY
+        constraintSubtype: { key: "category", value: $categoryId }
+      ) {
+        nodes {
+          id
+          name
+          namespace
+          key
+          ownerTypes
+          type { name }
+        }
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL(creds, query, { categoryId });
+  const attributes =
+    data?.node?.attributes?.nodes?.map(
+      (node: {
+        id?: string;
+        name?: string;
+        __typename?: string;
+        values?: { nodes?: { id?: string; name?: string }[] };
+        options?: { key?: string; value?: string }[];
+      }) => ({
+        id: String(node.id || ""),
+        name: String(node.name || ""),
+        type: String(node.__typename || "TaxonomyAttribute"),
+        values: [
+          ...((node.values?.nodes || []).map((value) => ({
+            id: String(value.id || ""),
+            name: String(value.name || ""),
+          })) || []),
+          ...((node.options || []).map((option) => ({
+            id: String(option.key || option.value || ""),
+            name: String(option.value || option.key || ""),
+          })) || []),
+        ].filter((value) => value.id && value.name),
+      })
+    ) || [];
+  const templates =
+    data?.standardMetafieldDefinitionTemplates?.nodes
+      ?.map(
+        (node: {
+          id?: string;
+          name?: string;
+          namespace?: string;
+          key?: string;
+          ownerTypes?: string[];
+          type?: { name?: string };
+        }) => ({
+          id: String(node.id || ""),
+          name: String(node.name || ""),
+          namespace: String(node.namespace || ""),
+          key: String(node.key || ""),
+          ownerTypes: Array.isArray(node.ownerTypes) ? node.ownerTypes : [],
+          type: String(node.type?.name || ""),
+        })
+      )
+      .filter(
+        (template: ShopifyStandardMetafieldTemplate) =>
+          template.id &&
+          template.namespace &&
+          template.key &&
+          template.type &&
+          template.ownerTypes.includes("PRODUCT")
+      ) || [];
+  const value = { attributes, templates };
+
+  categoryMetafieldDataCache.set(cacheKey, {
+    expiresAt: Date.now() + SHOPIFY_CLIENT_CACHE_TTL_MS,
+    value,
+  });
+
+  return value;
 }
 
 export async function updateProductTaxonomy(

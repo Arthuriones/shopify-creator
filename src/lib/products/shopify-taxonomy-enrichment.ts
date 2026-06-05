@@ -1,8 +1,11 @@
 import { suggestShopifyTaxonomy } from "@/lib/gemini/client";
 import {
+  getShopifyCategoryMetafieldData,
   searchShopifyTaxonomyCategories,
   type ShopifyCredentials,
   type ShopifyProductMetafieldInput,
+  type ShopifyStandardMetafieldTemplate,
+  type ShopifyTaxonomyAttributeMatch,
   type ShopifyTaxonomyCategoryMatch,
 } from "@/lib/shopify/client";
 import type { StoreContext } from "@/types";
@@ -43,6 +46,8 @@ const ATTRIBUTE_ALIASES: Record<string, { key: string; name: string }> = {
   "gênero": { key: "gender", name: "Genero" },
   gender: { key: "gender", name: "Genero" },
   sexo: { key: "gender", name: "Genero" },
+  "genero alvo": { key: "gender", name: "Genero" },
+  "target gender": { key: "gender", name: "Genero" },
   material: { key: "material", name: "Material" },
   tecido: { key: "material", name: "Material" },
   fabric: { key: "material", name: "Material" },
@@ -54,6 +59,9 @@ const ATTRIBUTE_ALIASES: Record<string, { key: string; name: string }> = {
   categoria: { key: "category_hint", name: "Categoria sugerida" },
   category: { key: "category_hint", name: "Categoria sugerida" },
   tipo: { key: "product_type_hint", name: "Tipo sugerido" },
+  idade: { key: "age_group", name: "Faixa etaria" },
+  "faixa etaria": { key: "age_group", name: "Faixa etaria" },
+  "age group": { key: "age_group", name: "Faixa etaria" },
 };
 
 const CATEGORY_PRODUCT_TYPE_HINTS: { pattern: RegExp; value: string }[] = [
@@ -247,12 +255,221 @@ function fallbackAttributes(product: ProductForTaxonomyEnrichment, sourceCategor
   );
 }
 
+function mergeTaxonomyAttributes(input: {
+  preferAi: boolean;
+  sourceAttributes: { name: string; key: string; value: string | string[] }[];
+  aiAttributes: { name: string; key: string; value: string | string[] }[];
+  fallbackAttributes: { name: string; key: string; value: string | string[] }[];
+}) {
+  return input.preferAi
+    ? mergeAttributes(
+        input.aiAttributes,
+        input.sourceAttributes,
+        input.fallbackAttributes
+      )
+    : mergeAttributes(
+        input.sourceAttributes,
+        input.aiAttributes,
+        input.fallbackAttributes
+      );
+}
+
 function metafieldValue(value: string | string[]) {
   return Array.isArray(value) ? value.join(", ") : value;
 }
 
 function metafieldType() {
   return "single_line_text_field";
+}
+
+function normalizedToken(input: string) {
+  return input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizedCompact(input: string) {
+  return normalizedToken(input).replace(/\s+/g, "");
+}
+
+const VALUE_SYNONYMS: Record<string, string[]> = {
+  feminino: ["female", "women", "womens"],
+  feminina: ["female", "women", "womens"],
+  mulher: ["female", "women", "womens"],
+  masculino: ["male", "men", "mens"],
+  homem: ["male", "men", "mens"],
+  unissex: ["unisex"],
+  unisex: ["unisex"],
+  adulto: ["adult", "adults"],
+  adultos: ["adult", "adults"],
+  infantil: ["kids", "children", "child"],
+  crianca: ["kids", "children", "child"],
+  criancas: ["kids", "children", "child"],
+  bebe: ["baby", "infant"],
+  preto: ["black"],
+  branca: ["white"],
+  branco: ["white"],
+  azul: ["blue"],
+  vermelho: ["red"],
+  vermelha: ["red"],
+  verde: ["green"],
+  amarelo: ["yellow"],
+  amarela: ["yellow"],
+  rosa: ["pink"],
+  roxo: ["purple"],
+  roxa: ["purple"],
+  cinza: ["gray", "grey"],
+  prata: ["silver"],
+  prateado: ["silver"],
+  prateada: ["silver"],
+  dourado: ["gold"],
+  dourada: ["gold"],
+  marrom: ["brown"],
+  bege: ["beige"],
+};
+
+const ATTRIBUTE_TEMPLATE_HINTS: Record<string, string[]> = {
+  gender: ["target gender", "gender", "targetgender", "target-gender"],
+  age_group: ["age group", "agegroup", "age-group", "recommended age group"],
+  color: ["color", "colour", "color pattern", "color-pattern"],
+  pattern: ["pattern", "color pattern", "color-pattern"],
+  material: ["material", "fabric", "jewelry material", "clothing material"],
+  size: ["size"],
+  product_subtype: ["type", "jewelry type", "clothing type", "product type"],
+};
+
+function templateMatchesAttribute(
+  template: ShopifyStandardMetafieldTemplate,
+  attribute: { name: string; key: string }
+) {
+  const haystack = [
+    template.name,
+    template.key,
+    template.namespace,
+    `${template.namespace}.${template.key}`,
+  ].map(normalizedCompact);
+  const hints = [
+    attribute.key,
+    attribute.name,
+    ...(ATTRIBUTE_TEMPLATE_HINTS[attribute.key] || []),
+  ].map(normalizedCompact);
+
+  return hints.some((hint) =>
+    haystack.some((candidate) => candidate.includes(hint) || hint.includes(candidate))
+  );
+}
+
+function valueCandidates(value: string) {
+  const normalized = normalizedToken(value);
+  const compact = normalizedCompact(value);
+  const synonyms = VALUE_SYNONYMS[compact] || VALUE_SYNONYMS[normalized] || [];
+  return [normalized, compact, ...synonyms.map(normalizedToken), ...synonyms.map(normalizedCompact)];
+}
+
+function matchTaxonomyValue(
+  attribute: ShopifyTaxonomyAttributeMatch | undefined,
+  value: string
+) {
+  if (!attribute) return null;
+  const candidates = valueCandidates(value);
+  return (
+    attribute.values.find((taxonomyValue) => {
+      const normalizedName = normalizedToken(taxonomyValue.name);
+      const compactName = normalizedCompact(taxonomyValue.name);
+      return candidates.some(
+        (candidate) =>
+          candidate === normalizedName ||
+          candidate === compactName ||
+          normalizedName.includes(candidate) ||
+          compactName.includes(candidate)
+      );
+    }) || null
+  );
+}
+
+function taxonomyAttributeMatchesTemplate(
+  taxonomyAttribute: ShopifyTaxonomyAttributeMatch,
+  template: ShopifyStandardMetafieldTemplate
+) {
+  const taxonomyName = normalizedCompact(taxonomyAttribute.name);
+  const templateName = normalizedCompact(template.name);
+  const templateKey = normalizedCompact(template.key);
+  const hintMatches = Object.entries(ATTRIBUTE_TEMPLATE_HINTS).some(
+    ([key, hints]) =>
+      templateMatchesAttribute(template, { key, name: key }) &&
+      [key, ...hints].map(normalizedCompact).some((hint) =>
+        taxonomyName.includes(hint) || hint.includes(taxonomyName)
+      )
+  );
+
+  return (
+    hintMatches ||
+    templateName.includes(taxonomyName) ||
+    taxonomyName.includes(templateName) ||
+    templateKey.includes(taxonomyName) ||
+    taxonomyName.includes(templateKey)
+  );
+}
+
+async function buildStandardCategoryMetafields(input: {
+  creds: ShopifyCredentials;
+  category: ShopifyTaxonomyCategoryMatch | null;
+  attributes: { name: string; key: string; value: string | string[] }[];
+}) {
+  if (!input.category?.id) return [] as ShopifyProductMetafieldInput[];
+
+  const { attributes: taxonomyAttributes, templates } =
+    await getShopifyCategoryMetafieldData(input.creds, input.category.id);
+  const fields: ShopifyProductMetafieldInput[] = [];
+
+  for (const attribute of input.attributes) {
+    const template = templates.find((candidate) =>
+      templateMatchesAttribute(candidate, attribute)
+    );
+    if (!template) continue;
+
+    const taxonomyAttribute = taxonomyAttributes.find((candidate) =>
+      taxonomyAttributeMatchesTemplate(candidate, template)
+    );
+    const values = Array.isArray(attribute.value)
+      ? attribute.value
+      : String(attribute.value).split(",").map((item) => item.trim()).filter(Boolean);
+
+    if (template.type.includes("product_taxonomy_value_reference")) {
+      const matchedIds = values
+        .map((value) => matchTaxonomyValue(taxonomyAttribute, value)?.id)
+        .filter((id): id is string => Boolean(id));
+      if (matchedIds.length === 0) continue;
+
+      fields.push({
+        namespace: template.namespace,
+        key: template.key,
+        type: template.type,
+        value: template.type.startsWith("list.")
+          ? JSON.stringify([...new Set(matchedIds)])
+          : matchedIds[0],
+      });
+      continue;
+    }
+
+    fields.push({
+      namespace: template.namespace,
+      key: template.key,
+      type: template.type || "single_line_text_field",
+      value: values.join(", "),
+    });
+  }
+
+  const seen = new Set<string>();
+  return fields.filter((field) => {
+    const key = `${field.namespace}.${field.key}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return field.value.length > 0;
+  });
 }
 
 function buildMetafields(input: {
@@ -313,6 +530,7 @@ export async function buildShopifyTaxonomyEnrichment(input: {
   context?: StoreContext | null;
   enabled: boolean;
   useAiFallback: boolean;
+  preferAiCategory?: boolean;
 }): Promise<ShopifyTaxonomyEnrichmentResult> {
   const warnings: string[] = [];
   if (!input.enabled) {
@@ -325,16 +543,17 @@ export async function buildShopifyTaxonomyEnrichment(input: {
     input.product.sourceAttributes,
     sourceAttributesFromOptions(input.product)
   );
+  const canUseAi = input.useAiFallback && Boolean(process.env.GEMINI_API_KEY);
+  const preferAiCategory = canUseAi && input.preferAiCategory === true;
 
-  let categorySearch = sourceCategory;
-  let productType = input.product.productType || null;
+  let categorySearch = preferAiCategory ? "" : sourceCategory;
+  let productType = preferAiCategory ? null : input.product.productType || null;
   let aiAttributes: { name: string; key: string; value: string | string[] }[] = [];
   let usedAi = false;
 
   if (
-    input.useAiFallback &&
-    process.env.GEMINI_API_KEY &&
-    (!categorySearch || !productType || sourceAttributes.length === 0)
+    canUseAi &&
+    (preferAiCategory || !categorySearch || !productType || sourceAttributes.length === 0)
   ) {
     try {
       const suggestion = await suggestShopifyTaxonomy(
@@ -350,11 +569,12 @@ export async function buildShopifyTaxonomyEnrichment(input: {
               ? attribute.value.join(", ")
               : attribute.value,
           })),
+          sourceCategoryTrusted: !preferAiCategory,
         },
         input.context
       );
-      categorySearch = categorySearch || suggestion.categorySearch;
-      productType = productType || suggestion.productType;
+      categorySearch = suggestion.categorySearch || categorySearch;
+      productType = suggestion.productType || productType;
       aiAttributes = suggestion.attributes || [];
       usedAi = true;
     } catch (error) {
@@ -368,11 +588,12 @@ export async function buildShopifyTaxonomyEnrichment(input: {
 
   productType = productType || inferProductType(input.product, sourceCategory) || null;
 
-  const attributes = mergeAttributes(
+  const attributes = mergeTaxonomyAttributes({
+    preferAi: preferAiCategory,
     sourceAttributes,
     aiAttributes,
-    fallbackAttributes(input.product, sourceCategory)
-  );
+    fallbackAttributes: fallbackAttributes(input.product, sourceCategory),
+  });
   let category: ShopifyTaxonomyCategoryMatch | null = null;
 
   if (categorySearch) {
@@ -396,12 +617,34 @@ export async function buildShopifyTaxonomyEnrichment(input: {
     }
   }
 
-  const metafields = buildMetafields({
-    category,
-    categorySearch,
-    productType,
-    attributes,
-  });
+  let metafields: ShopifyProductMetafieldInput[] = [];
+  try {
+    metafields = await buildStandardCategoryMetafields({
+      creds: input.creds,
+      category,
+      attributes,
+    });
+    if (category?.id && attributes.length > 0 && metafields.length === 0) {
+      warnings.push(
+        "Nenhum metacampo padrao de categoria foi encontrado com valor compativel."
+      );
+    }
+  } catch (error) {
+    warnings.push(
+      `Metacampos padrao da Shopify ignorados: ${
+        error instanceof Error ? error.message : "falha ao mapear metacampos"
+      }`
+    );
+  }
+
+  if (metafields.length === 0) {
+    metafields = buildMetafields({
+      category,
+      categorySearch,
+      productType,
+      attributes,
+    });
+  }
 
   return {
     category,

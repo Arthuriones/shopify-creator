@@ -389,6 +389,13 @@ export async function POST(request: NextRequest) {
           context,
           enabled: true,
           useAiFallback,
+          preferAiCategory:
+            useAiFallback &&
+            Boolean(
+              product.category?.id ||
+                includeAlreadyCategorized ||
+                forceSingleProductPreview
+            ),
         });
 
         if (!taxonomy.category?.id && taxonomy.metafields.length === 0) {
