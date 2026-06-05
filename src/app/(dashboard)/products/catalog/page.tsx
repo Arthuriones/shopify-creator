@@ -79,6 +79,7 @@ interface TaxonomyPreviewItem {
   status: "preview" | "updated" | "skipped" | "failed";
   category?: string | null;
   categoryId?: string | null;
+  currentCategoryId?: string | null;
   currentCategory?: string | null;
   productType?: string | null;
   currentProductType?: string | null;
@@ -358,7 +359,9 @@ export default function CatalogPage() {
             title: item.title,
             categoryId: item.categoryId || null,
             categoryName: item.category || null,
+            currentCategoryId: item.currentCategoryId || null,
             productType: item.productType || null,
+            currentProductType: item.currentProductType || null,
             metafields: item.metafields || [],
           })),
           limit: proposals.length,
@@ -388,8 +391,18 @@ export default function CatalogPage() {
         setTaxonomyPreview([]);
       }
       await loadProducts({ silent: true });
-    } catch {
-      toast.error("Erro ao aplicar categorias em massa.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro ao aplicar categorias em massa.";
+      setTaxonomyBulkProgress({
+        done: targets.length,
+        total: targets.length,
+        updated,
+        skipped,
+        failed: Math.max(failed, targets.length - updated - skipped),
+        failures: [message, ...failureMessages].slice(0, 5),
+      });
+      toast.error(message);
     } finally {
       setTaxonomyApplying(false);
     }
@@ -418,50 +431,49 @@ export default function CatalogPage() {
     const failureMessages: string[] = [];
 
     try {
-      for (const [index, product] of targets.entries()) {
+      setTaxonomyBulkProgress({
+        done: 0,
+        total: targets.length,
+        updated,
+        skipped,
+        failed,
+        current: "Gerando propostas em lote...",
+      });
+
+      const previewRes = await fetch("/api/shopify/products/enrich-taxonomy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "preview",
+          storeId: selectedStore,
+          productIds: targets.map((product) => product.id),
+          useAiFallback: taxonomyUseAi,
+          includeAlreadyCategorized: taxonomyIncludeExisting,
+          limit: targets.length,
+        }),
+      });
+      const previewData = await previewRes.json();
+      if (!previewRes.ok) {
+        throw new Error(previewData.error || "Falha ao gerar previas.");
+      }
+
+      const previewSummary = previewData.summary || {};
+      const previewProducts = (previewSummary.products || []) as TaxonomyPreviewItem[];
+      const proposals = previewProducts.filter((item) => item.status === "preview");
+      failureMessages.push(...taxonomyFailureMessages(previewProducts));
+      skipped += Number(previewSummary.skipped || 0);
+      failed += Number(previewSummary.failed || 0);
+
+      if (proposals.length > 0) {
         setTaxonomyBulkProgress({
-          done: index,
+          done: 0,
           total: targets.length,
           updated,
           skipped,
           failed,
-          current: product.title,
+          current: `Aplicando ${proposals.length} proposta(s) em lote...`,
           failures: failureMessages.slice(0, 5),
         });
-
-        const previewRes = await fetch("/api/shopify/products/enrich-taxonomy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "preview",
-            storeId: selectedStore,
-            productIds: [product.id],
-            useAiFallback: taxonomyUseAi,
-            includeAlreadyCategorized: taxonomyIncludeExisting,
-            limit: 1,
-          }),
-        });
-        const previewData = await previewRes.json();
-        if (!previewRes.ok) {
-          failureMessages.push(
-            `${product.title}: ${previewData.error || "Falha ao gerar previa."}`
-          );
-          failed += 1;
-          continue;
-        }
-
-        const proposal = (
-          (previewData.summary?.products || []) as TaxonomyPreviewItem[]
-        ).find((item) => item.status === "preview");
-
-        if (!proposal) {
-          const skippedItem = ((previewData.summary?.products || []) as TaxonomyPreviewItem[])[0];
-          if (skippedItem?.warning) {
-            failureMessages.push(`${product.title}: ${skippedItem.warning}`);
-          }
-          skipped += 1;
-          continue;
-        }
 
         const applyRes = await fetch("/api/shopify/products/enrich-taxonomy", {
           method: "POST",
@@ -469,33 +481,27 @@ export default function CatalogPage() {
           body: JSON.stringify({
             mode: "apply",
             storeId: selectedStore,
-            proposals: [
-              {
-                productId: proposal.id,
-                title: proposal.title,
-                categoryId: proposal.categoryId || null,
-                categoryName: proposal.category || null,
-                productType: proposal.productType || null,
-                metafields: proposal.metafields || [],
-              },
-            ],
-            limit: 1,
+            proposals: proposals.map((proposal) => ({
+              productId: proposal.id,
+              title: proposal.title,
+              categoryId: proposal.categoryId || null,
+              categoryName: proposal.category || null,
+              currentCategoryId: proposal.currentCategoryId || null,
+              productType: proposal.productType || null,
+              currentProductType: proposal.currentProductType || null,
+              metafields: proposal.metafields || [],
+            })),
+            limit: proposals.length,
           }),
         });
         const applyData = await applyRes.json();
         if (!applyRes.ok) {
-          failureMessages.push(
-            `${product.title}: ${applyData.error || "Falha ao aplicar categoria."}`
-          );
-          failed += 1;
-          continue;
+          throw new Error(applyData.error || "Falha ao aplicar categorias.");
         }
 
         const applySummary = applyData.summary || {};
         const applyProducts = (applySummary.products || []) as TaxonomyPreviewItem[];
-        const applyFailures = taxonomyFailureMessages(applyProducts);
-        failureMessages.push(...applyFailures);
-
+        failureMessages.push(...taxonomyFailureMessages(applyProducts));
         updated += Number(applySummary.updated || 0);
         skipped += Number(applySummary.skipped || 0);
         failed += Number(applySummary.failed || 0);

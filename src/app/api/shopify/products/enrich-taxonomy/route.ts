@@ -48,7 +48,9 @@ interface TaxonomyProposalInput {
   title?: string;
   categoryId?: string | null;
   categoryName?: string | null;
+  currentCategoryId?: string | null;
   productType?: string | null;
+  currentProductType?: string | null;
   metafields?: {
     namespace: string;
     key: string;
@@ -171,8 +173,16 @@ export async function POST(request: NextRequest) {
               (field) => field.namespace && field.key && field.type && field.value
             )
           : [];
+        const categoryId =
+          proposal.categoryId && proposal.categoryId !== proposal.currentCategoryId
+            ? proposal.categoryId
+            : null;
+        const productType =
+          proposal.productType && proposal.productType !== proposal.currentProductType
+            ? proposal.productType
+            : null;
 
-        if (!proposal.categoryId && !proposal.productType && metafields.length === 0) {
+        if (!categoryId && !productType && metafields.length === 0) {
           summary.skipped += 1;
           summary.products.push({
             id: productId,
@@ -187,8 +197,8 @@ export async function POST(request: NextRequest) {
         try {
           const result = await updateProductTaxonomy(creds, {
             productId,
-            categoryId: proposal.categoryId || null,
-            productType: proposal.productType || null,
+            categoryId,
+            productType,
             metafields,
           }) as { metafieldsWarning?: string | null };
 
@@ -218,8 +228,8 @@ export async function POST(request: NextRequest) {
             storeId,
             productId,
             title: proposal.title || productId,
-            categoryId: proposal.categoryId || null,
-            productType: proposal.productType || null,
+            categoryId,
+            productType,
             metafieldsCount: metafields.length,
             warning,
           });
@@ -261,6 +271,7 @@ export async function POST(request: NextRequest) {
         status: "preview" | "updated" | "skipped" | "failed";
         category?: string | null;
         categoryId?: string | null;
+        currentCategoryId?: string | null;
         currentCategory?: string | null;
         productType?: string | null;
         currentProductType?: string | null;
@@ -286,6 +297,7 @@ export async function POST(request: NextRequest) {
           title: product.title,
           status: "skipped",
           category: product.category.fullName || product.category.name || null,
+          currentCategoryId: product.category.id || null,
           currentCategory: product.category.fullName || product.category.name || null,
           currentProductType: product.productType || null,
           warning: "Produto ja tinha categoria.",
@@ -320,9 +332,10 @@ export async function POST(request: NextRequest) {
             id: product.id,
             title: product.title,
             status: "skipped",
-            category: null,
-            currentCategory: product.category?.fullName || product.category?.name || null,
-            currentProductType: product.productType || null,
+          category: null,
+          currentCategoryId: product.category?.id || null,
+          currentCategory: product.category?.fullName || product.category?.name || null,
+          currentProductType: product.productType || null,
             source: taxonomy.source,
             warning: taxonomy.warnings[0] || "Sem categoria ou atributo confiavel.",
           });
@@ -336,6 +349,7 @@ export async function POST(request: NextRequest) {
           status: "preview",
           category: taxonomy.category?.fullName || taxonomy.categorySearch || null,
           categoryId: taxonomy.category?.id || null,
+          currentCategoryId: product.category?.id || null,
           currentCategory: product.category?.fullName || product.category?.name || null,
           productType: taxonomy.productType || product.productType || null,
           currentProductType: product.productType || null,

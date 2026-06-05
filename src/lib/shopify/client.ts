@@ -1388,7 +1388,6 @@ export async function updateProductTaxonomy(
   const payload: Record<string, unknown> = { id: input.productId };
   if (input.categoryId) {
     payload.category = input.categoryId;
-    payload.deleteConflictingConstrainedMetafields = true;
   }
   if (input.productType) {
     payload.productType = input.productType;
@@ -1493,7 +1492,7 @@ export async function updateShopifyProduct(
       seo: input.seo,
       status: nextStatus,
       ...(input.categoryId
-        ? { category: input.categoryId, deleteConflictingConstrainedMetafields: true }
+        ? { category: input.categoryId }
         : {}),
       ...(input.productType ? { productType: input.productType } : {}),
       ...(input.metafields?.length ? { metafields: input.metafields } : {}),
