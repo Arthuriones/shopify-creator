@@ -90,6 +90,8 @@ const CATEGORY_PRODUCT_TYPE_HINTS: { pattern: RegExp; value: string }[] = [
   { pattern: /\bhandbags?\b|\bbags?\b|bolsas?/i, value: "Bolsa" },
 ];
 
+const GOOGLE_SHOPPING_NAMESPACE = "mm-google-shopping";
+
 function normalizeKey(input: string) {
   return input
     .normalize("NFD")
@@ -248,6 +250,12 @@ function inferAudienceAttributes(product: ProductForTaxonomyEnrichment, sourceCa
     attributes.push({ name: "Faixa etaria", key: "age_group", value: "Infantil" });
   } else if (/\b(baby|beb[eê])\b/.test(text)) {
     attributes.push({ name: "Faixa etaria", key: "age_group", value: "Bebe" });
+  } else if (
+    /\b(apparel|accessories|clothing|clothes|shirt|shirts|t-?shirt|pants|trousers|shorts|dress|dresses|coat|coats|jacket|jackets|shoe|shoes|sneaker|sneakers|jewelry|bracelet|necklace|ring|earring|watch|vestuario|vestu[aá]rio|acessorios|acess[oó]rios|roupa|roupas|camisa|camiseta|calca|cal[cç]a|shorts|vestido|casaco|jaqueta|calcado|cal[cç]ado|tenis|t[eê]nis|joia|j[oó]ia|pulseira|colar|anel|brinco|relogio|rel[oó]gio)\b/.test(
+      text
+    )
+  ) {
+    attributes.push({ name: "Faixa etaria", key: "age_group", value: "Adulto" });
   }
 
   return attributes;
@@ -300,6 +308,106 @@ function metafieldValue(value: string | string[]) {
 
 function metafieldType() {
   return "single_line_text_field";
+}
+
+function attributeValueList(attribute: { value: string | string[] }) {
+  return (Array.isArray(attribute.value) ? attribute.value : String(attribute.value).split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function attributeValuesByKey(
+  attributes: { key: string; value: string | string[] }[],
+  key: string
+) {
+  return attributes
+    .filter((attribute) => normalizeKey(attribute.key) === key)
+    .flatMap(attributeValueList);
+}
+
+function firstMatchingGoogleValue(
+  values: string[],
+  matches: { value: string; patterns: RegExp[] }[]
+) {
+  const textValues = values.map((value) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+  );
+
+  for (const match of matches) {
+    if (
+      textValues.some((value) =>
+        match.patterns.some((pattern) => pattern.test(value))
+      )
+    ) {
+      return match.value;
+    }
+  }
+
+  return null;
+}
+
+function googleShoppingGender(attributes: { key: string; value: string | string[] }[]) {
+  return firstMatchingGoogleValue(attributeValuesByKey(attributes, "gender"), [
+    { value: "female", patterns: [/\bfemale\b/, /\bwomen'?s?\b/, /\bfeminino\b/, /\bfeminina\b/, /\bmulher\b/] },
+    { value: "male", patterns: [/\bmale\b/, /\bmen'?s?\b/, /\bmasculino\b/, /\bhomem\b/] },
+    { value: "unisex", patterns: [/\bunisex\b/, /\bunissex\b/] },
+  ]);
+}
+
+function googleShoppingAgeGroup(attributes: { key: string; value: string | string[] }[]) {
+  return firstMatchingGoogleValue(attributeValuesByKey(attributes, "age_group"), [
+    { value: "adult", patterns: [/\badult\b/, /\badults\b/, /\badulto\b/, /\badultos\b/] },
+    { value: "kids", patterns: [/\bkids?\b/, /\bchildren\b/, /\bchild\b/, /\binfantil\b/, /\bcrianca\b/, /\bcriancas\b/] },
+    { value: "infant", patterns: [/\binfant\b/, /\bbaby\b/, /\bbebe\b/] },
+    { value: "toddler", patterns: [/\btoddler\b/] },
+    { value: "newborn", patterns: [/\bnewborn\b/, /\brecem nascido\b/] },
+  ]);
+}
+
+function buildGoogleShoppingMetafields(input: {
+  attributes: { key: string; value: string | string[] }[];
+}) {
+  const fields: ShopifyProductMetafieldInput[] = [];
+  const ageGroup = googleShoppingAgeGroup(input.attributes);
+  const gender = googleShoppingGender(input.attributes);
+
+  if (ageGroup) {
+    fields.push({
+      namespace: GOOGLE_SHOPPING_NAMESPACE,
+      key: "age_group",
+      type: metafieldType(),
+      value: ageGroup,
+      label: "Google Shopping: age_group",
+      displayValue: ageGroup,
+    });
+  }
+
+  if (gender) {
+    fields.push({
+      namespace: GOOGLE_SHOPPING_NAMESPACE,
+      key: "gender",
+      type: metafieldType(),
+      value: gender,
+      label: "Google Shopping: gender",
+      displayValue: gender,
+    });
+  }
+
+  return fields;
+}
+
+function uniqueMetafields(fields: ShopifyProductMetafieldInput[]) {
+  const seen = new Set<string>();
+  return fields.filter((field) => {
+    const key = `${field.namespace}.${field.key}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return field.value.length > 0;
+  });
 }
 
 function normalizedToken(input: string) {
@@ -859,13 +967,7 @@ async function buildStandardCategoryMetafields(input: {
     });
   }
 
-  const seen = new Set<string>();
-  return fields.filter((field) => {
-    const key = `${field.namespace}.${field.key}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return field.value.length > 0;
-  });
+  return uniqueMetafields(fields);
 }
 
 function buildMetafields(input: {
@@ -919,13 +1021,7 @@ function buildMetafields(input: {
     });
   }
 
-  const seen = new Set<string>();
-  return fields.filter((field) => {
-    const key = `${field.namespace}.${field.key}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return field.value.length > 0;
-  });
+  return uniqueMetafields(fields);
 }
 
 export async function buildShopifyTaxonomyEnrichment(input: {
@@ -1060,6 +1156,11 @@ export async function buildShopifyTaxonomyEnrichment(input: {
       attributes,
     });
   }
+
+  metafields = uniqueMetafields([
+    ...metafields,
+    ...buildGoogleShoppingMetafields({ attributes }),
+  ]);
 
   return {
     category,

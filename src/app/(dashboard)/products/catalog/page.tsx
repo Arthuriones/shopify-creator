@@ -1009,9 +1009,6 @@ export default function CatalogPage() {
                 <p className="text-xs text-muted-foreground/80">
                   A prévia abaixo muda conforme o produto escolhido.
                 </p>
-                <p className="text-xs text-muted-foreground/80">
-                  A prévia abaixo muda conforme o produto escolhido.
-                </p>
                 <Select
                   value={taxonomySampleProductId}
                   onValueChange={(value) => {
@@ -1073,6 +1070,9 @@ export default function CatalogPage() {
                   const metafields = item.metafields || [];
                   const standardMetafields = metafields.filter(
                     (field) => field.namespace === "shopify"
+                  );
+                  const googleShoppingMetafields = metafields.filter(
+                    (field) => field.namespace === "mm-google-shopping"
                   );
                   return (
                     <div
@@ -1152,6 +1152,41 @@ export default function CatalogPage() {
                                 <div
                                   key={`${item.id}-${field.namespace}-${field.key}`}
                                   className="rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2"
+                                >
+                                  <p className="text-xs font-semibold text-foreground">
+                                    {readableMetafieldName(field)}
+                                  </p>
+                                  <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                                    {readableMetafieldValue(field)}
+                                  </p>
+                                  <p className="mt-1 break-words text-[10px] text-muted-foreground/70">
+                                    {field.namespace}.{field.key} · {field.type}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[11px] font-medium uppercase text-muted-foreground">
+                              Metacampos Google Shopping
+                            </p>
+                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-500">
+                              {googleShoppingMetafields.length} para aplicar
+                            </span>
+                          </div>
+                          {googleShoppingMetafields.length === 0 ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Nenhum age_group/gender confiável para enviar ao Google.
+                            </p>
+                          ) : (
+                            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                              {googleShoppingMetafields.map((field) => (
+                                <div
+                                  key={`${item.id}-${field.namespace}-${field.key}`}
+                                  className="rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2"
                                 >
                                   <p className="text-xs font-semibold text-foreground">
                                     {readableMetafieldName(field)}
