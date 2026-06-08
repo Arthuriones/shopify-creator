@@ -840,7 +840,7 @@ export default function StoresPage() {
                     <strong className="text-foreground/90">Acesso &rarr; Selecionar escopos</strong>, cole:
                   </p>
                   <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    write_legal_policies,write_online_store_navigation,read_products,write_products,read_publications,write_publications,read_content,write_content,read_themes
+                    write_legal_policies,write_online_store_navigation,read_products,write_products,read_publications,write_publications,read_content,write_content,read_themes,read_metaobjects,write_metaobjects,read_metaobject_definitions,write_metaobject_definitions
                   </p>
                   <p>
                     <strong className="text-foreground/90">3.</strong> Em{" "}

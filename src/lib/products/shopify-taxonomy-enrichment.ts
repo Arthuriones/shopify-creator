@@ -932,7 +932,7 @@ async function buildStandardCategoryMetafields(input: {
     );
     const values = attributeValues(attribute);
 
-    if (template.type.includes("product_taxonomy_value_reference")) {
+    if (template.type.includes("metaobject_reference")) {
       const matchedValues = values
         .map((value) => matchTaxonomyValue(taxonomyAttribute, value))
         .filter(

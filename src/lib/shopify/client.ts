@@ -1329,13 +1329,13 @@ async function ensureStandardProductMetafieldDefinition(
     ? {
         id: field.definitionTemplateId,
         ownerType: "PRODUCT",
-        pin: true,
+        pin: false,
       }
     : {
         namespace: field.namespace,
         key: field.key,
         ownerType: "PRODUCT",
-        pin: true,
+        pin: false,
       };
 
   const enabled = await shopifyGraphQL(creds, mutation, variables);
@@ -1545,26 +1545,39 @@ export async function setProductVariantMetafields(
       }
     }
   `;
-  const result = await shopifyGraphQL(creds, mutation, {
-    metafields: uniqueVariantIds.flatMap((variantId) =>
-      fields.map((field) => ({
-        ownerId: variantId,
-        namespace: field.namespace,
-        key: field.key,
-        type: field.type,
-        value: field.value,
-      }))
-    ),
-  });
-  const userErrors = result?.metafieldsSet?.userErrors as
-    | { field?: string[]; message: string; code?: string }[]
-    | undefined;
+  const batchedInputs = uniqueVariantIds.flatMap((variantId) =>
+    fields.map((field) => ({
+      ownerId: variantId,
+      namespace: field.namespace,
+      key: field.key,
+      type: field.type,
+      value: field.value,
+    }))
+  );
 
-  if (userErrors?.length) {
+  const metafields: unknown[] = [];
+  const allUserErrors: { field?: string[]; message: string; code?: string }[] = [];
+
+  for (let index = 0; index < batchedInputs.length; index += 25) {
+    const result = await shopifyGraphQL(creds, mutation, {
+      metafields: batchedInputs.slice(index, index + 25),
+    });
+    const userErrors = result?.metafieldsSet?.userErrors as
+      | { field?: string[]; message: string; code?: string }[]
+      | undefined;
+    if (userErrors?.length) {
+      allUserErrors.push(...userErrors);
+    }
+    if (Array.isArray(result?.metafieldsSet?.metafields)) {
+      metafields.push(...result.metafieldsSet.metafields);
+    }
+  }
+
+  if (allUserErrors.length) {
     throw new Error(
       [
         ...definitionWarnings,
-        ...userErrors.map((err) =>
+        ...allUserErrors.map((err) =>
           err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
         ),
       ].join(" | ")
@@ -1572,8 +1585,9 @@ export async function setProductVariantMetafields(
   }
 
   return {
-    ...result?.metafieldsSet,
+    metafields,
     definitionWarnings,
+    userErrors: [],
   };
 }
 
@@ -1815,24 +1829,55 @@ export async function updateProductTaxonomy(
 
   let metafieldsResult = null;
   let variantMetafieldsResult = null;
-  let metafieldsWarning: string | null = null;
+  const metafieldsWarnings: string[] = [];
 
   if (input.metafields?.length) {
+    const standardShopifyMetafields = input.metafields.filter(
+      (field) => field.namespace === "shopify"
+    );
+    const otherProductMetafields = input.metafields.filter(
+      (field) => field.namespace !== "shopify"
+    );
+
     try {
-      metafieldsResult = await setProductMetafields(
-        creds,
-        input.productId,
-        input.metafields
-      );
+      if (standardShopifyMetafields.length > 0) {
+        metafieldsResult = await setProductMetafields(
+          creds,
+          input.productId,
+          standardShopifyMetafields
+        );
+      }
     } catch (error) {
-      if (!input.categoryId && !input.productType) {
+      if (!input.categoryId && !input.productType && otherProductMetafields.length === 0) {
         throw error;
       }
 
-      metafieldsWarning =
+      metafieldsWarnings.push(
         error instanceof Error
-          ? `Categoria aplicada, mas metacampos nao foram salvos: ${error.message}`
-          : "Categoria aplicada, mas metacampos nao foram salvos.";
+          ? `Metacampos padrao da Shopify nao foram salvos: ${error.message}`
+          : "Metacampos padrao da Shopify nao foram salvos."
+      );
+    }
+
+    try {
+      if (otherProductMetafields.length > 0) {
+        const extraMetafieldsResult = await setProductMetafields(
+          creds,
+          input.productId,
+          otherProductMetafields
+        );
+        metafieldsResult = metafieldsResult || extraMetafieldsResult;
+      }
+    } catch (error) {
+      if (!input.categoryId && !input.productType && standardShopifyMetafields.length === 0) {
+        throw error;
+      }
+
+      metafieldsWarnings.push(
+        error instanceof Error
+          ? `Metacampos complementares nao foram salvos: ${error.message}`
+          : "Metacampos complementares nao foram salvos."
+      );
     }
 
     const googleShoppingMetafields = input.metafields.filter(
@@ -1846,13 +1891,11 @@ export async function updateProductTaxonomy(
           googleShoppingMetafields
         );
       } catch (error) {
-        const warning =
+        metafieldsWarnings.push(
           error instanceof Error
             ? `Metacampos do produto aplicados, mas metacampos das variantes nao foram salvos: ${error.message}`
-            : "Metacampos do produto aplicados, mas metacampos das variantes nao foram salvos.";
-        metafieldsWarning = metafieldsWarning
-          ? `${metafieldsWarning} ${warning}`
-          : warning;
+            : "Metacampos do produto aplicados, mas metacampos das variantes nao foram salvos."
+        );
       }
     }
   }
@@ -1861,7 +1904,9 @@ export async function updateProductTaxonomy(
     ...(productResult || {}),
     metafieldsResult,
     variantMetafieldsResult,
-    metafieldsWarning,
+    metafieldsWarning: metafieldsWarnings.length
+      ? metafieldsWarnings.join(" ")
+      : null,
   };
 }
 

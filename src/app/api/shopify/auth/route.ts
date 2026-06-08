@@ -13,6 +13,10 @@ const SCOPES = [
   "read_content",
   "write_content",
   "read_themes",
+  "read_metaobjects",
+  "write_metaobjects",
+  "read_metaobject_definitions",
+  "write_metaobject_definitions",
 ].join(",");
 
 function dashboardUrl(request: NextRequest, query?: string): string {
