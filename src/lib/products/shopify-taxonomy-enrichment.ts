@@ -203,9 +203,52 @@ function sourceAttributesFromOptions(product: ProductForTaxonomyEnrichment) {
     .filter((attribute) => attribute.value);
 }
 
+function titleCategoryHint(product: ProductForTaxonomyEnrichment) {
+  const text = `${product.title || ""} ${product.productType || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const women = /\b(women|women's|womens|female|feminino|feminina|mulher)\b/.test(text);
+  const men = /\b(men|men's|mens|male|masculino|homem)\b/.test(text);
+
+  if (/\b(snow pants|ski pants|snowboard pants|calca de neve|calca snow|snow pant)\b/.test(text)) {
+    if (women) return "Women's Snow Pants";
+    if (men) return "Men's Snow Pants";
+    return "Snow Pants";
+  }
+
+  if (/\b(snow jacket|ski jacket|snowboard jacket|jaqueta de neve|casaco de neve)\b/.test(text)) {
+    if (women) return "Women's Snow Jackets";
+    if (men) return "Men's Snow Jackets";
+    return "Snow Jackets";
+  }
+
+  if (/\b(coat|coats|casaco|casacos)\b/.test(text)) {
+    if (women) return "Women's Coats";
+    if (men) return "Men's Coats";
+    return "Coats";
+  }
+
+  if (/\b(jacket|jackets|jaqueta|jaquetas)\b/.test(text)) {
+    if (women) return "Women's Jackets";
+    if (men) return "Men's Jackets";
+    return "Jackets";
+  }
+
+  if (/\b(pants|trousers|calca|calcas)\b/.test(text)) {
+    if (women) return "Women's Pants";
+    if (men) return "Men's Pants";
+    return "Pants";
+  }
+
+  return "";
+}
+
 function sourceCategorySearch(product: ProductForTaxonomyEnrichment) {
   return (
     product.sourceCategory ||
+    titleCategoryHint(product) ||
     product.productType ||
     product.tags?.find((tag) => /casaco|jaqueta|camisa|shirt|coat|jacket|dress|vestido/i.test(tag)) ||
     ""
