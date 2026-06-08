@@ -38,10 +38,14 @@ interface CatalogProductForTaxonomy {
   tags?: string[];
   productType?: string | null;
   category?: { id?: string; name?: string; fullName?: string } | null;
+  metafields?: {
+    nodes?: { namespace: string; key: string; type: string; value: string }[];
+  };
   images?: { nodes?: { url?: string | null; altText?: string | null }[] };
   options?: { name: string; values: string[] }[];
   variants?: {
     nodes?: {
+      id?: string;
       title?: string;
       selectedOptions?: { name: string; value: string }[];
     }[];
@@ -65,6 +69,7 @@ interface TaxonomyProposalInput {
     displayValue?: string;
     definitionTemplateId?: string;
   }[];
+  variantIds?: string[];
 }
 
 async function getAuthenticated() {
@@ -106,6 +111,15 @@ function variantOptionAttributes(product: CatalogProductForTaxonomy) {
     name,
     value: Array.from(values).join(", "),
   }));
+}
+
+function customMetafieldAttributes(product: CatalogProductForTaxonomy) {
+  return (product.metafields?.nodes || [])
+    .filter((field) => field.namespace === "custom" && field.key && field.value)
+    .map((field) => ({
+      name: field.key,
+      value: field.value,
+    }));
 }
 
 async function runWithConcurrency<T, R>(
@@ -254,6 +268,7 @@ export async function POST(request: NextRequest) {
             categoryId,
             productType,
             metafields,
+            variantIds: proposal.variantIds || [],
           }) as { metafieldsWarning?: string | null };
 
           if (result.metafieldsWarning) {
@@ -350,6 +365,7 @@ export async function POST(request: NextRequest) {
           displayValue?: string;
           definitionTemplateId?: string;
         }[];
+        variantIds?: string[];
         source?: string;
         warning?: string;
       }[],
@@ -386,7 +402,10 @@ export async function POST(request: NextRequest) {
             tags: product.tags || [],
             productType: product.productType,
             sourceCategory: product.category?.fullName || product.productType || null,
-            sourceAttributes: variantOptionAttributes(product),
+            sourceAttributes: [
+              ...variantOptionAttributes(product),
+              ...customMetafieldAttributes(product),
+            ],
             images: product.images?.nodes || [],
             options: product.options || [],
             variants: product.variants?.nodes?.map((variant) => ({
@@ -437,6 +456,9 @@ export async function POST(request: NextRequest) {
             currentProductType: product.productType || null,
             attributes: taxonomy.attributes,
             metafields: taxonomy.metafields,
+            variantIds: (product.variants?.nodes || [])
+              .map((variant) => variant.id)
+              .filter((id): id is string => Boolean(id)),
             source: taxonomy.source,
             warning: taxonomy.warnings[0],
           },

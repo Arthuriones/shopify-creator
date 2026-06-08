@@ -1281,6 +1281,8 @@ const categoryMetafieldDataCache = new Map<
   }
 >();
 
+type ShopifyMetafieldDefinitionOwnerType = "PRODUCT" | "PRODUCTVARIANT";
+
 function cachedShopKey(creds: ShopifyCredentials) {
   return normalizeShopDomain(creds.shopDomain) || creds.shopDomain;
 }
@@ -1356,9 +1358,10 @@ async function ensureStandardProductMetafieldDefinition(
   return null;
 }
 
-export async function ensureProductMetafieldDefinitions(
+async function ensureMetafieldDefinitions(
   creds: ShopifyCredentials,
-  fields: ShopifyProductMetafieldInput[]
+  fields: ShopifyProductMetafieldInput[],
+  ownerType: ShopifyMetafieldDefinitionOwnerType
 ) {
   const uniqueFields = Array.from(
     new Map(fields.map((field) => [`${field.namespace}.${field.key}`, field])).values()
@@ -1366,7 +1369,7 @@ export async function ensureProductMetafieldDefinitions(
   const warnings: string[] = [];
 
   for (const field of uniqueFields) {
-    if (field.namespace === "shopify") {
+    if (ownerType === "PRODUCT" && field.namespace === "shopify") {
       try {
         const warning = await ensureStandardProductMetafieldDefinition(creds, field);
         if (warning) warnings.push(warning);
@@ -1380,7 +1383,7 @@ export async function ensureProductMetafieldDefinitions(
       continue;
     }
 
-    const cacheKey = `${cachedShopKey(creds)}:product:${field.namespace}.${field.key}:${field.type}`;
+    const cacheKey = `${cachedShopKey(creds)}:${ownerType.toLowerCase()}:${field.namespace}.${field.key}:${field.type}`;
     if (isCacheFresh(metafieldDefinitionCache.get(cacheKey))) continue;
 
     const existingQuery = `
@@ -1393,7 +1396,7 @@ export async function ensureProductMetafieldDefinitions(
 
     try {
       const existing = await shopifyGraphQL(creds, existingQuery, {
-        ownerType: "PRODUCT",
+        ownerType,
         namespace: field.namespace,
         key: field.key,
       });
@@ -1415,7 +1418,7 @@ export async function ensureProductMetafieldDefinitions(
       `;
       const created = await shopifyGraphQL(creds, createMutation, {
         definition: {
-          ownerType: "PRODUCT",
+          ownerType,
           namespace: field.namespace,
           key: field.key,
           name: metafieldDefinitionName(field),
@@ -1460,6 +1463,20 @@ export async function ensureProductMetafieldDefinitions(
   return warnings;
 }
 
+export async function ensureProductMetafieldDefinitions(
+  creds: ShopifyCredentials,
+  fields: ShopifyProductMetafieldInput[]
+) {
+  return ensureMetafieldDefinitions(creds, fields, "PRODUCT");
+}
+
+export async function ensureProductVariantMetafieldDefinitions(
+  creds: ShopifyCredentials,
+  fields: ShopifyProductMetafieldInput[]
+) {
+  return ensureMetafieldDefinitions(creds, fields, "PRODUCTVARIANT");
+}
+
 export async function setProductMetafields(
   creds: ShopifyCredentials,
   productId: string,
@@ -1484,6 +1501,60 @@ export async function setProductMetafields(
       type: field.type,
       value: field.value,
     })),
+  });
+  const userErrors = result?.metafieldsSet?.userErrors as
+    | { field?: string[]; message: string; code?: string }[]
+    | undefined;
+
+  if (userErrors?.length) {
+    throw new Error(
+      [
+        ...definitionWarnings,
+        ...userErrors.map((err) =>
+          err.field?.length ? `${err.field.join(".")}: ${err.message}` : err.message
+        ),
+      ].join(" | ")
+    );
+  }
+
+  return {
+    ...result?.metafieldsSet,
+    definitionWarnings,
+  };
+}
+
+export async function setProductVariantMetafields(
+  creds: ShopifyCredentials,
+  variantIds: string[],
+  fields: ShopifyProductMetafieldInput[]
+) {
+  const uniqueVariantIds = [...new Set(variantIds)].filter(Boolean);
+  if (uniqueVariantIds.length === 0 || fields.length === 0) {
+    return { metafields: [], userErrors: [] };
+  }
+
+  const definitionWarnings = await ensureProductVariantMetafieldDefinitions(
+    creds,
+    fields
+  );
+  const mutation = `
+    mutation setProductVariantMetafields($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields { id namespace key type value ownerType }
+        userErrors { field message code }
+      }
+    }
+  `;
+  const result = await shopifyGraphQL(creds, mutation, {
+    metafields: uniqueVariantIds.flatMap((variantId) =>
+      fields.map((field) => ({
+        ownerId: variantId,
+        namespace: field.namespace,
+        key: field.key,
+        type: field.type,
+        value: field.value,
+      }))
+    ),
   });
   const userErrors = result?.metafieldsSet?.userErrors as
     | { field?: string[]; message: string; code?: string }[]
@@ -1692,6 +1763,7 @@ export async function updateProductTaxonomy(
     categoryId?: string | null;
     productType?: string | null;
     metafields?: ShopifyProductMetafieldInput[];
+    variantIds?: string[];
   }
 ) {
   if (!input.categoryId && !input.productType && !input.metafields?.length) {
@@ -1742,6 +1814,7 @@ export async function updateProductTaxonomy(
   }
 
   let metafieldsResult = null;
+  let variantMetafieldsResult = null;
   let metafieldsWarning: string | null = null;
 
   if (input.metafields?.length) {
@@ -1761,11 +1834,33 @@ export async function updateProductTaxonomy(
           ? `Categoria aplicada, mas metacampos nao foram salvos: ${error.message}`
           : "Categoria aplicada, mas metacampos nao foram salvos.";
     }
+
+    const googleShoppingMetafields = input.metafields.filter(
+      (field) => field.namespace === "mm-google-shopping"
+    );
+    if (input.variantIds?.length && googleShoppingMetafields.length) {
+      try {
+        variantMetafieldsResult = await setProductVariantMetafields(
+          creds,
+          input.variantIds,
+          googleShoppingMetafields
+        );
+      } catch (error) {
+        const warning =
+          error instanceof Error
+            ? `Metacampos do produto aplicados, mas metacampos das variantes nao foram salvos: ${error.message}`
+            : "Metacampos do produto aplicados, mas metacampos das variantes nao foram salvos.";
+        metafieldsWarning = metafieldsWarning
+          ? `${metafieldsWarning} ${warning}`
+          : warning;
+      }
+    }
   }
 
   return {
     ...(productResult || {}),
     metafieldsResult,
+    variantMetafieldsResult,
     metafieldsWarning,
   };
 }

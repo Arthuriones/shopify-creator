@@ -232,7 +232,7 @@ function inferProductType(product: ProductForTaxonomyEnrichment, sourceCategory:
 }
 
 function inferAudienceAttributes(product: ProductForTaxonomyEnrichment, sourceCategory: string) {
-  const text = `${product.title || ""} ${sourceCategory || ""} ${(product.tags || []).join(" ")}`
+  const text = `${product.title || ""} ${product.productType || ""} ${sourceCategory || ""} ${(product.tags || []).join(" ")}`
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();

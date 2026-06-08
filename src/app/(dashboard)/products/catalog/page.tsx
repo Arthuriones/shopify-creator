@@ -93,6 +93,7 @@ interface TaxonomyPreviewItem {
     displayValue?: string;
     definitionTemplateId?: string;
   }[];
+  variantIds?: string[];
   source?: string;
   warning?: string;
 }
@@ -152,7 +153,7 @@ export default function CatalogPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [taxonomyEnriching, setTaxonomyEnriching] = useState(false);
   const [taxonomyUseAi, setTaxonomyUseAi] = useState(true);
-  const [taxonomyIncludeExisting, setTaxonomyIncludeExisting] = useState(false);
+  const [taxonomyIncludeExisting, setTaxonomyIncludeExisting] = useState(true);
   const [taxonomyPreviewOpen, setTaxonomyPreviewOpen] = useState(false);
   const [taxonomyPreview, setTaxonomyPreview] = useState<TaxonomyPreviewItem[]>([]);
   const [taxonomyApplying, setTaxonomyApplying] = useState(false);
@@ -391,6 +392,7 @@ export default function CatalogPage() {
             productType: item.productType || null,
             currentProductType: item.currentProductType || null,
             metafields: item.metafields || [],
+            variantIds: item.variantIds || [],
           })),
           limit: proposals.length,
         }),
@@ -508,6 +510,7 @@ export default function CatalogPage() {
               productType: proposal.productType || null,
               currentProductType: proposal.currentProductType || null,
               metafields: proposal.metafields || [],
+              variantIds: proposal.variantIds || [],
             })),
             limit: proposals.length,
           }),
@@ -738,7 +741,7 @@ export default function CatalogPage() {
                 onChange={(event) => setTaxonomyIncludeExisting(event.target.checked)}
                 className="h-4 w-4 accent-primary"
               />
-              Sobrescrever categorizados
+              Incluir categorizados
             </label>
             <Button
               type="button"
@@ -1182,24 +1185,33 @@ export default function CatalogPage() {
                               Nenhum age_group/gender confiável para enviar ao Google.
                             </p>
                           ) : (
-                            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-                              {googleShoppingMetafields.map((field) => (
-                                <div
-                                  key={`${item.id}-${field.namespace}-${field.key}`}
-                                  className="rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2"
-                                >
-                                  <p className="text-xs font-semibold text-foreground">
-                                    {readableMetafieldName(field)}
-                                  </p>
-                                  <p className="mt-0.5 break-words text-xs text-muted-foreground">
-                                    {readableMetafieldValue(field)}
-                                  </p>
-                                  <p className="mt-1 break-words text-[10px] text-muted-foreground/70">
-                                    {field.namespace}.{field.key} · {field.type}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
+                            <>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Aplicar no produto
+                                {item.variantIds?.length
+                                  ? ` e em ${item.variantIds.length} variante(s)`
+                                  : ""}
+                                .
+                              </p>
+                              <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                                {googleShoppingMetafields.map((field) => (
+                                  <div
+                                    key={`${item.id}-${field.namespace}-${field.key}`}
+                                    className="rounded-md border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2"
+                                  >
+                                    <p className="text-xs font-semibold text-foreground">
+                                      {readableMetafieldName(field)}
+                                    </p>
+                                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                                      {readableMetafieldValue(field)}
+                                    </p>
+                                    <p className="mt-1 break-words text-[10px] text-muted-foreground/70">
+                                      {field.namespace}.{field.key} · {field.type}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
                           )}
                         </div>
 
