@@ -47,5 +47,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (user) {
+    const hasPassword = user.user_metadata?.has_password === true;
+    if (
+      !hasPassword &&
+      !pathname.startsWith("/set-password") &&
+      !pathname.startsWith("/api/") &&
+      !pathname.startsWith("/callback") &&
+      !pathname.startsWith("/login")
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/set-password";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }

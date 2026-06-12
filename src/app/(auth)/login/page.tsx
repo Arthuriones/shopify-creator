@@ -6,14 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Package, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+type Mode = "login" | "signup" | "recovery";
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [secondsRemaining, setSecondsRemaining] = useState(0);
+  const router = useRouter();
 
   useEffect(() => {
     if (!cooldownUntil) return;
@@ -28,7 +34,7 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [cooldownUntil]);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading || secondsRemaining > 0) return;
 
@@ -36,32 +42,55 @@ export default function LoginPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/callback` },
-    });
 
-    setLoading(false);
-    if (!error) {
-      setSent(true);
-      return;
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              has_password: true
+            }
+          }
+        });
+        if (error) throw error;
+        // Assume login is successful immediately if no email confirmation required
+        router.push("/stores");
+      } else if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        router.push("/stores");
+      } else if (mode === "recovery") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/callback?type=recovery`,
+        });
+        if (error) throw error;
+        setSent(true);
+      }
+    } catch (error: any) {
+      const normalizedMessage = error.message.toLowerCase();
+      if (
+        normalizedMessage.includes("429") ||
+        normalizedMessage.includes("too many") ||
+        normalizedMessage.includes("security purposes") ||
+        normalizedMessage.includes("rate limit")
+      ) {
+        const secondsMatch = error.message.match(/(\d+)\s*seconds?/i);
+        const waitSeconds = secondsMatch ? Number(secondsMatch[1]) : 60;
+        setCooldownUntil(Date.now() + waitSeconds * 1000);
+        setErrorMessage(`Muitas tentativas. Aguarde ${waitSeconds}s e tente novamente.`);
+      } else if (normalizedMessage.includes("invalid login credentials")) {
+        setErrorMessage("Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'.");
+      } else {
+        setErrorMessage(error.message || "Ocorreu um erro. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
     }
-
-    const normalizedMessage = error.message.toLowerCase();
-    if (
-      normalizedMessage.includes("429") ||
-      normalizedMessage.includes("too many") ||
-      normalizedMessage.includes("security purposes") ||
-      normalizedMessage.includes("rate limit")
-    ) {
-      const secondsMatch = error.message.match(/(\d+)\s*seconds?/i);
-      const waitSeconds = secondsMatch ? Number(secondsMatch[1]) : 60;
-      setCooldownUntil(Date.now() + waitSeconds * 1000);
-      setErrorMessage(`Muitas tentativas. Aguarde ${waitSeconds}s e tente novamente.`);
-      return;
-    }
-
-    setErrorMessage(error.message || "Não foi possível enviar o link. Tente novamente.");
   }
 
   return (
@@ -104,7 +133,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form / Success */}
-        {sent ? (
+        {sent && mode === "recovery" ? (
           <div className="animate-fade-in text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full animate-scale-in"
               style={{ background: "oklch(0.72 0.19 155 / 12%)" }}
@@ -114,57 +143,121 @@ export default function LoginPage() {
                 style={{ color: "oklch(0.72 0.19 155)" }}
               />
             </div>
-            <p className="text-sm text-foreground font-medium">Link enviado</p>
-            <p className="mt-1.5 text-[13px] text-muted-foreground">
+            <p className="text-sm text-foreground font-medium">Link de recuperação enviado</p>
+            <p className="mt-1.5 text-[13px] text-muted-foreground mb-4">
               Verifique <strong className="text-foreground font-medium">{email}</strong>
             </p>
+            <Button variant="outline" className="w-full h-11" onClick={() => { setSent(false); setMode("login"); }}>
+              Voltar ao Login
+            </Button>
           </div>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-2">
-              <Label
-                htmlFor="email"
-                className="text-[13px] font-medium text-muted-foreground"
+          <div className="space-y-6">
+            <div className="flex bg-card p-1 rounded-lg border border-border/50">
+              <button
+                className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "login" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => setMode("login")}
               >
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
-              />
+                Entrar
+              </button>
+              <button
+                className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "signup" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => setMode("signup")}
+              >
+                Criar Conta
+              </button>
             </div>
-            <Button
-              type="submit"
-              className="w-full h-11 text-sm font-medium transition-all duration-200"
-              style={{
-                background: loading ? "oklch(0.72 0.19 155 / 70%)" : "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
-              }}
-              disabled={loading || secondsRemaining > 0}
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-flex gap-0.5">
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="email"
+                    className="text-[13px] font-medium text-muted-foreground"
+                  >
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
+                  />
+                </div>
+                
+                {mode !== "recovery" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="password"
+                        className="text-[13px] font-medium text-muted-foreground"
+                      >
+                        Senha
+                      </Label>
+                      {mode === "login" && (
+                        <button 
+                          type="button" 
+                          onClick={() => setMode("recovery")}
+                          className="text-xs text-primary/80 hover:text-primary transition-colors"
+                        >
+                          Esqueci a senha
+                        </button>
+                      )}
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required={mode !== "recovery"}
+                      className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-11 text-sm font-medium transition-all duration-200"
+                style={{
+                  background: loading ? "oklch(0.72 0.19 155 / 70%)" : "oklch(0.72 0.19 155)",
+                  color: "oklch(0.13 0.02 155)",
+                }}
+                disabled={loading || secondsRemaining > 0}
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="inline-flex gap-0.5">
+                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </span>
                   </span>
-                </span>
-              ) : secondsRemaining > 0 ? (
-                `Aguarde ${secondsRemaining}s`
-              ) : (
-                "Entrar com Magic Link"
+                ) : secondsRemaining > 0 ? (
+                  `Aguarde ${secondsRemaining}s`
+                ) : mode === "login" ? (
+                  "Entrar"
+                ) : mode === "signup" ? (
+                  "Criar Conta"
+                ) : (
+                  "Enviar link de acesso"
+                )}
+              </Button>
+              {errorMessage ? (
+                <p className="text-xs text-red-400">{errorMessage}</p>
+              ) : null}
+
+              {mode === "recovery" && (
+                 <Button type="button" variant="ghost" className="w-full h-11 text-xs text-muted-foreground" onClick={() => setMode("login")}>
+                   Voltar ao Login
+                 </Button>
               )}
-            </Button>
-            {errorMessage ? (
-              <p className="text-xs text-red-400">{errorMessage}</p>
-            ) : null}
-          </form>
+            </form>
+          </div>
         )}
       </div>
     </div>
