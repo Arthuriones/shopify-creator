@@ -33,6 +33,41 @@ import {
   Trash2,
   Pencil,
   Upload,
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  ExternalLink,
+  Store,
+  Trash2,
+  Pencil,
+  Upload,
   ImageIcon,
   Loader2,
   AlertCircle,
@@ -46,6 +81,7 @@ import { getPublicAppUrl } from "@/lib/public-url";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface ConnectedStore {
   id: string;
@@ -769,26 +805,16 @@ export default function StoresPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <header className="flex items-center justify-between border-b border-border/60 pb-5">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Lojas
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Conecte e configure suas lojas Shopify
-          </p>
-        </div>
-
+      <PageHeader
+        title="Lojas"
+        description="Conecte e configure suas lojas Shopify"
+      >
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
             className={cn(
               buttonVariants({ size: "lg" }),
-              "text-[13px] font-medium transition-all duration-200"
+              "text-[13px] font-medium transition-all duration-200 bg-brand-gradient"
             )}
-            style={{
-              background: "oklch(0.72 0.19 155)",
-              color: "oklch(0.13 0.02 155)",
-            }}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
             Conectar Loja

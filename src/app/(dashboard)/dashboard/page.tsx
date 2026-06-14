@@ -41,18 +41,15 @@ const secondaryActions = [
   { href: "/reviews", label: "Gerar reviews", icon: MessageSquareText },
 ];
 
+import { PageHeader } from "@/components/layout/page-header";
+
 export default function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
-      <header className="border-b border-border/60 pb-5">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Painel de trabalho
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Acesse direto as operações principais. Sem métricas decorativas: cada
-          bloco abaixo leva a uma ação real do projeto.
-        </p>
-      </header>
+      <PageHeader
+        title="Painel de trabalho"
+        description="Acesse direto as operações principais. Sem métricas decorativas: cada bloco abaixo leva a uma ação real do projeto."
+      />
 
       <section className="grid gap-4 lg:grid-cols-3">
         {primaryActions.map((action) => (

@@ -10,7 +10,6 @@ import {
   Download,
   Globe2,
   LayoutDashboard,
-  LogOut,
   Package,
   PackageCheck,
   Settings2,
@@ -19,8 +18,6 @@ import {
   MessageSquareText,
   Workflow,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 interface NavItem {
   href: string;
@@ -159,7 +156,6 @@ function splitHref(href: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
 
   function isHrefActive(href: string, exact = false) {
     const target = splitHref(href);
@@ -177,37 +173,14 @@ export function Sidebar() {
     return pathname === target.path || pathname.startsWith(`${target.path}/`);
   }
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
-
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[244px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="border-b border-sidebar-border px-3 py-3">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md shadow-sm shadow-primary/20"
-              style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
-            >
-              <Package className="h-4 w-4" style={{ color: "oklch(0.13 0.02 155)" }} />
-            </div>
-            <span
-              className="truncate font-heading text-[16px] font-bold text-sidebar-foreground"
-              style={{ letterSpacing: "-0.01em" }}
-            >
-              Shopify Creator
-            </span>
-          </Link>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-          <div className="space-y-4">
+      <aside className="fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] w-64 flex-col border-r border-border bg-sidebar md:flex">
+        <nav className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="space-y-6">
             {navSections.map((section) => (
-              <div key={section.label} className="space-y-1">
-                <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-sidebar-foreground/42">
+              <div key={section.label} className="space-y-1.5">
+                <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   {section.label}
                 </div>
                 {section.items.map((item) => {
@@ -221,32 +194,27 @@ export function Sidebar() {
                       <Link
                         href={item.href}
                         className={cn(
-                          "group relative flex h-9 items-center gap-2.5 rounded-md px-3 text-[13px] font-semibold transition-colors",
+                          "group relative flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-semibold transition-colors",
                           isActive
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            ? "bg-blue-50/60 text-primary"
                             : hasActiveChild || isExpanded
-                              ? "bg-sidebar-accent/35 text-sidebar-foreground"
-                              : "text-sidebar-foreground/68 hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
+                              ? "bg-slate-50 text-foreground"
+                              : "text-foreground/70 hover:bg-slate-50 hover:text-foreground"
                         )}
                       >
                         {(isActive || hasActiveChild) && (
-                          <span
-                            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
-                            style={{ background: "oklch(0.79 0.184 154)" }}
-                          />
+                          <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-md bg-primary" />
                         )}
                         <item.icon
-                          className="h-4 w-4 shrink-0"
-                          style={
-                            isActive || hasActiveChild
-                              ? { color: "oklch(0.79 0.184 154)" }
-                              : undefined
-                          }
+                          className={cn(
+                            "h-4 w-4 shrink-0 transition-colors",
+                            isActive || hasActiveChild ? "text-primary" : "text-muted-foreground group-hover:text-foreground/70"
+                          )}
                         />
                         <span className="min-w-0 truncate">{item.label}</span>
                       </Link>
                       {item.children && (isExpanded || hasActiveChild) && (
-                        <div className="ml-5 space-y-1 border-l border-sidebar-border/80 pb-1 pl-3 pt-1">
+                        <div className="ml-[1.35rem] space-y-1 border-l border-border/80 pb-1 pl-4 pt-1">
                           {item.children.map((child, index) => {
                             const childActive = isHrefActive(child.href, true);
                             return (
@@ -254,10 +222,10 @@ export function Sidebar() {
                                 key={`${child.label}-${index}`}
                                 href={child.href}
                                 className={cn(
-                                  "block rounded-md px-3 py-2 text-[13px] font-semibold transition-colors",
+                                  "block rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                                   childActive
-                                    ? "bg-sidebar-accent/70 text-sidebar-foreground"
-                                    : "text-sidebar-foreground/58 hover:bg-sidebar-accent/45 hover:text-sidebar-foreground"
+                                    ? "bg-blue-50/50 text-primary font-semibold"
+                                    : "text-muted-foreground hover:bg-slate-50 hover:text-foreground"
                                 )}
                               >
                                 {child.label}
@@ -273,39 +241,10 @@ export function Sidebar() {
             ))}
           </div>
         </nav>
-
-        <div className="border-t border-sidebar-border p-3">
-          <button
-            onClick={handleLogout}
-            className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-[14px] font-semibold text-sidebar-foreground/68 transition-colors hover:bg-sidebar-accent/55 hover:text-sidebar-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </button>
-        </div>
       </aside>
 
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-sidebar-border/70 bg-sidebar/95 px-4 backdrop-blur-md md:hidden">
-        <Link href="/products" className="flex items-center gap-2.5">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: "linear-gradient(160deg, oklch(0.82 0.2 153), oklch(0.74 0.17 160))" }}
-          >
-            <Package className="h-4 w-4" style={{ color: "oklch(0.13 0.02 155)" }} />
-          </div>
-          <span className="font-heading text-base font-semibold text-sidebar-foreground">
-            Shopify Creator
-          </span>
-        </Link>
-        <button
-          onClick={handleLogout}
-          className="rounded-lg border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium text-muted-foreground"
-        >
-          Sair
-        </button>
-      </header>
-
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-sidebar-border/70 bg-sidebar/95 px-1 py-1 backdrop-blur-md md:hidden">
+      {/* Mobile nav bar at bottom */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-16 items-center justify-around border-t border-border bg-white px-2 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] md:hidden">
         {mobileNavItems.map((item) => {
           const isActive = item.children
             ? isItemExpanded(item)
@@ -315,14 +254,14 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex min-w-[76px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
+                "flex flex-col items-center justify-center gap-1 min-w-[64px] h-full transition-colors",
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-foreground"
-                  : "text-muted-foreground"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon className="h-4 w-4" />
-              <span className="truncate">{item.label}</span>
+              <item.icon className="h-5 w-5" />
+              <span className="text-[10px] font-semibold">{item.label}</span>
             </Link>
           );
         })}
