@@ -1,38 +1,4 @@
-"use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import {
-  Plus,
-  ExternalLink,
-  Store,
-  Trash2,
-  Pencil,
-  Upload,
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -981,7 +947,7 @@ export default function StoresPage() {
             </form>
           </DialogContent>
         </Dialog>
-      </header>
+      </PageHeader>
 
       {!loadingStores && stores.length > 0 && (
         <Card className="border-border/50">
