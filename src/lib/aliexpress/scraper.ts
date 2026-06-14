@@ -6,6 +6,7 @@ import type {
 } from "@/types";
 import { scrapeProductWithBrowser } from "./browser-scraper";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { applyProxyTemplate } from "@/lib/import/proxy-fetch";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -244,7 +245,7 @@ async function fetchBestAliExpressHtml(url: string): Promise<string> {
 
   if (attempts.some((attempt) => attempt.blocked)) {
     throw new Error(
-      "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Configure ALIEXPRESS_FETCH_PROXY_URL, BRIGHTDATA_API_KEY/BRIGHTDATA_ZONE ou BRIGHTDATA_PROXY_* no deploy."
+      "AliExpress bloqueou a requisicao no servidor (captcha/anti-bot). Configure IMPORT_FETCH_PROXY_URL, GLOBAL_FETCH_PROXY_URL, ALIEXPRESS_FETCH_PROXY_URL, BRIGHTDATA_API_KEY/BRIGHTDATA_ZONE ou BRIGHTDATA_PROXY_* no deploy."
     );
   }
 
@@ -282,23 +283,15 @@ function buildDirectCandidateUrls(inputUrl: string): string[] {
 }
 
 function buildCandidateUrls(directUrls: string[]): string[] {
-  const proxyTemplate = process.env.ALIEXPRESS_FETCH_PROXY_URL?.trim();
+  const proxyTemplate =
+    process.env.IMPORT_FETCH_PROXY_URL?.trim() ||
+    process.env.GLOBAL_FETCH_PROXY_URL?.trim() ||
+    process.env.ALIEXPRESS_FETCH_PROXY_URL?.trim();
   if (!proxyTemplate) return directUrls;
 
   const urls = new Set<string>(directUrls);
   for (const directUrl of directUrls) urls.add(applyProxyTemplate(proxyTemplate, directUrl));
   return [...urls];
-}
-
-function applyProxyTemplate(template: string, url: string): string {
-  if (template.includes("{{url}}")) {
-    return template.replaceAll("{{url}}", encodeURIComponent(url));
-  }
-  if (template.includes("{url}")) {
-    return template.replaceAll("{url}", encodeURIComponent(url));
-  }
-  const separator = template.includes("?") ? "&" : "?";
-  return `${template}${separator}url=${encodeURIComponent(url)}`;
 }
 
 function buildAliHeaders(refererUrl: string): Record<string, string> {

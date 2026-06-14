@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
+import { fetchWithImportProxy } from "@/lib/import/proxy-fetch";
 import type { UnifiedImportProduct } from "@/lib/import/source-adapters";
 
 type JsonRecord = Record<string, unknown>;
@@ -631,7 +632,7 @@ function collectProductLinks(sourceUrl: string, html: string, limit: number) {
 }
 
 async function fetchHtml(source: string) {
-  const res = await fetch(source, {
+  const res = await fetchWithImportProxy(source, {
     headers: GENERIC_HEADERS,
     redirect: "follow",
     cache: "no-store",

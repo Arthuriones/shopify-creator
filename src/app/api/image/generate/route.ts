@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       referenceImages = await loadStoreReferenceImages(supabase, storeId);
     }
 
-    // Baixar imagem original do AliExpress
+    // Baixar imagem original da origem importada
     const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) });
     if (!imgRes.ok) {
       return NextResponse.json({ error: "Erro ao baixar imagem original" }, { status: 400 });

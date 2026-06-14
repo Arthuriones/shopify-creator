@@ -29,6 +29,11 @@ function clampAiMediaLimit(value: unknown, fallback = 1) {
 export function toAliExpressLikeProduct(
   product: UnifiedImportProduct
 ): AliExpressProduct {
+  const rawAliExpressProduct =
+    product.sourceType === "aliexpress" && product.raw && typeof product.raw === "object"
+      ? (product.raw as Partial<AliExpressProduct>)
+      : null;
+
   return {
     title: product.title,
     original_url: product.sourceUrl,
@@ -36,9 +41,14 @@ export function toAliExpressLikeProduct(
     price: Number(product.price || 0),
     originalPrice: Number(product.compareAtPrice || product.price || 0),
     images: product.images.map((image) => image.src),
-    specs: {},
-    rating: 0,
-    orders: 0,
+    specs: Object.fromEntries(
+      (product.sourceAttributes || []).map((attribute) => [
+        attribute.name,
+        attribute.value,
+      ])
+    ),
+    rating: Number(rawAliExpressProduct?.rating || 0),
+    orders: Number(rawAliExpressProduct?.orders || 0),
     variantOptions: product.options.map((optionName) => ({
       name: optionName,
       values: [

@@ -51,7 +51,7 @@ Idioma final obrigatório: ${resolvedStore?.target_language || "pt-BR"}.
 
     const prompt = `
 Você é um copywriter especialista em e-commerce focado em alta conversão e branding premium.
-Sua tarefa é escrever uma descrição de produto otimizada baseada no título e nas informações brutas do fornecedor (AliExpress).
+Sua tarefa é escrever uma descrição de produto otimizada baseada no título e nas informações brutas da origem externa.
 ${storeContext}
 
 Título do Produto: ${title}

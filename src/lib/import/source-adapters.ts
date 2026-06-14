@@ -45,7 +45,19 @@ function stripHtml(html: string) {
 export function detectImportSource(input: string): ImportSourceType {
   const lower = input.toLowerCase();
   if (lower.includes("aliexpress.")) return "aliexpress";
-  return "shopify_public";
+
+  try {
+    const url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`);
+    const path = url.pathname.toLowerCase();
+
+    if (url.hostname.includes("myshopify.com")) return "shopify_public";
+    if (/^\/(products|collections)\//i.test(path)) return "shopify_public";
+    if (path === "/" || path === "") return "shopify_public";
+
+    return "generic_site";
+  } catch {
+    return "shopify_public";
+  }
 }
 
 export function normalizeAliExpressProduct(

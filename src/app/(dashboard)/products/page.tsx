@@ -1283,7 +1283,7 @@ function ProductsPageContent() {
     setSelectedMainImage(0);
 
     try {
-      const res = await fetch("/api/aliexpress", {
+      const res = await fetch("/api/import/product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
@@ -1305,7 +1305,7 @@ function ProductsPageContent() {
       };
 
       if (looksInvalidImportedProduct(normalizedProduct.title)) {
-        toast.error("O AliExpress retornou uma pagina invalida (404). Use outro link do mesmo produto.");
+        toast.error("A origem retornou uma pagina invalida (404/bloqueio). Use outro link do mesmo produto.");
         return;
       }
 
@@ -1323,7 +1323,7 @@ function ProductsPageContent() {
       }
 
       if (normalizedProduct.images.length === 0) {
-        toast.error("Nao foi possivel importar imagens validas deste anuncio.");
+        toast.error("Nao foi possivel importar imagens validas deste produto.");
         return;
       }
 
@@ -1730,7 +1730,7 @@ function ProductsPageContent() {
             className="mt-1 text-base text-muted-foreground"
             style={{ letterSpacing: "-0.01em" }}
           >
-            Importe do AliExpress, otimize com IA e publique na Shopify
+            Importe produtos de qualquer site, otimize com IA e publique na Shopify
           </p>
         </div>
         <Link
@@ -2915,7 +2915,7 @@ function ProductsPageContent() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground/50">
-                  Use no ChatGPT (DALL-E), Midjourney ou Leonardo AI para gerar uma imagem profissional sem logos/watermarks do AliExpress
+                  Use no ChatGPT (DALL-E), Midjourney ou Leonardo AI para gerar uma imagem profissional sem logos, marcas d&apos;agua ou referencias da origem
                 </p>
               </div>
             ) : null}

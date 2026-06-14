@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   const optimize = body.optimize === true || body.translateProduct === true;
   const neutralize = body.neutralizeProducts === true;
   const removeExternalReferences =
-    body.removeExternalReferences === true || body.neutralize === true;
+    body.removeExternalReferences === true || (body.neutralize === true && !neutralize);
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =

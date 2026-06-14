@@ -1,4 +1,5 @@
 import { normalizeShopDomain } from "@/lib/shopify/domain";
+import { fetchWithImportProxy } from "@/lib/import/proxy-fetch";
 
 export interface PublicShopifyVariant {
   id: number;
@@ -267,7 +268,7 @@ export async function fetchPublicShopifyCollections(
   }
 
   try {
-    const res = await fetch(`https://${domain}/collections.json?limit=250`, {
+    const res = await fetchWithImportProxy(`https://${domain}/collections.json?limit=250`, {
       headers: {
         accept: "application/json",
         "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
@@ -304,7 +305,7 @@ async function fetchCollectionProductHandles(
 
   for (let page = 1; page <= 20; page += 1) {
     try {
-      const res = await fetch(
+      const res = await fetchWithImportProxy(
         `https://${domain}/collections/${collectionHandle}/products.json?limit=250&page=${page}`,
         {
           headers: {
@@ -370,7 +371,7 @@ export async function fetchPublicShopifyProduct(
   }
 
   const jsonUrl = `https://${domain}/products/${handle}.json`;
-  const jsonRes = await fetch(jsonUrl, {
+  const jsonRes = await fetchWithImportProxy(jsonUrl, {
     headers: {
       accept: "application/json",
       "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
@@ -384,7 +385,7 @@ export async function fetchPublicShopifyProduct(
     if (product) return { domain, product };
   }
 
-  const jsRes = await fetch(`https://${domain}/products/${handle}.js`, {
+  const jsRes = await fetchWithImportProxy(`https://${domain}/products/${handle}.js`, {
     headers: {
       accept: "application/json",
       "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",
@@ -462,7 +463,7 @@ export async function fetchPublicShopifyProducts(
       ? `/collections/${encodeURIComponent(collectionHandle)}/products.json`
       : "/products.json";
     const url = `https://${domain}${path}?limit=${pageSize}&page=${page}`;
-    const res = await fetch(url, {
+    const res = await fetchWithImportProxy(url, {
       headers: {
         accept: "application/json",
         "user-agent": "ShopifyCreator/1.0 (+https://shopify.dev)",

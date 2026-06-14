@@ -51,9 +51,9 @@ export function ImportCard({
   return (
     <Card className="border-border/50">
       <CardHeader>
-        <CardTitle>Importar Anuncio</CardTitle>
+        <CardTitle>Importar produto</CardTitle>
         <CardDescription>
-          Cole o link do produto do AliExpress (ex: pt.aliexpress.com/item/...)
+          Cole o link de qualquer produto: AliExpress, loja Shopify pública ou outro site.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -61,7 +61,7 @@ export function ImportCard({
           <div className="flex-1">
             <form onSubmit={handleScrape} className="flex gap-2">
               <Input
-                placeholder="https://pt.aliexpress.com/item/100500..."
+                placeholder="https://loja.com/products/produto"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={loading}

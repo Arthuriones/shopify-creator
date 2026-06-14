@@ -76,7 +76,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "AliExpress",
+    label: "Importação global",
     items: [
       {
         href: "/bulk",

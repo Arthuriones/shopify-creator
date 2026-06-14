@@ -58,7 +58,8 @@ export default function BulkImportPage() {
   const [jobs, setJobs] = useState<BulkJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [optimize, setOptimize] = useState(false);
-  const [neutralize, setNeutralize] = useState(false);
+  const [neutralizeProducts, setNeutralizeProducts] = useState(false);
+  const [removeExternalReferences, setRemoveExternalReferences] = useState(false);
   const [aiMediaLimit, setAiMediaLimit] = useState("1");
   const [neutralizationInstructions, setNeutralizationInstructions] = useState("");
   const [applyLogo, setApplyLogo] = useState(false);
@@ -160,7 +161,8 @@ export default function BulkImportPage() {
           storeId: selectedStore,
           sources: sourceList,
           optimize,
-          neutralize,
+          neutralizeProducts,
+          removeExternalReferences,
           aiMediaLimit: Number(aiMediaLimit || 1),
           neutralizationInstructions,
           applyLogo,
@@ -211,18 +213,17 @@ export default function BulkImportPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="border-b border-border/60 pb-5">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Importação em lote
+          Importacao em lote
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Cole links AliExpress, domínios Shopify ou URLs de produto. O backend importa
-          e publica com histórico em jobs; tradução por IA é opcional.
+          Cole links de produtos, dominios Shopify, AliExpress ou outros sites. O backend importa e publica com historico em jobs; traducao por IA e opcional.
         </p>
       </header>
 
       <Card className="border-border/60">
         <CardHeader>
-          <CardTitle className="text-lg">Configuração</CardTitle>
-          <CardDescription>Até 20 origens por execução.</CardDescription>
+          <CardTitle className="text-lg">Configuracao</CardTitle>
+          <CardDescription>Ate 20 origens por execucao.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 lg:grid-cols-[1fr_160px]">
@@ -279,7 +280,7 @@ export default function BulkImportPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Padrão recomendado: não rastreia estoque na Shopify e não envia quantidade zero.
+                Padrao recomendado: nao rastreia estoque na Shopify e nao envia quantidade zero.
               </p>
             </div>
             <div className="space-y-2">
@@ -293,23 +294,23 @@ export default function BulkImportPage() {
                 className="h-10"
               />
               <p className="text-xs text-muted-foreground">
-                Usado só quando o rastreio estiver ativo.
+                Usado so quando o rastreio estiver ativo.
               </p>
             </div>
           </div>
 
           <Textarea
-            placeholder="https://pt.aliexpress.com/item/123...&#10;exemplo.myshopify.com&#10;https://loja.com/products/produto"
+            placeholder="https://loja.com/products/produto&#10;exemplo.myshopify.com&#10;https://pt.aliexpress.com/item/123..."
             rows={10}
             value={sources}
             onChange={(event) => setSources(event.target.value)}
             className="font-mono text-sm"
           />
 
-          {neutralize && (
+          {(neutralizeProducts || removeExternalReferences) && (
             <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
               <p className="text-sm font-medium text-foreground">
-                Instruções extras para neutralização
+                Instrucoes extras para limpeza por IA
               </p>
               <Textarea
                 rows={3}
@@ -317,7 +318,7 @@ export default function BulkImportPage() {
                 onChange={(event) =>
                   setNeutralizationInstructions(event.target.value)
                 }
-                placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
+                placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrao azul da camisa."
                 className="bg-background/70 text-sm"
               />
               <div className="grid gap-2 pt-2 sm:grid-cols-[1fr_160px]">
@@ -339,7 +340,7 @@ export default function BulkImportPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Essas instruções serão aplicadas em todos os produtos deste lote.
+                Essas instrucoes serao aplicadas em todos os produtos deste lote.
               </p>
             </div>
           )}
@@ -390,8 +391,24 @@ export default function BulkImportPage() {
             <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
               <input
                 type="checkbox"
-                checked={neutralize}
-                onChange={(event) => setNeutralize(event.target.checked)}
+                checked={neutralizeProducts}
+                onChange={(event) => {
+                  setNeutralizeProducts(event.target.checked);
+                  if (event.target.checked) setRemoveExternalReferences(false);
+                }}
+                className="h-4 w-4 accent-primary"
+              />
+              <Sparkles className="h-4 w-4 text-primary" />
+              Neutralizar produto (stock)
+            </label>
+            <label className="flex h-9 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={removeExternalReferences}
+                onChange={(event) => {
+                  setRemoveExternalReferences(event.target.checked);
+                  if (event.target.checked) setNeutralizeProducts(false);
+                }}
                 className="h-4 w-4 accent-primary"
               />
               <Sparkles className="h-4 w-4 text-primary" />
@@ -473,7 +490,7 @@ export default function BulkImportPage() {
                     <p className="truncate text-xs text-muted-foreground">
                       {job.error || job.progress?.step || "Aguardando"}
                       {job.progress?.total
-                        ? ` · ${job.progress.current || job.progress.total}/${job.progress.total}`
+                        ? ` - ${job.progress.current || job.progress.total}/${job.progress.total}`
                         : ""}
                     </p>
                   </div>

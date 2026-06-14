@@ -71,22 +71,23 @@ export default function LoginPage() {
         if (error) throw error;
         setSent(true);
       }
-    } catch (error: any) {
-      const normalizedMessage = error.message.toLowerCase();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Ocorreu um erro. Tente novamente.";
+      const normalizedMessage = message.toLowerCase();
       if (
         normalizedMessage.includes("429") ||
         normalizedMessage.includes("too many") ||
         normalizedMessage.includes("security purposes") ||
         normalizedMessage.includes("rate limit")
       ) {
-        const secondsMatch = error.message.match(/(\d+)\s*seconds?/i);
+        const secondsMatch = message.match(/(\d+)\s*seconds?/i);
         const waitSeconds = secondsMatch ? Number(secondsMatch[1]) : 60;
         setCooldownUntil(Date.now() + waitSeconds * 1000);
         setErrorMessage(`Muitas tentativas. Aguarde ${waitSeconds}s e tente novamente.`);
       } else if (normalizedMessage.includes("invalid login credentials")) {
         setErrorMessage("Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'.");
       } else {
-        setErrorMessage(error.message || "Ocorreu um erro. Tente novamente.");
+        setErrorMessage(message);
       }
     } finally {
       setLoading(false);
@@ -213,7 +214,7 @@ export default function LoginPage() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      required={mode !== "recovery"}
+                      required
                       className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
                     />
                   </div>

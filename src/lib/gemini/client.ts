@@ -27,7 +27,7 @@ export async function optimizeProduct(
   const normalizedCustomPrompt = customPrompt?.trim();
   const prompt = `Você é um copywriter especialista em e-commerce para lojas Shopify.
 
-Sua tarefa: transformar este produto importado do AliExpress em um produto profissional para vender no Brasil.
+Sua tarefa: transformar este produto importado de uma origem externa em um produto profissional para vender no Brasil.
 
 Loja: "${context.name}"
 Nicho: "${context.niche}"
@@ -46,13 +46,13 @@ Produto original:
 
 REGRAS OBRIGATÓRIAS:
 1. TUDO no idioma final obrigatório "${language}". Não misture idiomas.
-2. Título: máximo 70 caracteres, com palavra-chave principal, sem chinês/caracteres estranhos, sem "AliExpress"
+2. Título: máximo 70 caracteres, com palavra-chave principal, sem chinês/caracteres estranhos, sem nome de marketplace/fornecedor
 3. Descrição: HTML formatado e profissional com:
    - Headline chamativa com benefício principal
    - 3-5 bullet points com benefícios (usar emojis ✅ nos bullets)
    - Especificações técnicas em tabela HTML simples
    - Call-to-action final
-   - NÃO mencionar China, AliExpress, importação, dropshipping
+   - NÃO mencionar China, AliExpress, Shopee, Temu, marketplace, importação, dropshipping ou fornecedor original
    - Tom: confiante, profissional, focado em benefícios
 4. Tags: 5-8 tags em português, relevantes para SEO no Brasil
 5. SEO Title: máximo 60 caracteres, em português
@@ -289,7 +289,7 @@ Analise a imagem de produto disponÃ­vel nesta URL: ${originalImageUrl}
 Produto: "${productTitle}"${brandContext}
 
 Sua tarefa: criar uma descriÃ§Ã£o DETALHADA da imagem para que um modelo de geraÃ§Ã£o de imagens possa recriar esta foto de produto de forma limpa e profissional, SEM:
-- Logos ou marcas d'Ã¡gua do AliExpress
+- Logos ou marcas d'Ã¡gua de marketplace, fornecedor ou loja de origem
 - Textos em chinÃªs
 - Watermarks de qualquer tipo
 - Fundos poluÃ­dos
