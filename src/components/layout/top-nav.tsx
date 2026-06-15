@@ -27,14 +27,14 @@ export function TopNav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-card/95 backdrop-blur-sm">
       <div className="grid h-[72px] grid-cols-[280px_minmax(0,1fr)]">
-        <div className="flex items-center border-r border-border px-5">
+        <div className="flex items-center border-r border-slate-200 bg-white px-5">
           <Link href="/dashboard" className="group flex items-center">
-            <div className="relative h-12 w-[176px] overflow-hidden rounded-lg bg-accent">
+            <div className="relative flex h-12 w-[176px] items-center justify-center overflow-hidden rounded-lg bg-accent">
               <Image
-                src="/logo.png"
+                src="/logo-cropped.png"
                 alt="XCART.APP Logo"
                 fill
-                className="object-cover object-left"
+                className="object-contain object-center"
                 priority
               />
             </div>

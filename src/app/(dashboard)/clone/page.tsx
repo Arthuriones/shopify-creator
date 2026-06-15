@@ -46,14 +46,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
@@ -973,7 +965,7 @@ export default function ClonePage() {
   const [previewKey, setPreviewKey] = useState("");
   const [applyProgress, setApplyProgress] = useState<CloneApplyProgress | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>("bulk");
-  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedImportMode, setSelectedImportMode] = useState<ImportMode | null>(null);
   const [sourceCollections, setSourceCollections] = useState<SourceCollection[]>([]);
   const [selectedProductHandles, setSelectedProductHandles] = useState<string[]>([]);
 
@@ -1041,29 +1033,6 @@ export default function ClonePage() {
       ? "bulk"
       : null;
   const isImportSubpage = Boolean(routedImportMode);
-  const importPageCopy =
-    routedImportMode === "single"
-      ? {
-          label: "Produto individual",
-          title: "Importar produto individual",
-          description:
-            "Cole uma URL de produto Shopify, revise o item encontrado e publique somente esse produto na loja conectada.",
-          sourceLabel: "URL do produto",
-          sourcePlaceholder: "https://loja.com/products/produto",
-          actionLabel: "Abrir importação individual",
-          icon: PackageCheck,
-        }
-      : {
-          label: "Importação em massa",
-          title: "Importar produtos em massa",
-          description:
-            "Analise uma loja Shopify pública, selecione os produtos desejados, preserve coleções e importe em lotes com progresso.",
-          sourceLabel: "Loja de origem",
-          sourcePlaceholder: "exemplo.myshopify.com ou dominio.com",
-          actionLabel: "Abrir importação em massa",
-          icon: Download,
-        };
-  const ImportPageIcon = importPageCopy.icon;
 
   const pageMeta = {
     overview: {
@@ -1209,8 +1178,13 @@ export default function ClonePage() {
   useEffect(() => {
     if (!routedImportMode) return;
     setImportMode(routedImportMode);
-    setImportModalOpen(true);
+    setSelectedImportMode(routedImportMode);
   }, [routedImportMode]);
+
+  function openInlineImport(mode: ImportMode) {
+    setImportMode(mode);
+    setSelectedImportMode(mode);
+  }
 
   useEffect(() => {
     async function loadStores() {
@@ -1987,8 +1961,9 @@ export default function ClonePage() {
 
         {!isImportSubpage && (
         <div className="grid gap-3 md:grid-cols-2">
-          <Link
-            href="/clone/shopify/individual"
+          <button
+            type="button"
+            onClick={() => openInlineImport("single")}
             className="group rounded-lg border border-primary/35 bg-primary/10 p-4 text-left shadow-sm transition-colors hover:border-primary/65 hover:bg-primary/15"
           >
             <span className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
@@ -2002,9 +1977,10 @@ export default function ClonePage() {
               Use uma URL de produto Shopify específica, configure destino e publique só aquele item.
             </p>
             <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
-          </Link>
-          <Link
-            href="/clone/shopify/bulk"
+          </button>
+          <button
+            type="button"
+            onClick={() => openInlineImport("bulk")}
             className="group rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/55 hover:bg-card/80"
           >
             <span className="inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-sm font-bold text-foreground">
@@ -2018,25 +1994,57 @@ export default function ClonePage() {
               Leia a loja, selecione produtos, veja coleções encontradas e importe em lotes com progresso.
             </p>
             <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
-          </Link>
+          </button>
         </div>
         )}
 
-        <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
-          <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-5xl">
-            <DialogHeader className="border-b border-border/60 px-5 py-4">
-              <DialogTitle>
-                {importMode === "single"
-                  ? "Importar produto individual"
-                  : "Selecionar produtos para importar"}
-              </DialogTitle>
-              <DialogDescription>
-                Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify.
-              </DialogDescription>
-            </DialogHeader>
+        {(selectedImportMode || isImportSubpage) && (
+          <Card className="rounded-lg border-border/60">
+            <CardHeader className="border-b border-border/60 pb-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle>
+                    {importMode === "single"
+                      ? "Importar produto individual"
+                      : "Selecionar produtos para importar"}
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify.
+                  </CardDescription>
+                </div>
+                {!isImportSubpage && (
+                  <div className="inline-flex rounded-md border border-border bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => openInlineImport("single")}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                        importMode === "single"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Individual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openInlineImport("bulk")}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                        importMode === "bulk"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Em massa
+                    </button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
 
-            <div className="grid max-h-[70vh] gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-4 overflow-auto px-5 py-4">
+            <CardContent className="grid gap-0 p-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4 px-5 py-4">
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
                   <div className="space-y-2">
                     <Label htmlFor="modal-source">
@@ -2399,7 +2407,7 @@ export default function ClonePage() {
                 )}
               </div>
 
-              <aside className="space-y-4 overflow-auto border-t border-border/60 bg-muted/25 px-5 py-4 lg:border-l lg:border-t-0">
+              <aside className="space-y-4 border-t border-border/60 bg-muted/25 px-5 py-4 lg:border-l lg:border-t-0">
                 {transformedPreview ? (
                   <TransformedPreviewCard preview={transformedPreview} />
                 ) : (
@@ -2466,9 +2474,9 @@ export default function ClonePage() {
                   </div>
                 )}
               </aside>
-            </div>
+            </CardContent>
 
-            <DialogFooter className="items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-muted-foreground">
                 {importMode === "bulk"
                   ? `${selectedProductHandles.length} produto(s) selecionado(s)`
@@ -2504,499 +2512,11 @@ export default function ClonePage() {
                   Importar
                 </Button>
               </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {isImportSubpage ? (
-          <Card className="rounded-lg border-border/60">
-            <CardHeader className="space-y-3">
-              <Badge variant="secondary" className="w-fit rounded-md">
-                {importPageCopy.label}
-              </Badge>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl">
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <ImportPageIcon className="h-5 w-5 text-primary" />
-                    {importPageCopy.title}
-                  </CardTitle>
-                  <CardDescription className="mt-2 text-sm leading-6">
-                    {importPageCopy.description}
-                  </CardDescription>
-                </div>
-                <Button onClick={() => setImportModalOpen(true)} className="w-full sm:w-auto">
-                  <Store className="h-4 w-4" />
-                  {importPageCopy.actionLabel}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-lg border border-border/60 bg-background/50 p-4">
-                <Label htmlFor="subpage-source">{importPageCopy.sourceLabel}</Label>
-                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="subpage-source"
-                    value={source}
-                    onChange={(event) => setSource(event.target.value)}
-                    placeholder={importPageCopy.sourcePlaceholder}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handlePreview}
-                    disabled={previewLoading || !source.trim()}
-                    className="sm:w-auto"
-                  >
-                    {previewLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <WandSparkles className="h-4 w-4" />
-                    )}
-                    Analisar
-                  </Button>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  O botão principal abre todas as opções: loja destino,
-                  tradução, publicação, estoque, coleções e seleção de produtos.
-                </p>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Resumo da prévia
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {preview.length > 0
-                    ? `${preview.length} produto(s) carregado(s) de ${sourceDomain || "origem analisada"}.`
-                    : "Nenhum produto carregado ainda."}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  {sourceCollections.length > 0
-                    ? `${sourceCollections.length} coleção(ões) reconhecida(s) para aplicar no destino.`
-                    : "Coleções aparecem depois da análise quando a loja de origem permite leitura pública."}
-                </p>
-              </div>
-            </CardContent>
+            </div>
           </Card>
-        ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <Card className="rounded-lg border-border/60">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <PackageCheck className="h-4 w-4 text-primary" />
-                Configurar clone
-              </CardTitle>
-              <CardDescription>
-                Nada é publicado antes de clicar em Aplicar na loja.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_128px]">
-                <div className="space-y-2">
-                  <Label htmlFor="source">Loja de origem</Label>
-                  <Input
-                    id="source"
-                    value={source}
-                    onChange={(event) => setSource(event.target.value)}
-                    placeholder="exemplo.myshopify.com ou dominio.com"
-                  />
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Use apenas o domínio; a busca pública usa /products.json.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="limit">Limite</Label>
-                  <Input
-                    id="limit"
-                    value={limit}
-                    onChange={(event) => setLimit(event.target.value)}
-                    inputMode="numeric"
-                    min={1}
-                    max={MAX_CLONE_LIMIT}
-                    type="number"
-                  />
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Até {MAX_CLONE_LIMIT} por execução. Padrão: {DEFAULT_CLONE_LIMIT}.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-primary/20 bg-primary/8 p-4">
-                <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
-                  <div className="space-y-2">
-                    <Label>Modo de clone</Label>
-                    <Select value={cloneMode} onValueChange={handleCloneModeChange}>
-                      <SelectTrigger className="w-full min-w-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start">
-                        <SelectItem value="identical">Clonar idêntico</SelectItem>
-                        <SelectItem value="translated">Clonar + traduzir</SelectItem>
-                        <SelectItem value="routed">Clonar + checkout roteado</SelectItem>
-                        <SelectItem value="complete">Fluxo completo IA</SelectItem>
-                        <SelectItem value="custom">Personalizado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2 text-xs leading-5 text-muted-foreground md:grid-cols-2">
-                    <div className="rounded-md border border-border/60 bg-background/55 p-3">
-                      <div className="mb-1 flex items-center gap-2 font-semibold text-foreground">
-                        <Copy className="h-3.5 w-3.5 text-primary" />
-                        Básico
-                      </div>
-                      Clonar idêntico mantém título, descrição, imagens, tags e SEO
-                      como vieram da origem.
-                    </div>
-                    <div className="rounded-md border border-border/60 bg-background/55 p-3">
-                      <div className="mb-1 flex items-center gap-2 font-semibold text-foreground">
-                        <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                        Avançado
-                      </div>
-                      Os modos compostos ligam tradução e/ou geração automática de rota.
-                      Ao mudar uma opção manualmente, o fluxo vira personalizado.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Destino conectado</Label>
-                  <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue placeholder="Selecione uma loja">
-                        {formatStoreLabel(selectedTarget)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      {stores.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          <span className="block max-w-[320px] truncate">
-                            {formatStoreLabel(store)}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Loja onde os produtos serão criados.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Duplicados</Label>
-                  <Select
-                    value={duplicatePolicy}
-                    onValueChange={(value) => {
-                      setDuplicatePolicy(value || "skip");
-                      setCloneMode("custom");
-                    }}
-                  >
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="skip">Pular existentes</SelectItem>
-                      <SelectItem value="create">Criar mesmo assim</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Evita produtos repetidos quando a origem já foi clonada.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 rounded-lg border border-border bg-card p-4 xl:grid-cols-[minmax(220px,280px)_180px_minmax(0,1fr)] xl:items-start">
-                <div className="space-y-2">
-                  <Label>Estoque</Label>
-                  <Select
-                    value={inventoryMode}
-                    onValueChange={(value) => {
-                      setInventoryMode((value || "not_tracked") as InventoryMode);
-                      setCloneMode("custom");
-                    }}
-                  >
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
-                      <SelectItem value="tracked">Definir estoque inicial</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="inventory-quantity">Quantidade</Label>
-                  <Input
-                    id="inventory-quantity"
-                    value={inventoryQuantity}
-                    onChange={(event) => setInventoryQuantity(event.target.value)}
-                    inputMode="numeric"
-                    min={0}
-                    type="number"
-                    disabled={inventoryMode === "not_tracked"}
-                  />
-                </div>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  No modo <strong>Inventory not tracked</strong>, o app marca as
-                  variantes como “não rastrear estoque” na Shopify e não envia
-                  quantidade. Use “Definir estoque inicial” apenas quando quiser
-                  controlar estoque real por variante.
-                </p>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={publishToStorefront}
-                    onChange={(event) => {
-                      setPublishToStorefront(event.target.checked);
-                      setCloneMode("custom");
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>
-                    <span className="block font-medium text-foreground">
-                      Publicar na loja
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      Produtos entram disponíveis na Shopify de destino.
-                    </span>
-                  </span>
-                </label>
-
-                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={translateCloneProducts}
-                    onChange={(event) => {
-                      setTranslateCloneProducts(event.target.checked);
-                      setCloneMode("custom");
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>
-                    <span className="flex items-center gap-2 font-medium text-foreground">
-                      <Languages className="h-4 w-4 text-primary" />
-                      Traduzir produto
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      Desligado preserva o texto original. Ligado adapta titulo,
-                      descricao e SEO para o idioma da loja destino.
-                    </span>
-                  </span>
-                </label>
-
-                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={translateVariantOptions}
-                    onChange={(event) => {
-                      setTranslateVariantOptions(event.target.checked);
-                      setCloneMode("custom");
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>
-                    <span className="flex items-center gap-2 font-medium text-foreground">
-                      <Languages className="h-4 w-4 text-primary" />
-                      Traduzir cores e tamanhos
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      Converte nomes de opções e valores comuns: Color vira Cor,
-                      Size vira Tamanho, blue vira azul e S/small vira P.
-                    </span>
-                  </span>
-                </label>
-
-                <div className="space-y-2 rounded-lg border border-border bg-card p-4">
-                  <Label>Vitrine para mapear</Label>
-                  <Select value={sourceStoreId} onValueChange={(value) => setSourceStoreId(value || "")}>
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue placeholder="Loja vitrine">
-                        {formatStoreLabel(selectedSourceStore)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      {stores.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          <span className="block max-w-[260px] truncate">
-                            {formatStoreLabel(store)}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Origem do mapa quando a rota automática for criada.
-                  </p>
-                </div>
-
-                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={createRoutingConfig}
-                    onChange={(event) => {
-                      setCreateRoutingConfig(event.target.checked);
-                      setCloneMode("custom");
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                  />
-                  <span>
-                    <span className="block font-medium text-foreground">
-                      Preparar rota de checkout
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                      Salva mapas para ligar vitrine e dark store depois.
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                <Button onClick={handlePreview} disabled={previewLoading || storesLoading}>
-                  {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  Analisar origem
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleTransformPreview}
-                  disabled={transformPreviewLoading || storesLoading || !source.trim() || !targetStoreId}
-                >
-                  {transformPreviewLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <SlidersHorizontal className="h-4 w-4" />
-                  )}
-                  Visualizar
-                </Button>
-                <Button onClick={handleApply} disabled={applyLoading || !targetStoreId}>
-                  {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
-                  Aplicar na loja
-                </Button>
-                {(previewLoading || transformPreviewLoading || applyLoading) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => cloneAbortRef.current?.abort()}
-                  >
-                    Cancelar operação
-                  </Button>
-                )}
-              </div>
-
-              {applyProgress && (
-                <div className="rounded-lg border border-primary/25 bg-primary/8 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {applyProgress.phase === "done"
-                          ? "Importação finalizada"
-                          : applyProgress.phase === "routing"
-                            ? "Preparando rota"
-                            : applyProgress.phase === "analyzing"
-                              ? "Analisando origem"
-                              : "Importação em lotes"}
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        {applyProgress.message}
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="w-fit rounded-md">
-                      {applyProgress.total > 0
-                        ? `${applyProgress.current}/${applyProgress.total}`
-                        : "calculando"}
-                    </Badge>
-                  </div>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-background/70">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{
-                        width:
-                          applyProgress.total > 0
-                            ? `${Math.min(
-                                100,
-                                Math.round((applyProgress.current / applyProgress.total) * 100)
-                              )}%`
-                            : "8%",
-                      }}
-                    />
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
-                      Criados: <strong className="text-foreground">{applyProgress.created}</strong>
-                    </div>
-                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
-                      Pulados: <strong className="text-foreground">{applyProgress.skipped}</strong>
-                    </div>
-                    <div className="rounded-md border border-border/60 bg-background/45 px-3 py-2">
-                      Falhas: <strong className="text-foreground">{applyProgress.failed}</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-lg border-border/60">
-          <CardHeader>
-            <CardTitle className="text-lg">Prévia</CardTitle>
-            <CardDescription>
-              {sourceDomain ? `${sourceDomain} - ${preview.length} produtos` : "Nenhuma origem analisada"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {transformedPreview && (
-              <div className="mb-4">
-                <TransformedPreviewCard preview={transformedPreview} />
-              </div>
-            )}
-            {preview.length === 0 ? (
-              <EmptyState>
-                Depois de analisar, os primeiros produtos aparecem aqui com imagem,
-                preço e quantidade de variantes.
-              </EmptyState>
-            ) : (
-              <div className="space-y-3">
-                <div className="rounded-md border border-primary/20 bg-primary/8 px-3 py-2 text-xs font-medium text-muted-foreground">
-                  Mostrando {preview.length} produto(s) carregado(s). Se a loja
-                  tiver mais produtos, aumente o limite e analise novamente.
-                </div>
-                <div className="max-h-[560px] space-y-2 overflow-auto pr-1">
-                {preview.map((product) => (
-                  <a
-                    key={product.id}
-                    href={product.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex gap-3 rounded-lg border border-border/60 bg-background/45 p-3 transition-colors hover:bg-muted/40"
-                  >
-                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-                      {product.images[0]?.src ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={product.images[0].src}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {product.title}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {product.variants.length} variantes · {product.variants[0]?.price || "0.00"}
-                      </p>
-                    </div>
-                  </a>
-                ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        </div>
         )}
+
+        {null}
       </section>
       )}
 

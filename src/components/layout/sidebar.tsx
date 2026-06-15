@@ -65,6 +65,7 @@ const navSections: NavSection[] = [
         label: "Clonar loja",
         icon: Download,
         children: [
+          { href: "/clone/shopify", label: "Configuracao de clone" },
           { href: "/clone/shopify/individual", label: "Produto individual" },
           { href: "/clone/shopify/bulk", label: "Importação em massa" },
           { href: "/clone/export", label: "Exportar catálogo" },
@@ -175,12 +176,12 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed left-0 top-[72px] z-40 hidden h-[calc(100vh-72px)] w-[280px] flex-col border-r border-border bg-sidebar md:flex">
+      <aside className="fixed left-0 top-[72px] z-40 hidden h-[calc(100vh-72px)] w-[280px] flex-col border-r border-slate-200 bg-white md:flex">
         <nav className="flex-1 overflow-y-auto px-4 py-5">
           <div className="space-y-6">
             {navSections.map((section) => (
               <div key={section.label} className="space-y-1.5">
-                <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
                   {section.label}
                 </div>
                 {section.items.map((item) => {
@@ -196,10 +197,10 @@ export function Sidebar() {
                         className={cn(
                           "group relative flex min-w-0 items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-semibold transition-colors active:scale-[0.98]",
                           isActive
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            ? "bg-slate-100 text-slate-950"
                             : hasActiveChild || isExpanded
-                              ? "bg-muted text-foreground"
-                              : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                              ? "bg-slate-50 text-slate-950"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                         )}
                       >
                         {(isActive || hasActiveChild) && (
@@ -208,13 +209,13 @@ export function Sidebar() {
                         <item.icon
                           className={cn(
                             "h-4 w-4 shrink-0 transition-colors",
-                            isActive || hasActiveChild ? "text-primary" : "text-muted-foreground group-hover:text-foreground/70"
+                            isActive || hasActiveChild ? "text-primary" : "text-slate-400 group-hover:text-slate-700"
                           )}
                         />
                         <span className="min-w-0 truncate">{item.label}</span>
                       </Link>
                       {item.children && (isExpanded || hasActiveChild) && (
-                        <div className="ml-[1.35rem] space-y-1 border-l border-border pb-1 pl-4 pt-1">
+                        <div className="ml-[1.35rem] space-y-1 border-l border-slate-200 pb-1 pl-4 pt-1">
                           {item.children.map((child, index) => {
                             const childActive = isHrefActive(child.href, true);
                             return (
@@ -224,8 +225,8 @@ export function Sidebar() {
                                 className={cn(
                                   "block rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                                   childActive
-                                    ? "bg-accent text-foreground"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    ? "bg-slate-100 text-slate-950"
+                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
                                 )}
                               >
                                 {child.label}
