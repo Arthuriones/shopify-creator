@@ -1955,18 +1955,20 @@ export default function ClonePage() {
 
       {activeView === "shopify" && (
       <section className="space-y-4" aria-labelledby="clone-shopify">
-        <ServiceIntro
-          icon={Copy}
-          title="Serviço 1: clonar loja Shopify"
-          description="Use quando quiser copiar produtos de uma vitrine pública. A origem pode ser um domínio próprio ou myshopify.com; o sistema busca o catálogo público e mostra uma prévia antes de gravar algo."
-          steps={[
-            "Informe a loja pública de origem.",
-            "Analise a prévia para conferir produtos e variantes.",
-            "Aplique na loja conectada ou exporte o catálogo.",
-          ]}
-        />
+        {!isCloneConfigSubpage && (
+          <ServiceIntro
+            icon={Copy}
+            title="Serviço 1: clonar loja Shopify"
+            description="Use quando quiser copiar produtos de uma vitrine pública. A origem pode ser um domínio próprio ou myshopify.com; o sistema busca o catálogo público e mostra uma prévia antes de gravar algo."
+            steps={[
+              "Informe a loja pública de origem.",
+              "Analise a prévia para conferir produtos e variantes.",
+              "Aplique na loja conectada ou exporte o catálogo.",
+            ]}
+          />
+        )}
 
-        {!isImportSubpage && (
+        {!isImportSubpage && !isCloneConfigSubpage && (
         <div className="grid gap-3 md:grid-cols-2">
           <button
             type="button"
@@ -2011,15 +2013,19 @@ export default function ClonePage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle>
-                    {importMode === "single"
-                      ? "Importar produto individual"
-                      : "Selecionar produtos para importar"}
+                    {isCloneConfigSubpage
+                      ? "Configurações de clone"
+                      : importMode === "single"
+                        ? "Importar produto individual"
+                        : "Selecionar produtos para importar"}
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify.
+                    {isCloneConfigSubpage
+                      ? "Ajuste origem, destino, publicação, estoque, IA e seleção antes de importar na Shopify."
+                      : "Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify."}
                   </CardDescription>
                 </div>
-                {!isImportSubpage && (
+                {!isImportSubpage && !isCloneConfigSubpage && (
                   <div className="inline-flex rounded-md border border-border bg-muted p-1">
                     <button
                       type="button"
