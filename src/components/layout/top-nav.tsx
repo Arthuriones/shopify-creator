@@ -25,48 +25,64 @@ export function TopNav() {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-16 glass-panel flex items-center justify-between px-6 shadow-[0_4px_30px_rgba(0,0,0,0.03)] border-b border-white/20 dark:border-white/5">
-      <div className="flex items-center gap-8">
-        <Link href="/dashboard" className="flex items-center gap-2 group">
-          <Image 
-            src="/logo.png" 
-            alt="XCART.APP Logo" 
-            width={32} 
-            height={32} 
-            className="rounded-lg object-contain transition-transform group-active:scale-95" 
-          />
-          <span className="font-heading font-black text-xl tracking-tight text-foreground">
-            XCART<span className="text-primary-cyan">.APP</span>
-          </span>
-        </Link>
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-card/95 backdrop-blur-sm">
+      <div className="grid h-[72px] grid-cols-[280px_minmax(0,1fr)]">
+        <div className="flex items-center border-r border-border px-5">
+          <Link href="/dashboard" className="group flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-accent">
+              <Image
+                src="/logo.png"
+                alt="XCART.APP Logo"
+                width={36}
+                height={18}
+                className="h-auto w-9 object-contain"
+                priority
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="font-heading text-[1.35rem] font-black tracking-tight text-foreground">
+                XCART.APP
+              </div>
+              <div className="truncate text-[11px] font-medium text-muted-foreground">
+                Operação e catálogo Shopify
+              </div>
+            </div>
+          </Link>
+        </div>
 
-        <nav className="hidden md:flex items-center gap-6">
+        <div className="flex min-w-0 items-center justify-between gap-4 px-5 lg:px-7">
+          <nav className="hidden min-w-0 items-center gap-1 md:flex">
           {navLinks.map((link) => {
-            const isActive = pathname === link.href || (link.href !== "/dashboard" && pathname.startsWith(link.href + '/'));
+            const isActive =
+              pathname === link.href ||
+              (link.href !== "/dashboard" && pathname.startsWith(`${link.href}/`));
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-[13px] font-semibold transition-colors ${
-                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`rounded-md px-3 py-2 text-[13px] font-semibold transition-colors ${
+                  isActive
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {link.label}
               </Link>
             );
           })}
-        </nav>
-      </div>
+          </nav>
 
-      <div className="flex items-center gap-4">
-        <ThemeToggle />
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-slate-50 rounded-md transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sair</span>
-        </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={handleLogout}
+              className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   );

@@ -2102,7 +2102,7 @@ export default function ClonePage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
                     <input
                       type="checkbox"
                       checked={publishToStorefront}
@@ -2114,7 +2114,7 @@ export default function ClonePage() {
                       <span className="text-xs text-muted-foreground">Online Store ao importar.</span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
                     <input
                       type="checkbox"
                       checked={translateCloneProducts}
@@ -2126,7 +2126,7 @@ export default function ClonePage() {
                       <span className="text-xs text-muted-foreground">Usa idioma da loja destino.</span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
                     <input
                       type="checkbox"
                       checked={translateVariantOptions}
@@ -2140,7 +2140,7 @@ export default function ClonePage() {
                       </span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
                     <input
                       type="checkbox"
                       checked={neutralizeCloneProducts}
@@ -2218,7 +2218,7 @@ export default function ClonePage() {
                 </div>
 
                 {(neutralizeCloneProducts || removeExternalReferencesCloneProducts) && (
-                  <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_180px]">
+                  <div className="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-[minmax(0,1fr)_180px]">
                     <div className="space-y-3">
                       <div>
                         <Label htmlFor="clone-ai-media-limit">
@@ -2704,7 +2704,7 @@ export default function ClonePage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 rounded-lg border border-border/70 bg-background/45 p-4 lg:grid-cols-[260px_180px_minmax(0,1fr)] lg:items-start">
+              <div className="grid gap-4 rounded-lg border border-border bg-card p-4 xl:grid-cols-[minmax(220px,280px)_180px_minmax(0,1fr)] xl:items-start">
                 <div className="space-y-2">
                   <Label>Estoque</Label>
                   <Select
@@ -2743,8 +2743,8 @@ export default function ClonePage() {
                 </p>
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_220px]">
-                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+              <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
                   <input
                     type="checkbox"
                     checked={publishToStorefront}
@@ -2764,7 +2764,7 @@ export default function ClonePage() {
                   </span>
                 </label>
 
-                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
                   <input
                     type="checkbox"
                     checked={translateCloneProducts}
@@ -2786,7 +2786,7 @@ export default function ClonePage() {
                   </span>
                 </label>
 
-                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
                   <input
                     type="checkbox"
                     checked={translateVariantOptions}
@@ -2808,7 +2808,7 @@ export default function ClonePage() {
                   </span>
                 </label>
 
-                <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-3">
+                <div className="space-y-2 rounded-lg border border-border bg-card p-4">
                   <Label>Vitrine para mapear</Label>
                   <Select value={sourceStoreId} onValueChange={(value) => setSourceStoreId(value || "")}>
                     <SelectTrigger className="w-full min-w-0">
@@ -2831,7 +2831,7 @@ export default function ClonePage() {
                   </p>
                 </div>
 
-                <label className="flex min-h-16 items-start gap-3 rounded-lg border border-border/70 bg-background/45 p-3 text-sm">
+                <label className="flex min-h-[154px] min-w-0 items-start gap-3 rounded-lg border border-border bg-card p-4 text-sm">
                   <input
                     type="checkbox"
                     checked={createRoutingConfig}
