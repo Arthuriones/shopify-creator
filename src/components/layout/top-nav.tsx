@@ -28,24 +28,16 @@ export function TopNav() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-card/95 backdrop-blur-sm">
       <div className="grid h-[72px] grid-cols-[280px_minmax(0,1fr)]">
         <div className="flex items-center border-r border-border px-5">
-          <Link href="/dashboard" className="group flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-accent">
+          <Link href="/dashboard" className="group flex items-center">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent">
               <Image
                 src="/logo.png"
                 alt="XCART.APP Logo"
-                width={36}
-                height={18}
-                className="h-auto w-9 object-contain"
+                width={40}
+                height={20}
+                className="h-auto w-10 object-contain"
                 priority
               />
-            </div>
-            <div className="min-w-0">
-              <div className="font-heading text-[1.35rem] font-black tracking-tight text-foreground">
-                XCART.APP
-              </div>
-              <div className="truncate text-[11px] font-medium text-muted-foreground">
-                Operação e catálogo Shopify
-              </div>
             </div>
           </Link>
         </div>
