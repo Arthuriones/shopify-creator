@@ -29,13 +29,12 @@ export function TopNav() {
       <div className="grid h-[72px] grid-cols-[280px_minmax(0,1fr)]">
         <div className="flex items-center border-r border-border px-5">
           <Link href="/dashboard" className="group flex items-center">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent">
+            <div className="relative h-12 w-[176px] overflow-hidden rounded-lg bg-accent">
               <Image
                 src="/logo.png"
                 alt="XCART.APP Logo"
-                width={40}
-                height={20}
-                className="h-auto w-10 object-contain"
+                fill
+                className="object-cover object-left"
                 priority
               />
             </div>
