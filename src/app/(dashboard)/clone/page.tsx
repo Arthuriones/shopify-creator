@@ -1032,6 +1032,7 @@ export default function ClonePage() {
     : pathname.endsWith("/bulk")
       ? "bulk"
       : null;
+  const isCloneConfigSubpage = pathname.endsWith("/configuracao");
   const isImportSubpage = Boolean(routedImportMode);
 
   const pageMeta = {
@@ -1180,6 +1181,12 @@ export default function ClonePage() {
     setImportMode(routedImportMode);
     setSelectedImportMode(routedImportMode);
   }, [routedImportMode]);
+
+  useEffect(() => {
+    if (!isCloneConfigSubpage) return;
+    setImportMode("bulk");
+    setSelectedImportMode("bulk");
+  }, [isCloneConfigSubpage]);
 
   function openInlineImport(mode: ImportMode) {
     setImportMode(mode);

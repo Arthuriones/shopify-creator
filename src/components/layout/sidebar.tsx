@@ -65,7 +65,7 @@ const navSections: NavSection[] = [
         label: "Clonar loja",
         icon: Download,
         children: [
-          { href: "/clone/shopify", label: "Configuracao de clone" },
+          { href: "/clone/shopify/configuracao", label: "Configuracao de clone" },
           { href: "/clone/shopify/individual", label: "Produto individual" },
           { href: "/clone/shopify/bulk", label: "Importação em massa" },
           { href: "/clone/export", label: "Exportar catálogo" },
