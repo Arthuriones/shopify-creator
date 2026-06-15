@@ -175,7 +175,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] w-64 flex-col border-r border-border bg-sidebar md:flex">
+      <aside className="fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] w-64 flex-col border-r border-border bg-sidebar md:flex glass-panel border-r border-white/20 dark:border-white/5 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.1)] transition-transform">
         <nav className="flex-1 overflow-y-auto px-4 py-6">
           <div className="space-y-6">
             {navSections.map((section) => (
@@ -194,7 +194,7 @@ export function Sidebar() {
                       <Link
                         href={item.href}
                         className={cn(
-                          "group relative flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-semibold transition-colors",
+                          "group relative flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-semibold transition-all duration-200 active:scale-[0.98]",
                           isActive
                             ? "bg-blue-50/60 text-primary"
                             : hasActiveChild || isExpanded

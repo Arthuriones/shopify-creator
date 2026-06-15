@@ -11,89 +11,108 @@ import {
   Sparkles,
   Store,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const primaryActions = [
-  {
-    href: "/clone/shopify/individual",
-    title: "Importar produto individual",
-    description: "Use uma URL de produto Shopify e publique apenas o item selecionado.",
-    icon: PackageCheck,
-  },
-  {
-    href: "/clone/shopify/bulk",
-    title: "Importar loja em massa",
-    description: "Analise catálogo, escolha produtos e preserve coleções na loja destino.",
-    icon: Boxes,
-  },
-  {
-    href: "/clone/routed-checkout/create-route",
-    title: "Vincular routed checkout",
-    description: "Mapeie produtos da vitrine para variantes da dark store.",
-    icon: GitBranch,
-  },
-];
-
-const secondaryActions = [
-  { href: "/stores", label: "Conectar lojas", icon: Store },
-  { href: "/store-setup", label: "Setup da loja", icon: Settings2 },
-  { href: "/optimizer", label: "Otimizar com IA", icon: Sparkles },
-  { href: "/reviews", label: "Gerar reviews", icon: MessageSquareText },
-];
-
 import { PageHeader } from "@/components/layout/page-header";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-10">
       <PageHeader
-        title="Painel de trabalho"
-        description="Acesse direto as operações principais. Sem métricas decorativas: cada bloco abaixo leva a uma ação real do projeto."
+        title="Painel de Controle"
+        description="Acesse suas operações principais. Cada bloco abaixo leva a uma ação vital do seu fluxo de dropshipping e automação."
       />
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        {primaryActions.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            className="group rounded-lg border border-border/60 bg-card p-5 shadow-sm transition-colors hover:border-primary/45 hover:bg-card/85"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/12 text-primary">
-                <action.icon className="h-5 w-5" />
-              </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
-            </div>
-            <h2 className="mt-5 text-lg font-semibold text-foreground">
-              {action.title}
+      {/* BENTO GRID */}
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-[220px]">
+        
+        {/* BLOCK 1: Importar Produto Individual (LARGE) */}
+        <Link
+          href="/clone/shopify/individual"
+          className="group relative overflow-hidden rounded-3xl bg-card/60 backdrop-blur-md border border-white/10 dark:border-white/5 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 md:col-span-2 lg:col-span-2 lg:row-span-2 flex flex-col justify-between"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+            <PackageCheck className="w-64 h-64 text-primary translate-x-12 -translate-y-12" />
+          </div>
+          <div className="relative z-10">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-6 group-hover:scale-110 transition-transform">
+              <PackageCheck className="h-7 w-7" />
+            </span>
+            <h2 className="text-4xl font-heading font-black tracking-tighter text-foreground mb-4">
+              Importação <br /> Individual
             </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {action.description}
+            <p className="text-muted-foreground text-lg max-w-sm leading-relaxed">
+              Use uma URL de produto Shopify e publique apenas o item selecionado instantaneamente.
             </p>
-          </Link>
-        ))}
+          </div>
+          <div className="relative z-10 flex items-center text-primary font-bold text-lg mt-8 group-hover:translate-x-2 transition-transform">
+            Começar agora <ArrowRight className="ml-2 h-6 w-6" />
+          </div>
+        </Link>
+
+        {/* BLOCK 2: Importar loja em massa */}
+        <Link
+          href="/clone/shopify/bulk"
+          className="group relative overflow-hidden rounded-3xl bg-brand-gradient p-8 shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.2)] transition-all duration-300 flex flex-col justify-between hover:scale-[1.02]"
+        >
+          <div className="relative z-10 text-white">
+            <Boxes className="h-10 w-10 mb-5 opacity-90" />
+            <h2 className="text-2xl font-heading font-extrabold tracking-tight mb-2">
+              Importação <br/> em Massa
+            </h2>
+            <p className="text-white/80 text-sm leading-relaxed mt-2">
+              Analise o catálogo completo e extraia múltiplos produtos de uma só vez.
+            </p>
+          </div>
+          <div className="relative z-10 flex items-center text-white font-bold mt-4 group-hover:translate-x-2 transition-transform">
+            Clonar loja <ArrowRight className="ml-2 h-5 w-5" />
+          </div>
+        </Link>
+
+        {/* BLOCK 3: Vincular routed checkout */}
+        <Link
+          href="/clone/routed-checkout/create-route"
+          className="group relative overflow-hidden rounded-3xl bg-card/60 backdrop-blur-md border border-white/10 dark:border-white/5 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between"
+        >
+          <div className="relative z-10">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-5">
+              <GitBranch className="h-5 w-5" />
+            </span>
+            <h2 className="text-xl font-heading font-bold tracking-tight text-foreground mb-2">
+              Routed Checkout
+            </h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Mapeie produtos da vitrine para as variantes da dark store oculta.
+            </p>
+          </div>
+          <div className="relative z-10 flex items-center text-primary font-bold mt-4 group-hover:translate-x-2 transition-transform">
+            Vincular agora <ArrowRight className="ml-2 h-4 w-4" />
+          </div>
+        </Link>
       </section>
 
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle>Ferramentas de apoio</CardTitle>
-          <CardDescription>
-            Recursos que preparam loja, conteúdo e material de venda.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {secondaryActions.map((action) => (
+      {/* SECONDARY TOOLS BENTO */}
+      <div className="pt-8">
+        <h3 className="text-2xl font-heading font-bold mb-6 tracking-tight">Ferramentas de Apoio</h3>
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { href: "/stores", label: "Lojas", icon: Store },
+            { href: "/store-setup", label: "Setup", icon: Settings2 },
+            { href: "/optimizer", label: "IA Optimizer", icon: Sparkles },
+            { href: "/reviews", label: "Reviews IA", icon: MessageSquareText },
+          ].map((action) => (
             <Link
               key={action.href}
               href={action.href}
-              className="flex h-12 items-center gap-3 rounded-md border border-border/60 bg-background/45 px-3 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/8"
+              className="group flex flex-col items-center justify-center gap-4 rounded-3xl bg-card/40 backdrop-blur-md border border-white/5 p-6 hover:bg-card/80 shadow-sm hover:shadow-md transition-all duration-300 text-center active:scale-95"
             >
-              <action.icon className="h-4 w-4 text-primary" />
-              {action.label}
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-background shadow-sm text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-300">
+                <action.icon className="h-6 w-6" />
+              </span>
+              <span className="font-semibold text-sm text-foreground">{action.label}</span>
             </Link>
           ))}
-        </CardContent>
-      </Card>
+        </section>
+      </div>
+
     </div>
   );
 }
