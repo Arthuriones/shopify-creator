@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  turbopack: { root: __dirname },
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium", "undici"],
   images: {
     remotePatterns: [

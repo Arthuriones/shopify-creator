@@ -16,7 +16,6 @@ import {
   Image as ImageIcon,
   Languages,
   Loader2,
-  LockKeyhole,
   PackageCheck,
   Route,
   ShieldCheck,
@@ -492,7 +491,15 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
-function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
+function RoutedTaskHeader({
+  routedView,
+  hasRoutes,
+  routesCount,
+}: {
+  routedView: RoutedCheckoutView;
+  hasRoutes: boolean;
+  routesCount: number;
+}) {
   const content = {
     "create-destination": {
       eyebrow: "Etapa 1",
@@ -551,58 +558,114 @@ function RoutedTaskHeader({ routedView }: { routedView: RoutedCheckoutView }) {
     },
   }[routedView];
 
-  const steps = [
-    { view: "create-destination", href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
-    { view: "neutralize", href: "/clone/routed-checkout/neutralize", label: "Opcional: IA" },
-    { view: "create-route", href: "/clone/routed-checkout/create-route", label: "2. Vincular produtos" },
-    { view: "script", href: "/clone/routed-checkout/script", label: "3. Instalar script" },
-    { view: "active-routes", href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
+  const mainSteps = [
+    { view: "create-destination", href: "/clone/routed-checkout/create-destination", label: "Criar destino" },
+    { view: "create-route", href: "/clone/routed-checkout/create-route", label: "Vincular produtos" },
+    { view: "script", href: "/clone/routed-checkout/script", label: "Instalar script" },
   ];
+
+  // Passo "ativo" entre os principais. Neutralização faz parte do passo 1.
+  const activeMainView = routedView === "neutralize" ? "create-destination" : routedView;
+  const isManaging = routedView === "active-routes";
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="rounded-md">
-              {content.eyebrow}
-            </Badge>
-            {content.checklist.map((item, index) => (
-              <span
-                key={item}
-                className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/45 px-2 py-1 text-xs text-muted-foreground"
-              >
-                <span className="font-semibold text-primary">{index + 1}</span>
-                {item}
-              </span>
-            ))}
-          </div>
-          <h2 className="mt-3 font-heading text-xl font-bold tracking-tight text-foreground">
-            {content.title}
-          </h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
-            {content.description}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
-        {steps.map((step) => {
-          const active = routedView === step.view;
+      {/* Stepper */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {mainSteps.map((step, index) => {
+          const active = !isManaging && step.view === activeMainView;
+          // Passos 1 e 2 ficam "feitos" quando já existe ao menos uma rota.
+          const done = !active && hasRoutes && index < 2;
           return (
-            <Link
-              key={step.href}
-              href={step.href}
-              className={cn(
-                "rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors",
-                active
-                  ? "border-primary/40 bg-primary/12 text-foreground"
-                  : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
+            <div key={step.view} className="flex items-center gap-1.5">
+              {index > 0 && (
+                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
               )}
-            >
-              {step.label}
-            </Link>
+              <Link
+                href={step.href}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm font-semibold transition-colors",
+                  active
+                    ? "border-primary/50 bg-primary/12 text-foreground"
+                    : done
+                      ? "border-primary/25 bg-primary/5 text-foreground"
+                      : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {done ? (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                ) : (
+                  <span
+                    className={cn(
+                      "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border/70 text-muted-foreground"
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                )}
+                {step.label}
+              </Link>
+            </div>
           );
         })}
+
+        <span className="mx-1 hidden h-5 w-px bg-border/60 sm:block" />
+
+        <Link
+          href="/clone/routed-checkout/active-routes"
+          className={cn(
+            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm font-semibold transition-colors",
+            isManaging
+              ? "border-primary/50 bg-primary/12 text-foreground"
+              : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Rotas ativas
+          {routesCount > 0 && (
+            <Badge variant="secondary" className="rounded-full px-1.5">
+              {routesCount}
+            </Badge>
+          )}
+        </Link>
+      </div>
+
+      {/* Sub-opção do passo 1 */}
+      <div className="mt-2">
+        <Link
+          href="/clone/routed-checkout/neutralize"
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+            routedView === "neutralize"
+              ? "bg-primary/12 text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Opcional: Neutralização IA (dentro do passo 1)
+        </Link>
+      </div>
+
+      {/* Contexto do passo atual */}
+      <div className="mt-3 border-t border-border/60 pt-3">
+        <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
+          {content.title}
+        </h2>
+        <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">
+          {content.description}
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {content.checklist.map((item, index) => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/45 px-2 py-1 text-xs text-muted-foreground"
+            >
+              <span className="font-semibold text-primary">{index + 1}</span>
+              {item}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -629,7 +692,7 @@ function ServiceOverview() {
     {
       href: "/clone/routed-checkout",
       icon: GitBranch,
-      title: "Routed checkout",
+      title: "Loja vitrine",
       description:
         "Faça uma vitrine vender enquanto o checkout final é montado na dark store com variantes mapeadas.",
       bullets: ["SKU map", "Variant map", "Script no tema"],
@@ -1039,7 +1102,7 @@ export default function ClonePage() {
     overview: {
       title: "Central de clone e checkout",
       description:
-        "Escolha um recurso independente: clonar produtos, exportar catálogo ou configurar routed checkout.",
+        "Escolha um recurso independente: clonar produtos, exportar catálogo ou configurar a Loja vitrine.",
     },
     shopify: {
       title: "Clone de loja Shopify",
@@ -1052,7 +1115,7 @@ export default function ClonePage() {
         "Gere JSON ou CSV a partir de uma origem Shopify pública para revisão e backup.",
     },
     "routed-checkout": {
-      title: "Routed checkout",
+      title: "Loja vitrine",
       description:
         "Roteie pedidos da vitrine para o checkout da dark store com mapas de SKU e variant.",
     },
@@ -1159,7 +1222,11 @@ export default function ClonePage() {
     ]
   );
 
-  const installToken = selectedRouteConfig?.public_token || "";
+  // Para o passo "Instalar script": usa a rota que casa com as lojas selecionadas;
+  // se nenhuma casar, cai para a primeira rota ativa, garantindo um token real.
+  const scriptConfig =
+    selectedRouteConfig || configs.find((config) => config.enabled) || configs[0] || null;
+  const installToken = scriptConfig?.public_token || "";
   function buildRoutedInstallSnippet(token: string) {
     return `<script
   src="${appOrigin}/routed-checkout-loader.js"
@@ -2233,7 +2300,7 @@ export default function ClonePage() {
                     />
                     <span>
                       <span className="block font-medium text-foreground">Preparar rota</span>
-                      <span className="text-xs text-muted-foreground">Gera mapa para routed checkout.</span>
+                      <span className="text-xs text-muted-foreground">Gera mapa para Loja vitrine.</span>
                     </span>
                   </label>
                 </div>
@@ -2684,56 +2751,62 @@ export default function ClonePage() {
 
       {activeView === "routed-checkout" && (
       <section className="space-y-4" aria-labelledby="routed-checkout">
-        <RoutedTaskHeader routedView={routedView} />
+        <RoutedTaskHeader
+          routedView={routedView}
+          hasRoutes={configs.length > 0}
+          routesCount={configs.length}
+        />
 
-        {routedView === "script" && (
-          <RoutedCheckoutTutorial
-            installSnippet={installSnippet}
-            routeToken={installToken}
-          />
-        )}
-
-        {routedView !== "script" && routedView !== "active-routes" && (
-        <details className="rounded-lg border border-amber-300/70 bg-amber-50/80 p-4">
-          <summary className="flex cursor-pointer items-center gap-3 text-sm font-bold text-amber-950">
-            <LockKeyhole className="h-4 w-4" />
-            Evitar erro /password na dark store
-          </summary>
-          <div className="mt-3 grid gap-3 text-sm leading-6 text-amber-900 lg:grid-cols-[1fr_360px]">
-            <p>
-              Se a loja destino estiver em “Opening soon” ou protegida por senha,
-              a Shopify redireciona o carrinho roteado para <code>/password</code>.
-              Na dark store, abra Online Store &gt; Preferences &gt; Password
-              protection e remova a senha antes de testar.
-            </p>
-            <div className="rounded-lg border border-amber-300/70 bg-white/65 p-3 text-xs leading-5 text-amber-950">
-              Teste em janela anônima. Se aparecer “Opening soon”, o checkout
-              roteado está chegando na loja certa, mas a própria Shopify está
-              bloqueando a abertura.
+        {routedView === "script" &&
+          (configs.length === 0 ? (
+            <Card className="rounded-lg border-border/60">
+              <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Route className="h-6 w-6" />
+                </span>
+                <h3 className="text-lg font-semibold text-foreground">
+                  Nenhuma rota criada ainda
+                </h3>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  O script só funciona com o token de uma rota. Volte ao passo 2,
+                  vincule a vitrine à dark store e crie a rota — o token é gerado
+                  automaticamente.
+                </p>
+                <Link
+                  href="/clone/routed-checkout/create-route"
+                  className="mt-1 inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  Ir para o passo 2: Vincular produtos
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {scriptConfig && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Token da rota</span>
+                  <span className="font-semibold text-foreground">{scriptConfig.name}</span>
+                  <Link
+                    href="/clone/routed-checkout/active-routes"
+                    className="ml-auto text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Trocar rota
+                  </Link>
+                </div>
+              )}
+              <RoutedCheckoutTutorial
+                installSnippet={installSnippet}
+                routeToken={installToken}
+              />
             </div>
-          </div>
-        </details>
-        )}
+          ))}
 
         {routedView !== "script" && (
         <div className="grid gap-5">
         {showRoutedSetup && (
         <Card className="rounded-lg border-border/60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Route className="h-4 w-4 text-primary" />
-              {routedView === "create-destination"
-                ? "Criar produtos de destino"
-                : routedView === "neutralize"
-                  ? "Neutralizar e criar destino"
-                  : "Vincular vitrine e dark store"}
-            </CardTitle>
-            <CardDescription>
-              {routedView === "create-route"
-                ? "Revise os pares de variantes e crie a rota que gera o token."
-                : "Escolha as lojas e crie os produtos equivalentes na dark store."}
-            </CardDescription>
-          </CardHeader>
           <CardContent className="space-y-5">
             {routedView === "create-route" && (
             <div className="space-y-2">

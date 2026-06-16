@@ -1,117 +1,309 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   Boxes,
-  GitBranch,
-  MessageSquareText,
-  PackageCheck,
-  Settings2,
+  CheckCircle2,
+  CircleDashed,
+  Link2,
+  Rocket,
+  ShoppingBag,
   Sparkles,
   Store,
+  UploadCloud,
+  Workflow,
+  XCircle,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/page-header";
+import { createClient } from "@/lib/supabase/client";
+
+const quickActions = [
+  {
+    href: "/clone/shopify/individual",
+    title: "Importar produto",
+    desc: "Importe um produto via URL",
+    icon: Link2,
+    tint: "text-sky-400 bg-sky-500/10",
+  },
+  {
+    href: "/clone/shopify/bulk",
+    title: "Importação em massa",
+    desc: "Importe múltiplos produtos",
+    icon: UploadCloud,
+    tint: "text-indigo-400 bg-indigo-500/10",
+  },
+  {
+    href: "/clone/shopify",
+    title: "Clonar loja",
+    desc: "Clone uma loja completa",
+    icon: Store,
+    tint: "text-emerald-400 bg-emerald-500/10",
+  },
+  {
+    href: "/clone/routed-checkout",
+    title: "Loja vitrine",
+    desc: "Gerenciar roteamento",
+    icon: Workflow,
+    tint: "text-orange-400 bg-orange-500/10",
+  },
+];
+
+type ProductStatus = "pending" | "optimized" | "published" | "failed";
+
+interface RecentProduct {
+  id: string;
+  title: string;
+  status: ProductStatus;
+  created_at: string;
+}
+
+const STATUS_META: Record<
+  ProductStatus,
+  { label: string; icon: typeof CircleDashed; tint: string }
+> = {
+  pending: { label: "Importado", icon: CircleDashed, tint: "text-sky-400" },
+  optimized: { label: "Otimizado", icon: Sparkles, tint: "text-indigo-400" },
+  published: { label: "Publicado", icon: CheckCircle2, tint: "text-emerald-400" },
+  failed: { label: "Falhou", icon: XCircle, tint: "text-red-400" },
+};
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `${min} min atrás`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours} h atrás`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} d atrás`;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+function displayName(
+  user: { user_metadata?: Record<string, unknown>; email?: string } | null
+): string {
+  const meta = user?.user_metadata ?? {};
+  const raw =
+    (typeof meta.name === "string" && meta.name) ||
+    (typeof meta.full_name === "string" && meta.full_name) ||
+    (user?.email ? user.email.split("@")[0] : "");
+  if (!raw) return "você";
+  const first = raw.trim().split(/\s+/)[0];
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+  const [storeCount, setStoreCount] = useState(0);
+  const [productCount, setProductCount] = useState(0);
+  const [publishedCount, setPublishedCount] = useState(0);
+  const [recent, setRecent] = useState<RecentProduct[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      const supabase = createClient();
+
+      const [{ data: userData }, stores, products, published, recentProducts] =
+        await Promise.all([
+          supabase.auth.getUser(),
+          supabase.from("stores").select("id", { count: "exact", head: true }),
+          supabase.from("products").select("id", { count: "exact", head: true }),
+          supabase
+            .from("products")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "published"),
+          supabase
+            .from("products")
+            .select("id, title, status, created_at")
+            .order("created_at", { ascending: false })
+            .limit(5),
+        ]);
+
+      if (!active) return;
+
+      setName(displayName(userData?.user ?? null));
+      setStoreCount(stores.count ?? 0);
+      setProductCount(products.count ?? 0);
+      setPublishedCount(published.count ?? 0);
+      setRecent((recentProducts.data as RecentProduct[] | null) ?? []);
+      setLoading(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const stats = [
+    { label: "Lojas conectadas", value: storeCount, icon: Store, tint: "text-sky-400 bg-sky-500/10" },
+    { label: "Produtos importados", value: productCount, icon: Boxes, tint: "text-indigo-400 bg-indigo-500/10" },
+    { label: "Produtos publicados", value: publishedCount, icon: ShoppingBag, tint: "text-emerald-400 bg-emerald-500/10" },
+  ];
+
+  const noStores = !loading && storeCount === 0;
+
   return (
     <div className="space-y-8 animate-fade-in pb-10">
-      <PageHeader
-        title="Painel de Controle"
-        description="Acesse suas operações principais. Cada bloco abaixo leva a uma ação vital do seu fluxo de dropshipping e automação."
-      />
+      {/* Greeting */}
+      <div>
+        <h1 className="text-[2rem] font-heading font-bold tracking-tight text-foreground">
+          {loading ? (
+            <span className="skeleton inline-block h-9 w-64 rounded-lg align-middle" />
+          ) : (
+            <>Olá, {name} 👋</>
+          )}
+        </h1>
+        <p className="mt-1 text-[0.95rem] text-muted-foreground">
+          Tudo pronto para escalar suas operações hoje.
+        </p>
+      </div>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        <Link
-          href="/clone/shopify/individual"
-          className="group relative grid min-h-[360px] overflow-hidden rounded-lg border border-border bg-card p-8 shadow-[0_18px_40px_rgba(15,23,42,0.06)] transition-all duration-200 hover:border-primary/35 hover:shadow-[0_24px_48px_rgba(15,23,42,0.08)]"
-        >
-          <div className="pointer-events-none absolute right-8 top-8 hidden opacity-[0.08] lg:block">
-            <PackageCheck className="h-48 w-48 text-primary" />
-          </div>
-          <div className="relative z-10 max-w-[520px]">
-            <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-primary">
-              <PackageCheck className="h-6 w-6" />
-            </span>
-            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-              Fluxo principal
-            </p>
-            <h2 className="mb-4 text-3xl font-heading font-black tracking-tight text-foreground lg:text-[2.6rem]">
-              Importação individual
-            </h2>
-            <p className="max-w-[34rem] text-base leading-7 text-muted-foreground">
-              Use uma URL de produto Shopify e publique apenas o item selecionado instantaneamente.
-            </p>
-          </div>
-          <div className="relative z-10 mt-10 flex items-center text-sm font-semibold text-primary transition-transform group-hover:translate-x-1">
-            Começar agora <ArrowRight className="ml-2 h-4 w-4" />
-          </div>
-        </Link>
-
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
+      {/* Empty state — usuário sem nenhuma loja */}
+      {noStores ? (
+        <div className="rounded-2xl border border-border bg-card/70 p-10 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Rocket className="h-7 w-7" />
+          </span>
+          <h2 className="mt-5 text-xl font-heading font-bold tracking-tight text-foreground">
+            Conecte sua primeira loja
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-[14px] text-muted-foreground">
+            Você ainda não conectou nenhuma loja Shopify. Conecte uma para começar
+            a importar e publicar produtos.
+          </p>
           <Link
-            href="/clone/shopify/bulk"
-            className="group rounded-lg bg-brand-gradient p-7 text-primary-foreground shadow-[0_18px_40px_rgba(34,112,255,0.24)] transition-all duration-200 hover:brightness-[1.03]"
+            href="/stores"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
-            <Boxes className="mb-5 h-9 w-9 opacity-95" />
-            <h2 className="mb-2 text-2xl font-heading font-extrabold tracking-tight">
-              Importação em massa
-            </h2>
-            <p className="text-sm leading-6 text-primary-foreground/84">
-              Analise o catálogo completo e extraia múltiplos produtos de uma só vez.
-            </p>
-            <div className="mt-8 flex items-center text-sm font-semibold">
-              Clonar loja <ArrowRight className="ml-2 h-4 w-4" />
-            </div>
-          </Link>
-
-          <Link
-            href="/clone/routed-checkout/create-route"
-            className="group rounded-lg border border-border bg-card p-7 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition-all duration-200 hover:border-primary/30"
-          >
-            <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg bg-accent text-primary">
-              <GitBranch className="h-5 w-5" />
-            </span>
-            <h2 className="mb-2 text-xl font-heading font-bold tracking-tight text-foreground">
-              Routed Checkout
-            </h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Mapeie produtos da vitrine para as variantes da dark store oculta.
-            </p>
-            <div className="mt-8 flex items-center text-sm font-semibold text-primary">
-              Vincular agora <ArrowRight className="ml-2 h-4 w-4" />
-            </div>
+            <Store className="h-4 w-4" /> Conectar loja
           </Link>
         </div>
-      </section>
-
-      <div className="pt-4">
-        <h3 className="mb-5 text-xl font-heading font-bold tracking-tight">Ferramentas de apoio</h3>
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { href: "/stores", label: "Lojas", icon: Store },
-            { href: "/store-setup", label: "Setup", icon: Settings2 },
-            { href: "/optimizer", label: "IA Optimizer", icon: Sparkles },
-            { href: "/reviews", label: "Reviews IA", icon: MessageSquareText },
-          ].map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              className="group flex min-h-[170px] flex-col items-start justify-between rounded-lg border border-border bg-card p-5 text-left shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-colors hover:border-primary/30 hover:bg-card active:scale-[0.99]"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:text-primary">
-                <action.icon className="h-5 w-5" />
-              </span>
-              <div>
-                <div className="font-semibold text-foreground">{action.label}</div>
-                <div className="mt-2 flex items-center text-sm font-medium text-primary">
-                  Abrir <ArrowRight className="ml-2 h-4 w-4" />
+      ) : (
+        <>
+          {/* Stat cards */}
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {stats.map((s) => (
+              <div
+                key={s.label}
+                className="rounded-2xl border border-border bg-card/70 p-5 transition-colors hover:border-primary/30"
+              >
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${s.tint}`}>
+                    <s.icon className="h-5 w-5" />
+                  </span>
+                  <span className="pt-0.5 text-[13px] text-muted-foreground">{s.label}</span>
+                </div>
+                <div className="mt-4 flex items-baseline gap-2">
+                  {loading ? (
+                    <span className="skeleton h-7 w-16 rounded-md" />
+                  ) : (
+                    <span className="text-[1.75rem] font-heading font-bold leading-none text-foreground">
+                      {s.value.toLocaleString("pt-BR")}
+                    </span>
+                  )}
                 </div>
               </div>
-            </Link>
-          ))}
-        </section>
-      </div>
+            ))}
+          </section>
+
+          {/* Quick actions */}
+          <section>
+            <div className="mb-4">
+              <h2 className="text-xl font-heading font-bold tracking-tight text-foreground">
+                Ações rápidas
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {quickActions.map((a) => (
+                <Link
+                  key={a.href}
+                  href={a.href}
+                  className="group rounded-2xl border border-border bg-card/70 p-5 transition-all hover:border-primary/40 hover:bg-card active:scale-[0.99]"
+                >
+                  <div className="flex items-start justify-between">
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${a.tint}`}>
+                      <a.icon className="h-5 w-5" />
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  </div>
+                  <h3 className="mt-4 font-semibold text-foreground">{a.title}</h3>
+                  <p className="mt-1 text-[13px] text-muted-foreground">{a.desc}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          {/* Recent activity */}
+          <section>
+            <div className="rounded-2xl border border-border bg-card/70 p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-heading font-bold tracking-tight text-foreground">
+                  Produtos recentes
+                </h2>
+                <Link
+                  href="/products/catalog"
+                  className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Ver catálogo
+                </Link>
+              </div>
+
+              {loading ? (
+                <div className="space-y-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3.5 px-2 py-2.5">
+                      <div className="skeleton h-9 w-9 rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <div className="skeleton h-3.5 w-48 rounded" />
+                        <div className="skeleton h-3 w-24 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : recent.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-[14px] text-muted-foreground">
+                    Nenhum produto importado ainda.
+                  </p>
+                  <Link
+                    href="/clone/shopify/individual"
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Link2 className="h-4 w-4" /> Importar primeiro produto
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {recent.map((item) => {
+                    const meta = STATUS_META[item.status] ?? STATUS_META.pending;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-3.5 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.03]"
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] ${meta.tint}`}>
+                          <meta.icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13.5px] font-medium text-foreground">{item.title}</p>
+                          <p className="truncate text-[12px] text-muted-foreground">{meta.label}</p>
+                        </div>
+                        <span className="shrink-0 text-[12px] text-muted-foreground">
+                          {relativeTime(item.created_at)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -46,6 +46,7 @@ import {
   RefreshCw,
   Pencil,
   ExternalLink,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -128,15 +129,15 @@ interface AvailableLogo {
 }
 
 const LOGO_POSITION_OPTIONS: { value: LogoPosition; label: string }[] = [
-  { value: "top-left", label: "â†– Topo esq" },
-  { value: "top-center", label: "â†‘ Topo" },
-  { value: "top-right", label: "â†— Topo dir" },
-  { value: "center-left", label: "â† Centro esq" },
-  { value: "center", label: "â— Centro" },
-  { value: "center-right", label: "â†’ Centro dir" },
-  { value: "bottom-left", label: "â†™ Inf esq" },
-  { value: "bottom-center", label: "â†“ Inferior" },
-  { value: "bottom-right", label: "â†˜ Inf dir" },
+  { value: "top-left", label: "↖ Topo esq" },
+  { value: "top-center", label: "↑ Topo" },
+  { value: "top-right", label: "↗ Topo dir" },
+  { value: "center-left", label: "← Centro esq" },
+  { value: "center", label: "● Centro" },
+  { value: "center-right", label: "→ Centro dir" },
+  { value: "bottom-left", label: "↙ Inf esq" },
+  { value: "bottom-center", label: "↓ Inferior" },
+  { value: "bottom-right", label: "↘ Inf dir" },
 ];
 
 function getLogoUrl(logoPath: string): string {
@@ -308,6 +309,7 @@ function ProductsPageContent() {
   const [comparePriceDraft, setComparePriceDraft] = useState("");
   const [bulkMarkupDraft, setBulkMarkupDraft] = useState("0");
   const [activeTab, setActiveTab] = useState("optimized");
+  const [importSettingsOpen, setImportSettingsOpen] = useState(false);
   const [storeAssets, setStoreAssets] = useState<StoreAsset[]>([]);
   const [materialFiles, setMaterialFiles] = useState<File[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -1717,17 +1719,17 @@ function ProductsPageContent() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2
-            className="text-3xl font-semibold text-foreground"
+            className="text-2xl font-semibold text-foreground"
             style={{ letterSpacing: "-0.03em" }}
           >
             Produtos
           </h2>
           <p
-            className="mt-1 text-base text-muted-foreground"
+            className="mt-1 text-sm text-muted-foreground"
             style={{ letterSpacing: "-0.01em" }}
           >
             Importe produtos de qualquer site, otimize com IA e publique na Shopify
@@ -1735,22 +1737,60 @@ function ProductsPageContent() {
         </div>
         <Link
           href="/products/catalog"
-          className="inline-flex h-10 items-center rounded-lg border border-border/50 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex h-9 items-center rounded-lg border border-border/50 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Ver Catalogo completo
+          Ver Catálogo completo
         </Link>
       </div>
 
       {/* Config */}
       <Card className="border-border/50">
-        <CardContent className="pt-6 space-y-6">
-          <StoreSettingsCard 
-            stores={stores}
-            selectedStore={selectedStore}
-            setSelectedStore={(val) => setSelectedStore(val ?? "")}
-            selectedStoreData={selectedStoreData}
-          />
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-[240px] flex-1">
+              <StoreSettingsCard
+                stores={stores}
+                selectedStore={selectedStore}
+                setSelectedStore={(val) => setSelectedStore(val ?? "")}
+                selectedStoreData={selectedStoreData}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setImportSettingsOpen(true)}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-border/50 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Settings2 className="h-4 w-4" />
+              Configurações de importação
+            </button>
+          </div>
 
+          <ImportCard
+            url={url}
+            setUrl={setUrl}
+            loading={loading}
+            handleScrape={handleScrape}
+            neutralizeOnImport={neutralizeOnImport}
+            setNeutralizeOnImport={setNeutralizeOnImport}
+            removeExternalReferencesOnImport={removeExternalReferencesOnImport}
+            setRemoveExternalReferencesOnImport={setRemoveExternalReferencesOnImport}
+            aiMediaLimit={aiMediaLimit}
+            setAiMediaLimit={setAiMediaLimit}
+            genericizeNeutralizedText={genericizeNeutralizedText}
+            setGenericizeNeutralizedText={setGenericizeNeutralizedText}
+            customPrompt={customImportPrompt}
+            setCustomPrompt={setCustomImportPrompt}
+            hasSelectedStore={Boolean(selectedStore)}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Popup: configurações avançadas de importação */}
+      <Dialog open={importSettingsOpen} onOpenChange={setImportSettingsOpen}>
+        <DialogContent className="border-border/50 bg-card max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Configurações de importação</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2.5">
               <label className="flex items-center gap-2 text-sm">
@@ -1824,27 +1864,9 @@ function ProductsPageContent() {
                 Se a loja tiver logo configurada, todas as midias vao para o preview ja com marca.
               </p>
             </div>
-
-            <ImportCard 
-              url={url}
-              setUrl={setUrl}
-              loading={loading}
-              handleScrape={handleScrape}
-              neutralizeOnImport={neutralizeOnImport}
-              setNeutralizeOnImport={setNeutralizeOnImport}
-              removeExternalReferencesOnImport={removeExternalReferencesOnImport}
-              setRemoveExternalReferencesOnImport={setRemoveExternalReferencesOnImport}
-              aiMediaLimit={aiMediaLimit}
-              setAiMediaLimit={setAiMediaLimit}
-              genericizeNeutralizedText={genericizeNeutralizedText}
-              setGenericizeNeutralizedText={setGenericizeNeutralizedText}
-              customPrompt={customImportPrompt}
-              setCustomPrompt={setCustomImportPrompt}
-              hasSelectedStore={Boolean(selectedStore)}
-            />
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {product && (
         <PricingCard 
