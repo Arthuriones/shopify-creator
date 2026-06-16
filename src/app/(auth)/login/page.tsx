@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Package, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type Mode = "login" | "signup" | "recovery";
@@ -110,23 +110,14 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
         {/* Brand */}
         <div className="mb-10 text-center">
-          <div
-            className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.72 0.19 155)" }}
-          >
-            <Package
-              className="h-5 w-5"
-              style={{ color: "oklch(0.13 0.02 155)" }}
-            />
-          </div>
-          <h1
-            className="text-2xl font-semibold text-foreground"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            Shopify Creator
-          </h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="mx-auto mb-4 h-12 w-auto"
+          />
           <p
-            className="mt-2 text-sm text-muted-foreground"
+            className="text-sm text-muted-foreground"
             style={{ letterSpacing: "-0.01em" }}
           >
             Automatize sua loja com IA
