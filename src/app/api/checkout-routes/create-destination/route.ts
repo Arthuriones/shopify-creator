@@ -54,6 +54,7 @@ interface DestinationProductInput {
     options?: string[];
     inventoryTracked?: boolean;
     inventoryQuantity?: number;
+    sku?: string;
   }[];
   seo: { title: string; description: string };
   publishToStorefront: boolean;
@@ -164,6 +165,10 @@ function toCreateProductInput(product: ConnectedProduct): DestinationProductInpu
           compareAtPrice: variant.compareAtPrice
             ? String(variant.compareAtPrice)
             : undefined,
+          // Copia o SKU da vitrine para a dark store: assim a conexao das
+          // variantes acontece automaticamente por SKU (sku_map), mesmo apos
+          // neutralizar/traduzir, sem precisar linkar produto por produto.
+          sku: variant.sku?.trim() || undefined,
           options: hasOptions
             ? optionNames.map(
                 (optionName) =>

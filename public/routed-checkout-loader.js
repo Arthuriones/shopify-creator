@@ -392,11 +392,10 @@
   function handleDocumentClick(event) {
     if (isCheckoutTarget(event.target)) {
       routeCheckout(event);
-      return;
     }
-    if (isAddToCartTarget(event.target)) {
-      routeAddToCart(event);
-    }
+    // O "adicionar ao carrinho" NAO e interceptado: o proprio tema adiciona o
+    // produto da vitrine normalmente (1 item). O roteamento acontece so no
+    // checkout. Interceptar o add causava double-add (loader + tema = 2 itens).
   }
 
   function patchYampiCheckoutFunctions() {

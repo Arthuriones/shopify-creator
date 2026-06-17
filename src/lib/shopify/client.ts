@@ -731,6 +731,7 @@ export async function createProduct(
       options?: string[];
       inventoryQuantity?: number;
       inventoryTracked?: boolean;
+      sku?: string;
     }[];
     options?: string[]; // nomes das opções: ["Cor", "Tamanho"]
     seo?: { title: string; description: string };
@@ -744,7 +745,25 @@ export async function createProduct(
     options?: string[];
     inventoryQuantity?: number;
     inventoryTracked?: boolean;
+    sku?: string;
   };
+
+  // Monta o bloco inventoryItem incluindo SKU e/ou rastreamento quando houver.
+  // O SKU e a chave que permite conectar a variante da vitrine a da dark store
+  // automaticamente (sku_map), sem linkar produto por produto.
+  function buildInventoryItem(variant: {
+    inventoryTracked?: boolean;
+    sku?: string;
+  }) {
+    const item: { tracked?: boolean; sku?: string } = {};
+    if (typeof variant.inventoryTracked === "boolean") {
+      item.tracked = variant.inventoryTracked;
+    }
+    if (variant.sku && variant.sku.trim()) {
+      item.sku = variant.sku.trim();
+    }
+    return Object.keys(item).length ? { inventoryItem: item } : {};
+  }
 
   function assertNoUserErrors(
     errors: ShopifyUserError[] | undefined,
@@ -817,6 +836,7 @@ export async function createProduct(
       typeof variant.inventoryTracked === "boolean"
         ? variant.inventoryTracked
         : false,
+    sku: variant.sku?.trim() || undefined,
   }));
   const hasMultipleVariants =
     normalizedVariants.length > 1 && Boolean(input.options?.length);
@@ -885,9 +905,7 @@ export async function createProduct(
     const variantsToCreate = normalizedVariants.slice(1).map((v) => ({
       price: v.price,
       ...(v.compareAtPrice ? { compareAtPrice: v.compareAtPrice } : {}),
-      ...(typeof v.inventoryTracked === "boolean"
-        ? { inventoryItem: { tracked: v.inventoryTracked } }
-        : {}),
+      ...buildInventoryItem(v),
       optionValues: (v.options || []).map((val, i) => ({
         optionName: input.options![i],
         name: val,
@@ -901,9 +919,7 @@ export async function createProduct(
         id: defaultVariantId,
         price: firstVariant.price,
         ...(firstVariant.compareAtPrice ? { compareAtPrice: firstVariant.compareAtPrice } : {}),
-        ...(typeof firstVariant.inventoryTracked === "boolean"
-          ? { inventoryItem: { tracked: firstVariant.inventoryTracked } }
-          : {}),
+        ...buildInventoryItem(firstVariant),
         optionValues: (firstVariant.options || []).map((val, i) => ({
           optionName: input.options![i],
           name: val,
@@ -968,9 +984,7 @@ export async function createProduct(
         id: defaultVariantId,
         price: variant.price,
         ...(variant.compareAtPrice ? { compareAtPrice: variant.compareAtPrice } : {}),
-        ...(typeof variant.inventoryTracked === "boolean"
-          ? { inventoryItem: { tracked: variant.inventoryTracked } }
-          : {}),
+        ...buildInventoryItem(variant),
       }],
     });
     assertNoUserErrors(
