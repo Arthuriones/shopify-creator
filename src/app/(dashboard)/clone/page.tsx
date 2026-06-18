@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AlertCircle,
+  ArrowLeftRight,
   ArrowRight,
   CheckCircle2,
   Code2,
@@ -1045,6 +1046,7 @@ export default function ClonePage() {
   const [routeSaving, setRouteSaving] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
+  const [invertingRouteId, setInvertingRouteId] = useState("");
   const [destinationCreating, setDestinationCreating] = useState(false);
   const [translateDestinationProducts, setTranslateDestinationProducts] =
     useState(false);
@@ -1874,6 +1876,56 @@ export default function ClonePage() {
       toast.error(error instanceof Error ? error.message : "Falha ao excluir rota.");
     } finally {
       setDeletingRouteId("");
+    }
+  }
+
+  async function handleInvertRoute(config: CheckoutConfig) {
+    const entries = Object.entries(config.variant_map || {});
+    if (entries.length === 0) {
+      toast.error("Esta rota nao tem mapa para inverter. Recrie a rota.");
+      return;
+    }
+    const values = entries.map(([, value]) => value);
+    if (new Set(values).size !== values.length) {
+      toast.error(
+        "Nao da para inverter automaticamente (destinos repetidos no mapa). Recrie a rota com a vitrine correta."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Inverter "${config.name}"?\n\nA vitrine (onde o cliente compra) e a dark store (onde fica o checkout) serao trocadas. O token instalado no tema continua o mesmo.`
+    );
+    if (!confirmed) return;
+
+    setInvertingRouteId(config.id);
+    try {
+      const invertedVariantMap = Object.fromEntries(
+        entries.map(([key, value]) => [value, key])
+      );
+      const res = await fetch("/api/checkout-routes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: config.id,
+          name: config.name,
+          sourceStoreId: config.target_store_id,
+          targetStoreId: config.source_store_id,
+          mode: config.mode,
+          variantMap: invertedVariantMap,
+          // sku_map nao pode ser invertido de forma confiavel; o variant_map
+          // ja cobre o roteamento. Recriar destino refaz o sku_map se preciso.
+          skuMap: {},
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao inverter rota.");
+      toast.success("Vitrine e dark store invertidas. O token segue o mesmo.");
+      await loadConfigs();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao inverter rota.");
+    } finally {
+      setInvertingRouteId("");
     }
   }
 
@@ -2845,6 +2897,9 @@ export default function ClonePage() {
             <div className={cn("grid gap-4", routedView === "create-route" ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
               <div className="space-y-2">
                 <Label>Vitrine</Label>
+                <p className="text-xs text-muted-foreground/80">
+                  Onde o cliente compra (storefront com o script instalado).
+                </p>
                 <Select value={routeSourceStoreId} onValueChange={handleRouteSourceChange}>
                   <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Origem">
@@ -2865,6 +2920,9 @@ export default function ClonePage() {
 
               <div className="space-y-2">
                 <Label>Dark store</Label>
+                <p className="text-xs text-muted-foreground/80">
+                  Onde fica o checkout/pagamento (recebe o pedido roteado).
+                </p>
                 <Select value={routeTargetStoreId} onValueChange={handleRouteTargetChange}>
                   <SelectTrigger className="w-full min-w-0">
                     <SelectValue placeholder="Destino">
@@ -3681,6 +3739,20 @@ export default function ClonePage() {
                       >
                         <Edit3 className="h-3.5 w-3.5" />
                         Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleInvertRoute(config)}
+                        disabled={invertingRouteId === config.id}
+                        title="Troca vitrine e dark store. Use se o cliente compra na loja que esta como dark store."
+                      >
+                        {invertingRouteId === config.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ArrowLeftRight className="h-3.5 w-3.5" />
+                        )}
+                        Inverter lojas
                       </Button>
                       <Button
                         variant="outline"
