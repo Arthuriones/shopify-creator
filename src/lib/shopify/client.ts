@@ -710,6 +710,43 @@ export async function syncProductCollections(
   return { synced, warnings };
 }
 
+// Carimba SKUs em variantes JA existentes (productVariantsBulkUpdate).
+// Usado para conectar produtos da dark store criados antes do SKU automatico,
+// sem precisar recriar nada — a conexao por SKU passa a funcionar.
+export async function updateVariantSkus(
+  creds: ShopifyCredentials,
+  productId: string,
+  updates: { variantId: string; sku: string }[]
+) {
+  const variants = updates
+    .filter((update) => update.variantId && update.sku?.trim())
+    .map((update) => ({
+      id: update.variantId,
+      inventoryItem: { sku: update.sku.trim() },
+    }));
+
+  if (variants.length === 0) return { updated: 0 };
+
+  const query = `
+    mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+        productVariants { id }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const result = await shopifyGraphQL(creds, query, { productId, variants });
+  const errors = result?.productVariantsBulkUpdate?.userErrors as
+    | { message: string }[]
+    | undefined;
+  if (errors?.length) {
+    throw new Error(errors.map((error) => error.message).join(" | "));
+  }
+
+  return { updated: variants.length };
+}
+
 export async function createProduct(
   creds: ShopifyCredentials,
   input: {

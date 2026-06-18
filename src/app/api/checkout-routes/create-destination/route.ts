@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createProduct,
   getProducts,
+  updateVariantSkus,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
 import {
@@ -450,6 +451,23 @@ export async function POST(request: NextRequest) {
         const maps = buildVariantMaps(product, existing);
         Object.assign(skuMap, maps.skuMap);
         Object.assign(variantMap, maps.variantMap);
+        // Carimba os SKUs da vitrine nas variantes ja existentes da dark store,
+        // pra que a conexao por SKU passe a funcionar sem recriar o produto.
+        const skuUpdates = Object.entries(maps.skuMap).map(([sku, variantId]) => ({
+          variantId,
+          sku,
+        }));
+        if (skuUpdates.length > 0) {
+          try {
+            await updateVariantSkus(targetCreds, existing.id, skuUpdates);
+          } catch (skuError) {
+            // Nao falha a operacao inteira por causa de SKU duplicado/limite.
+            console.warn(
+              `Falha ao carimbar SKU em ${product.handle}:`,
+              skuError instanceof Error ? skuError.message : skuError
+            );
+          }
+        }
         skipped.push({ sourceHandle: product.handle, targetProductId: existing.id });
         continue;
       }

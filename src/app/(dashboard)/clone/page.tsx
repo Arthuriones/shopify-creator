@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Code2,
@@ -1950,6 +1951,28 @@ export default function ClonePage() {
       return;
     }
 
+    let parsedSkuMap: Record<string, string>;
+    let parsedVariantMap: Record<string, string>;
+    try {
+      parsedSkuMap = parseJsonMap(skuMap, "SKU map");
+      parsedVariantMap = parseJsonMap(variantMap, "Variant map");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Mapa invalido.");
+      return;
+    }
+
+    // Sem mapa de variantes a rota nao consegue rotear nada no checkout
+    // (cai no checkout da vitrine). Bloqueia e orienta a conectar antes.
+    if (
+      Object.keys(parsedVariantMap).length === 0 &&
+      Object.keys(parsedSkuMap).length === 0
+    ) {
+      toast.error(
+        "Nenhuma variante conectada. Rode \"Criar destino\" (passo 1) para conectar os produtos por SKU antes de salvar a rota."
+      );
+      return;
+    }
+
     setRouteSaving(true);
     try {
       const res = await fetch("/api/checkout-routes", {
@@ -1961,8 +1984,8 @@ export default function ClonePage() {
           sourceStoreId: routeSourceStoreId,
           targetStoreId: routeTargetStoreId,
           mode: routeMode,
-          skuMap: parseJsonMap(skuMap, "SKU map"),
-          variantMap: parseJsonMap(variantMap, "Variant map"),
+          skuMap: parsedSkuMap,
+          variantMap: parsedVariantMap,
         }),
       });
       const data = await res.json();
@@ -3525,6 +3548,35 @@ export default function ClonePage() {
               </div>
             </div>
             )}
+
+            {routedView === "create-route" && (() => {
+              const connected = Object.keys(currentVariantMap).length;
+              const total = suggestedRouteMaps.sourceVariants.length;
+              const noneConnected = connected === 0;
+              return (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+                    noneConnected
+                      ? "border-red-400/40 bg-red-500/10 text-red-300"
+                      : "border-primary/30 bg-primary/8 text-foreground"
+                  )}
+                >
+                  {noneConnected ? (
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  )}
+                  <span>
+                    <strong>{connected}</strong>
+                    {total > 0 ? ` de ${total}` : ""} variante(s) conectada(s).
+                    {noneConnected
+                      ? " Rode \"Criar destino\" (passo 1) para conectar por SKU antes de salvar."
+                      : ""}
+                  </span>
+                </div>
+              );
+            })()}
 
             {routedView === "create-route" && (
             <div className="flex flex-wrap gap-2">
