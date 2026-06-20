@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   createProduct,
   getProducts,
   syncProductCollections,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
+import {
+  enqueueImageNeutralizeJobs,
+  processImageNeutralizeJobs,
+  type ImageNeutralizeItem,
+} from "@/lib/jobs/image-neutralize-processor";
 import { optimizeProduct } from "@/lib/gemini/client";
 import {
   neutralizeProductForDestination,
@@ -219,6 +225,10 @@ async function prepareCreateInputForImport(input: {
   neutralizationInstructions: string;
   customPrompt: string;
   applyLogoToImages: boolean;
+  // Quando true, neutraliza apenas o TEXTO aqui; a imagem vira job de background.
+  deferImageNeutralization?: boolean;
+  // Quando true, mantem apenas a imagem principal (dark store usa 1 imagem).
+  heroOnly?: boolean;
 }) {
   let productInput = input.productInput;
   const warnings: string[] = [];
@@ -229,6 +239,10 @@ async function prepareCreateInputForImport(input: {
   function getStorageClient() {
     storageClient ||= createAdminClient();
     return storageClient;
+  }
+
+  if (input.heroOnly && productInput.images.length > 1) {
+    productInput = { ...productInput, images: productInput.images.slice(0, 1) };
   }
 
   if (input.neutralizeProducts || input.removeExternalReferences) {
@@ -242,7 +256,8 @@ async function prepareCreateInputForImport(input: {
         url: image.src,
         altText: image.altText,
       })),
-      maxImages: input.aiMediaLimit,
+      // maxImages = 0 => neutraliza so o texto (imagem fica para a fila).
+      maxImages: input.deferImageNeutralization ? 0 : input.aiMediaLimit,
       storageClient: getStorageClient(),
       targetLanguage: input.targetLanguage,
       customInstructions:
@@ -271,7 +286,8 @@ async function prepareCreateInputForImport(input: {
     neutralized = true;
   }
 
-  if (input.applyLogoToImages) {
+  // Em modo fila a imagem sera substituida depois; nao aplica logo agora.
+  if (input.applyLogoToImages && !input.deferImageNeutralization) {
     const branded = await applyLogoToProductImages({
       userId: input.userId,
       storeId: input.targetStoreId,
@@ -439,6 +455,14 @@ export async function POST(request: NextRequest) {
     body.translateProduct === true || body.translateProducts === true;
   const neutralizeProducts = body.neutralizeProducts === true;
   const removeExternalReferences = body.removeExternalReferences === true;
+  // "queue": neutraliza texto na hora e processa a imagem em background (fila).
+  const imageNeutralizeMode =
+    body.imageNeutralizeMode === "queue" ? "queue" : "inline";
+  const deferImageNeutralization =
+    (neutralizeProducts || removeExternalReferences) &&
+    imageNeutralizeMode === "queue";
+  // Dark store usa 1 imagem por produto; o modo fila forca hero unico.
+  const heroOnly = body.heroOnly === true || deferImageNeutralization;
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =
@@ -592,6 +616,8 @@ export async function POST(request: NextRequest) {
         neutralizationInstructions,
         customPrompt,
         applyLogoToImages,
+        deferImageNeutralization,
+        heroOnly,
         productInput,
       });
 
@@ -679,6 +705,7 @@ export async function POST(request: NextRequest) {
     }[] = [];
     const aggregateSkuMap: Record<string, string> = {};
     const aggregateVariantMap: Record<string, string> = {};
+    const imageQueueItems: ImageNeutralizeItem[] = [];
     const collectionProductIds = new Map<string, Set<string>>();
     const collectionsForSync =
       sourceCollections.length > 0
@@ -734,6 +761,8 @@ export async function POST(request: NextRequest) {
           neutralizationInstructions,
           customPrompt,
           applyLogoToImages,
+          deferImageNeutralization,
+          heroOnly,
           productInput: await buildCreateInputForTarget(
             product,
             targetContext,
@@ -750,6 +779,23 @@ export async function POST(request: NextRequest) {
         Object.assign(aggregateVariantMap, maps.variantMap);
         assignProductToCollections(product, result?.syncedProduct?.id);
         created.push({ sourceHandle: product.handle, result });
+
+        // Modo fila: produto entra com a imagem original; o hero neutralizado
+        // sera trocado em background.
+        const createdProductId = result?.syncedProduct?.id;
+        const heroSource = prepared.productInput.images?.[0]?.src;
+        if (deferImageNeutralization && createdProductId && heroSource) {
+          imageQueueItems.push({
+            productId: createdProductId,
+            imageUrl: heroSource,
+            title: prepared.productInput.title,
+            mode: removeExternalReferences
+              ? "external-references"
+              : "stock-neutralize",
+            customInstructions: neutralizationInstructions || customPrompt,
+            targetLanguage: targetContext?.targetLanguage || "pt-BR",
+          });
+        }
         if (
           prepared.neutralized ||
           prepared.logoAppliedCount > 0 ||
@@ -770,6 +816,30 @@ export async function POST(request: NextRequest) {
               ? error.message
               : "Falha ao criar produto.",
         });
+      }
+    }
+
+    let imageQueueCount = 0;
+    if (imageQueueItems.length > 0) {
+      try {
+        const { queued } = await enqueueImageNeutralizeJobs({
+          userId,
+          storeId: targetStoreId,
+          items: imageQueueItems,
+        });
+        imageQueueCount = queued;
+        after(async () => {
+          try {
+            await processImageNeutralizeJobs({
+              userId,
+              storeId: targetStoreId,
+            });
+          } catch (error) {
+            console.error("[api/shopify/clone] image queue error", error);
+          }
+        });
+      } catch (error) {
+        console.error("[api/shopify/clone] enqueue images error", error);
       }
     }
 
@@ -842,6 +912,7 @@ export async function POST(request: NextRequest) {
       ),
       skuMapCount: Object.keys(aggregateSkuMap).length,
       variantMapCount: Object.keys(aggregateVariantMap).length,
+      imageQueueCount,
       skuMap: aggregateSkuMap,
       variantMap: aggregateVariantMap,
       collectionSync,

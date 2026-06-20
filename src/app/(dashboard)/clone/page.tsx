@@ -106,6 +106,14 @@ interface CheckoutConfig {
   variant_map: Record<string, string>;
 }
 
+interface ImageQueueProgress {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  total: number;
+}
+
 interface CloneRun {
   id: string;
   source_domain: string;
@@ -1056,6 +1064,10 @@ export default function ClonePage() {
     useState(false);
   const [destinationAiMediaLimit, setDestinationAiMediaLimit] = useState("1");
   const [destinationGenericizeText, setDestinationGenericizeText] = useState(true);
+  // Processa a imagem neutralizada em background (1 hero por produto).
+  const [destinationImageQueue, setDestinationImageQueue] = useState(true);
+  const [imageQueueProgress, setImageQueueProgress] =
+    useState<ImageQueueProgress | null>(null);
   const [
     destinationNeutralizationInstructions,
     setDestinationNeutralizationInstructions,
@@ -1070,6 +1082,58 @@ export default function ClonePage() {
 
   const cloneAbortRef = useRef<AbortController | null>(null);
   const destinationAbortRef = useRef<AbortController | null>(null);
+  const imageQueuePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function refreshImageQueue(storeId: string) {
+    if (!storeId) return;
+    if (imageQueuePollRef.current) {
+      clearTimeout(imageQueuePollRef.current);
+      imageQueuePollRef.current = null;
+    }
+    try {
+      const res = await fetch(
+        `/api/jobs/neutralize-images?storeId=${encodeURIComponent(storeId)}`
+      );
+      const data = await res.json();
+      if (!res.ok || !data.progress) return;
+
+      const progress = data.progress as ImageQueueProgress;
+      setImageQueueProgress(progress.total > 0 ? progress : null);
+
+      if (progress.pending > 0 || progress.processing > 0) {
+        // Se nada esta processando mas ha pendentes, o drain anterior terminou
+        // (ou estourou o tempo); reativa o processamento no servidor.
+        if (progress.pending > 0 && progress.processing === 0) {
+          fetch("/api/jobs/neutralize-images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storeId }),
+          }).catch(() => {});
+        }
+        imageQueuePollRef.current = setTimeout(
+          () => refreshImageQueue(storeId),
+          5000
+        );
+      }
+    } catch {
+      // Silencioso: a barra some sozinha quando a fila esvazia.
+    }
+  }
+
+  useEffect(() => {
+    if (routeTargetStoreId) {
+      refreshImageQueue(routeTargetStoreId);
+    } else {
+      setImageQueueProgress(null);
+    }
+    return () => {
+      if (imageQueuePollRef.current) {
+        clearTimeout(imageQueuePollRef.current);
+        imageQueuePollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeTargetStoreId]);
 
   const activeView: CloneView = pathname === "/clone/shopify" || pathname.startsWith("/clone/shopify/")
     ? "shopify"
@@ -1951,10 +2015,13 @@ export default function ClonePage() {
         body: JSON.stringify({
           sourceStoreId: routeSourceStoreId,
           targetStoreId: routeTargetStoreId,
-          limit: 50,
+          // Com a fila, a imagem nao trava o request: pode importar muito mais.
+          limit:
+            neutralizeDestinationProducts && destinationImageQueue ? 100 : 50,
           inventoryMode,
           inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
           neutralizeProducts: neutralizeDestinationProducts,
+          imageNeutralizeMode: destinationImageQueue ? "queue" : "inline",
           aiMediaLimit: parseAiMediaLimit(destinationAiMediaLimit),
           genericizeText: destinationGenericizeText,
           neutralizationInstructions: destinationNeutralizationInstructions,
@@ -1973,6 +2040,12 @@ export default function ClonePage() {
       );
       if (data.neutralizedCount) {
         toast.success(`${data.neutralizedCount} produto(s) neutralizados com IA.`);
+      }
+      if (data.imageQueueCount) {
+        toast.success(
+          `${data.imageQueueCount} imagem(ns) na fila de neutralização (processando em background).`
+        );
+        refreshImageQueue(routeTargetStoreId);
       }
       if (data.translatedCount) {
         toast.success(`${data.translatedCount} produto(s) traduzidos com IA.`);
@@ -3156,8 +3229,9 @@ export default function ClonePage() {
                       alem de marcas d&apos;agua, textos externos e artefatos de marketplace.
                     </p>
                     <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      Por segurança de tempo, a neutralização processa até 10 produtos
-                      por execucao e usa o limite de midias que voce escolher.
+                      {destinationImageQueue
+                        ? "Com a fila ligada, o texto é neutralizado na hora e cada produto entra com 1 imagem (o hero), trocada pela versão neutralizada em background — sem travar por limite de tempo."
+                        : "Modo inline: a neutralização processa até 10 produtos por execução e gera as imagens na hora (mais lento)."}
                     </p>
                   </div>
                   <Button
@@ -3208,15 +3282,73 @@ export default function ClonePage() {
                           type="number"
                           min={1}
                           max={20}
-                          value={destinationAiMediaLimit}
+                          value={destinationImageQueue ? "1" : destinationAiMediaLimit}
                           onChange={(event) =>
                             setDestinationAiMediaLimit(event.target.value)
                           }
                           className="h-10 bg-background/70"
-                          disabled={destinationCreating}
+                          disabled={destinationCreating || destinationImageQueue}
                         />
+                        {destinationImageQueue && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Fila usa 1 imagem por produto.
+                          </p>
+                        )}
                       </div>
                     </div>
+                    <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={destinationImageQueue}
+                        onChange={(event) =>
+                          setDestinationImageQueue(event.target.checked)
+                        }
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                        disabled={destinationCreating}
+                      />
+                      <span>
+                        <span className="block font-medium text-foreground">
+                          Neutralizar imagens em background (fila)
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Recomendado para lojas grandes. Importa rápido e troca o
+                          hero pela versão neutralizada aos poucos (~US$0,04/imagem).
+                        </span>
+                      </span>
+                    </label>
+                    {imageQueueProgress && imageQueueProgress.total > 0 && (
+                      <div className="space-y-1 rounded-md border border-primary/20 bg-background/60 p-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>
+                            Imagens neutralizadas:{" "}
+                            {imageQueueProgress.completed}/{imageQueueProgress.total}
+                            {imageQueueProgress.failed > 0
+                              ? ` · ${imageQueueProgress.failed} falharam`
+                              : ""}
+                          </span>
+                          <span>
+                            {imageQueueProgress.pending +
+                              imageQueueProgress.processing >
+                            0
+                              ? "processando…"
+                              : "concluído"}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-primary/15">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all"
+                            style={{
+                              width: `${Math.round(
+                                ((imageQueueProgress.completed +
+                                  imageQueueProgress.failed) /
+                                  Math.max(imageQueueProgress.total, 1)) *
+                                  100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
                     <Label htmlFor="destination-neutralization-instructions">
                       Instruções extras para esta neutralização
                     </Label>

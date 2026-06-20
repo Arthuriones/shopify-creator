@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   createProduct,
   getProducts,
@@ -9,11 +10,16 @@ import {
   neutralizeProductForDestination,
   translateProductForDestination,
 } from "@/lib/ai/product-neutralizer";
+import {
+  enqueueImageNeutralizeJobs,
+  processImageNeutralizeJobs,
+  type ImageNeutralizeItem,
+} from "@/lib/jobs/image-neutralize-processor";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 function clampAiMediaLimit(value: unknown, fallback = 1) {
   const numeric = Number(value ?? fallback);
@@ -214,6 +220,8 @@ async function toDestinationProductInput({
   neutralizationInstructions,
   aiMediaLimit,
   genericizeText,
+  deferImages,
+  heroOnly,
 }: {
   product: ConnectedProduct;
   neutralize: boolean;
@@ -226,10 +234,18 @@ async function toDestinationProductInput({
   neutralizationInstructions: string;
   aiMediaLimit: number;
   genericizeText: boolean;
+  // Quando true, neutraliza so o texto aqui; a imagem vira job de background.
+  deferImages?: boolean;
+  // Quando true, mantem apenas a imagem principal (dark store usa 1 imagem).
+  heroOnly?: boolean;
 }) {
-  const input = translateVariantOptions
+  const base = translateVariantOptions
     ? translateProductVariantOptionsToPortuguese(toCreateProductInput(product))
     : toCreateProductInput(product);
+  const input =
+    heroOnly && base.images.length > 1
+      ? { ...base, images: base.images.slice(0, 1) }
+      : base;
   if (!neutralize && !translate) {
     return {
       productForLookup: product,
@@ -280,7 +296,8 @@ async function toDestinationProductInput({
       url: image.url,
       altText: image.altText,
     })),
-    maxImages: aiMediaLimit,
+    // maxImages = 0 => neutraliza so o texto; a imagem fica para a fila.
+    maxImages: deferImages ? 0 : aiMediaLimit,
     storageClient: supabase,
     targetLanguage,
     customInstructions: neutralizationInstructions,
@@ -352,6 +369,12 @@ export async function POST(request: NextRequest) {
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const neutralizeProducts = body.neutralizeProducts === true;
+  // "queue": neutraliza texto na hora e processa a imagem em background.
+  const imageNeutralizeMode =
+    body.imageNeutralizeMode === "queue" ? "queue" : "inline";
+  const deferImages = neutralizeProducts && imageNeutralizeMode === "queue";
+  // Dark store usa 1 imagem por produto; o modo fila forca hero unico.
+  const heroOnly = body.heroOnly === true || deferImages;
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;
   const neutralizationInstructions =
@@ -372,9 +395,13 @@ export async function POST(request: NextRequest) {
     quantity: inventoryQuantity,
   };
   const requestedLimit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
-  const limit =
-    neutralizeProducts || translateProducts
-      ? Math.min(requestedLimit, 10)
+  // Geracao de imagem inline e o trabalho mais lento; com a fila (deferImages)
+  // so resta a neutralizacao de texto, entao o lote pode ser bem maior.
+  const inlineImageWork = neutralizeProducts && !deferImages;
+  const limit = inlineImageWork
+    ? Math.min(requestedLimit, 10)
+    : translateProducts && !neutralizeProducts
+      ? Math.min(requestedLimit, 20)
       : requestedLimit;
 
   if (!sourceStoreId || !targetStoreId) {
@@ -425,6 +452,7 @@ export async function POST(request: NextRequest) {
   const translated: { sourceHandle: string; title: string }[] = [];
   const skuMap: Record<string, string> = {};
   const variantMap: Record<string, string> = {};
+  const imageQueueItems: ImageNeutralizeItem[] = [];
 
   for (const product of sourceProducts) {
     if (request.signal.aborted) {
@@ -442,6 +470,8 @@ export async function POST(request: NextRequest) {
         neutralizationInstructions,
         aiMediaLimit,
         genericizeText,
+        deferImages,
+        heroOnly,
       });
       const existing = await findExistingProduct(
         targetCreds,
@@ -487,6 +517,20 @@ export async function POST(request: NextRequest) {
         sourceHandle: product.handle,
         targetProductId: targetProduct?.id,
       });
+
+      // Modo fila: produto entra com a imagem original; o hero neutralizado
+      // sera trocado em background.
+      const heroSource = destination.productInput.images?.[0]?.src;
+      if (deferImages && targetProduct?.id && heroSource) {
+        imageQueueItems.push({
+          productId: targetProduct.id,
+          imageUrl: heroSource,
+          title: destination.productInput.title,
+          mode: "stock-neutralize",
+          customInstructions: neutralizationInstructions,
+          targetLanguage: targetStore.target_language || "pt-BR",
+        });
+      }
       if (neutralizeProducts) {
         neutralized.push({
           sourceHandle: product.handle,
@@ -507,6 +551,33 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let imageQueueCount = 0;
+  if (imageQueueItems.length > 0) {
+    try {
+      const { queued } = await enqueueImageNeutralizeJobs({
+        userId,
+        storeId: targetStoreId,
+        items: imageQueueItems,
+      });
+      imageQueueCount = queued;
+      after(async () => {
+        try {
+          await processImageNeutralizeJobs({ userId, storeId: targetStoreId });
+        } catch (error) {
+          console.error(
+            "[api/checkout-routes/create-destination] image queue error",
+            error
+          );
+        }
+      });
+    } catch (error) {
+      console.error(
+        "[api/checkout-routes/create-destination] enqueue images error",
+        error
+      );
+    }
+  }
+
   return NextResponse.json({
     attempted: sourceProducts.length,
     createdCount: created.length,
@@ -514,6 +585,7 @@ export async function POST(request: NextRequest) {
     failedCount: failed.length,
     neutralizedCount: neutralized.length,
     translatedCount: translated.length,
+    imageQueueCount,
     neutralizeProducts,
     translateProducts,
     limitApplied: limit,

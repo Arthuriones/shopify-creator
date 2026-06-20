@@ -406,7 +406,7 @@ async function cleanProductForDestination(
   const text = await neutralizeText({ ...input, mode });
   const warnings: string[] = [];
   const images: { src: string; altText: string }[] = [];
-  const sourceImages = (input.images || []).slice(0, input.maxImages || 3);
+  const sourceImages = (input.images || []).slice(0, input.maxImages ?? 3);
 
   for (const [index, image] of sourceImages.entries()) {
     try {
@@ -437,4 +437,43 @@ export async function neutralizeProductForDestination(
   input: ProductNeutralizeInput
 ): Promise<ProductNeutralizeResult> {
   return cleanProductForDestination(input, "stock-neutralize");
+}
+
+interface ProductSingleImageInput {
+  userId: string;
+  imageUrl: string;
+  title: string;
+  mode?: ProductCleanupMode;
+  customInstructions?: string;
+  targetLanguage?: string;
+  index?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  storageClient: any;
+}
+
+// Neutraliza UMA imagem e devolve a URL publica processada.
+// Usado pela fila de background (1 imagem por produto na dark store).
+export async function neutralizeProductImage(
+  input: ProductSingleImageInput
+): Promise<{ src: string; altText: string }> {
+  const mode = input.mode || "stock-neutralize";
+  ensureGeminiKey(
+    mode === "external-references"
+      ? "retirar referencias externas de imagens"
+      : "neutralizar imagens"
+  );
+  await ensureProductImagesBucket();
+
+  return neutralizeImage(
+    { url: input.imageUrl, altText: input.title },
+    input.title,
+    {
+      userId: input.userId,
+      mode,
+      customInstructions: input.customInstructions,
+      targetLanguage: input.targetLanguage,
+      storageClient: input.storageClient,
+    } as ProductNeutralizeInput,
+    input.index ?? 0
+  );
 }

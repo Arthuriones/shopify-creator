@@ -2115,6 +2115,56 @@ export async function updateShopifyProduct(
   };
 }
 
+// Substitui a imagem do produto pela versao neutralizada.
+// A dark store usa 1 imagem por produto, entao apagamos toda a midia
+// existente e adicionamos a nova como hero.
+export async function replaceProductHeroImage(
+  creds: ShopifyCredentials,
+  productId: string,
+  image: { src: string; altText?: string }
+): Promise<string | null> {
+  const mediaQuery = `query { product(id: "${productId}") { media(first: 50) { nodes { id } } } }`;
+  const mediaRes = await shopifyGraphQL(creds, mediaQuery);
+  const mediaIds: string[] =
+    mediaRes?.product?.media?.nodes?.map((node: { id: string }) => node.id) || [];
+
+  if (mediaIds.length > 0) {
+    const deleteMutation = `mutation productDeleteMedia($productId: ID!, $mediaIds: [ID!]!) {
+      productDeleteMedia(productId: $productId, mediaIds: $mediaIds) {
+        deletedMediaIds
+        mediaUserErrors { field message }
+      }
+    }`;
+    await shopifyGraphQL(creds, deleteMutation, { productId, mediaIds });
+  }
+
+  const createMutation = `mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+    productCreateMedia(productId: $productId, media: $media) {
+      media { id }
+      mediaUserErrors { field message }
+    }
+  }`;
+  const createRes = await shopifyGraphQL(creds, createMutation, {
+    productId,
+    media: [
+      {
+        originalSource: image.src,
+        alt: image.altText || "",
+        mediaContentType: "IMAGE",
+      },
+    ],
+  });
+
+  const errors = createRes?.productCreateMedia?.mediaUserErrors as
+    | { message: string }[]
+    | undefined;
+  if (errors && errors.length > 0) {
+    throw new Error(errors.map((err) => err.message).join(" | "));
+  }
+
+  return createRes?.productCreateMedia?.media?.[0]?.id || null;
+}
+
 export async function getMenus(creds: ShopifyCredentials) {
   const query = `
     query {
