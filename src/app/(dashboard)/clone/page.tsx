@@ -593,6 +593,13 @@ export default function ClonePage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
+  const [importScope, setImportScope] = useState<"all" | "collection">("all");
+  const [selectedSourceCollection, setSelectedSourceCollection] =
+    useState<SourceCollection | null>(null);
+  const [sourceCollectionOptions, setSourceCollectionOptions] = useState<
+    SourceCollection[]
+  >([]);
+  const [loadingSourceCollections, setLoadingSourceCollections] = useState(false);
 
   const cloneAbortRef = useRef<AbortController | null>(null);
 
@@ -752,7 +759,37 @@ export default function ClonePage() {
   function openImportWizard(mode: ImportMode) {
     openInlineImport(mode);
     setImportStep(1);
+    setImportScope("all");
+    setSelectedSourceCollection(null);
     setImportWizardOpen(true);
+  }
+
+  async function loadSourceCollectionOptions() {
+    if (!source.trim()) {
+      toast.error("Informe a loja de origem primeiro.");
+      return;
+    }
+    setLoadingSourceCollections(true);
+    try {
+      const res = await fetch(
+        `/api/shopify/collections?source=${encodeURIComponent(source.trim())}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao ler coleções.");
+      const loaded = (data.collections || []) as SourceCollection[];
+      setSourceCollectionOptions(loaded);
+      if (loaded.length === 0) {
+        toast("Nenhuma coleção pública encontrada nessa loja.");
+      } else {
+        toast.success(`${loaded.length} coleção(ões) encontrada(s).`);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao ler coleções."
+      );
+    } finally {
+      setLoadingSourceCollections(false);
+    }
   }
 
   // Sub-rotas /individual, /bulk, /configuracao abrem o wizard direto.
@@ -922,6 +959,8 @@ export default function ClonePage() {
       applyLogoToImages: applyLogoToCloneImages,
       duplicatePolicy,
       createRoutingConfig,
+      collectionHandle:
+        importScope === "collection" ? selectedSourceCollection?.handle : undefined,
       ...overrides,
     };
 
@@ -1631,19 +1670,141 @@ export default function ClonePage() {
             {/* Passo 2 - Selecionar produtos (massa) */}
             {importStep === 2 && importMode === "bulk" && (
               <div className="space-y-3">
+                {/* Escopo: loja inteira ou uma colecao */}
+                <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
+                  <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImportScope("all");
+                        setSelectedSourceCollection(null);
+                        setPreview([]);
+                        setPreviewKey("");
+                      }}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                        importScope === "all"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Loja inteira
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImportScope("collection");
+                        setPreview([]);
+                        setPreviewKey("");
+                        if (sourceCollectionOptions.length === 0) {
+                          void loadSourceCollectionOptions();
+                        }
+                      }}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                        importScope === "collection"
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Por coleção
+                    </button>
+                  </div>
+
+                  {importScope === "collection" && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          Escolha a coleção da loja de origem para importar só ela.
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={loadSourceCollectionOptions}
+                          disabled={loadingSourceCollections || !source.trim()}
+                        >
+                          {loadingSourceCollections ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Recarregar
+                        </Button>
+                      </div>
+                      {sourceCollectionOptions.length === 0 ? (
+                        <div className="rounded-md border border-dashed border-border/70 bg-background/45 p-4 text-center text-xs text-muted-foreground">
+                          {loadingSourceCollections
+                            ? "Carregando coleções…"
+                            : "Nenhuma coleção carregada."}
+                        </div>
+                      ) : (
+                        <div className="max-h-40 space-y-1 overflow-auto">
+                          {sourceCollectionOptions.map((collection) => (
+                            <button
+                              type="button"
+                              key={collection.handle}
+                              onClick={() => {
+                                setSelectedSourceCollection(collection);
+                                setPreview([]);
+                                setPreviewKey("");
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors",
+                                selectedSourceCollection?.handle ===
+                                  collection.handle
+                                  ? "border-primary/60 bg-primary/10"
+                                  : "border-border/60 hover:bg-muted/40"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                                  selectedSourceCollection?.handle ===
+                                    collection.handle
+                                    ? "border-primary bg-primary"
+                                    : "border-muted-foreground/40"
+                                )}
+                              >
+                                {selectedSourceCollection?.handle ===
+                                  collection.handle && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium text-foreground">
+                                  {collection.title}
+                                </span>
+                                <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                                  /collections/{collection.handle}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handlePreview}
-                    disabled={previewLoading || !source.trim()}
+                    disabled={
+                      previewLoading ||
+                      !source.trim() ||
+                      (importScope === "collection" && !selectedSourceCollection)
+                    }
                   >
                     {previewLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <WandSparkles className="h-4 w-4" />
                     )}
-                    Analisar origem
+                    {importScope === "collection"
+                      ? "Analisar coleção"
+                      : "Analisar origem"}
                   </Button>
                   {preview.length > 0 && (
                     <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1969,6 +2130,137 @@ export default function ClonePage() {
             {/* Passo 4 - Revisar e importar */}
             {importStep === 4 && (
               <div className="space-y-3">
+                {/* Resumo do que vai ser importado */}
+                <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0">
+                        <span className="block text-[11px] text-muted-foreground">
+                          Origem
+                        </span>
+                        <span className="block truncate font-medium text-foreground">
+                          {sourceDomain || source || "—"}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <PackageCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0">
+                        <span className="block text-[11px] text-muted-foreground">
+                          Destino
+                        </span>
+                        <span className="block truncate font-medium text-foreground">
+                          {formatStoreLabel(selectedTarget)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0">
+                        <span className="block text-[11px] text-muted-foreground">
+                          Escopo
+                        </span>
+                        <span className="block truncate font-medium text-foreground">
+                          {importMode === "single"
+                            ? "Produto individual"
+                            : importScope === "collection" &&
+                                selectedSourceCollection
+                              ? `Coleção: ${selectedSourceCollection.title}`
+                              : "Loja inteira"}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0">
+                        <span className="block text-[11px] text-muted-foreground">
+                          Produtos
+                        </span>
+                        <span className="block font-medium text-foreground">
+                          {importMode === "single"
+                            ? "1 produto"
+                            : `${selectedProductHandles.length || preview.length} produto(s)`}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {importMode === "bulk" &&
+                    importScope === "collection" &&
+                    selectedSourceCollection && (
+                      <p className="rounded-md bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">
+                        Os produtos entram na coleção{" "}
+                        <span className="font-medium text-foreground">
+                          {selectedSourceCollection.title}
+                        </span>{" "}
+                        criada na loja de destino.
+                      </p>
+                    )}
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      publishToStorefront && "Publicar",
+                      translateCloneProducts && "Traduzir",
+                      translateVariantOptions && "Traduzir variações",
+                      neutralizeCloneProducts && "Neutralizar",
+                      removeExternalReferencesCloneProducts &&
+                        "Limpar refs externas",
+                      applyLogoToCloneImages && "Aplicar logo",
+                      createRoutingConfig && "Preparar rota",
+                      inventoryMode === "tracked" &&
+                        `Estoque: ${inventoryQuantity}`,
+                      duplicatePolicy === "skip"
+                        ? "Pular duplicados"
+                        : "Criar duplicados",
+                    ]
+                      .filter(Boolean)
+                      .map((label) => (
+                        <Badge
+                          key={String(label)}
+                          variant="secondary"
+                          className="rounded-md text-[11px]"
+                        >
+                          {label}
+                        </Badge>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Grid dos produtos que serao importados */}
+                {importMode === "bulk" && preview.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Pré-visualização dos produtos
+                    </p>
+                    <div className="grid max-h-44 grid-cols-4 gap-1.5 overflow-auto sm:grid-cols-6">
+                      {preview
+                        .filter(
+                          (product) =>
+                            selectedProductHandles.length === 0 ||
+                            selectedProductHandles.includes(product.handle)
+                        )
+                        .slice(0, 18)
+                        .map((product) => (
+                          <div
+                            key={product.handle}
+                            className="relative aspect-square overflow-hidden rounded-md border border-border/60 bg-muted"
+                            title={product.title}
+                          >
+                            {product.images?.[0]?.src ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={product.images[0].src}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-foreground">
                     {importMode === "bulk"

@@ -24,6 +24,7 @@ import {
   fetchPublicShopifyProduct,
   fetchPublicShopifyProducts,
   fetchPublicShopifyProductsByHandles,
+  normalizePublicShopifyDomain,
   productsToCsv,
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
@@ -507,6 +508,9 @@ export async function POST(request: NextRequest) {
       ? (body.productCollections as Record<string, unknown>)
       : {};
   const applyCollections = body.applyCollections !== false;
+  // Escopo opcional: importar apenas os produtos de uma colecao da origem.
+  const collectionHandle =
+    typeof body.collectionHandle === "string" ? body.collectionHandle.trim() : "";
   const inventoryMode = body.inventoryMode === "tracked" ? "tracked" : "not_tracked";
   const inventoryQuantityRaw = Number(body.inventoryQuantity ?? 0);
   const inventoryQuantity =
@@ -545,7 +549,15 @@ export async function POST(request: NextRequest) {
       domain = result.domain;
       products = [result.product];
     } else {
-      const result = await fetchPublicShopifyProducts(source, {
+      // Quando ha colecao escolhida, le os produtos so dela (via URL da colecao).
+      const normalizedDomain = collectionHandle
+        ? normalizePublicShopifyDomain(source)
+        : null;
+      const fetchSource =
+        collectionHandle && normalizedDomain
+          ? `https://${normalizedDomain}/collections/${collectionHandle}`
+          : source;
+      const result = await fetchPublicShopifyProducts(fetchSource, {
         limit,
         page,
         pageSize: page ? pageSize : undefined,
