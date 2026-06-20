@@ -3,6 +3,7 @@ import { after } from "next/server";
 import {
   createProduct,
   getProducts,
+  getProductsCount,
   updateVariantSkus,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
@@ -394,15 +395,22 @@ export async function POST(request: NextRequest) {
     tracked: inventoryMode === "tracked",
     quantity: inventoryQuantity,
   };
-  const requestedLimit = Math.min(Math.max(Number(body.limit || 50), 1), 100);
-  // Geracao de imagem inline e o trabalho mais lento; com a fila (deferImages)
-  // so resta a neutralizacao de texto, entao o lote pode ser bem maior.
+  // Paginacao por cursor: o cliente processa um lote por vez e mostra progresso.
+  const cursor = typeof body.cursor === "string" && body.cursor ? body.cursor : null;
+  const withCount = body.withCount === true;
+  // Lote menor quando a imagem e gerada inline (mais lento por produto).
   const inlineImageWork = neutralizeProducts && !deferImages;
-  const limit = inlineImageWork
-    ? Math.min(requestedLimit, 10)
-    : translateProducts && !neutralizeProducts
-      ? Math.min(requestedLimit, 20)
-      : requestedLimit;
+  const requestedPageSize = Number(body.pageSize || (inlineImageWork ? 8 : 20));
+  const pageSize = Math.min(
+    Math.max(Number.isFinite(requestedPageSize) ? Math.floor(requestedPageSize) : 20, 1),
+    inlineImageWork ? 10 : 50
+  );
+  // Override de idioma de saida (ex.: "es" para loja do Chile). Cai no idioma
+  // configurado na loja destino e, por fim, em pt-BR.
+  const targetLanguageOverride =
+    typeof body.targetLanguage === "string" && body.targetLanguage.trim()
+      ? body.targetLanguage.trim().slice(0, 16)
+      : "";
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
@@ -443,8 +451,21 @@ export async function POST(request: NextRequest) {
     accessToken: targetStore.access_token,
   };
 
-  const sourceData = await getProducts(sourceCreds, { first: limit });
+  const targetLanguage =
+    targetLanguageOverride || targetStore.target_language || "pt-BR";
+
+  const sourceData = await getProducts(sourceCreds, {
+    first: pageSize,
+    after: cursor,
+  });
   const sourceProducts = (sourceData?.products?.nodes || []) as ConnectedProduct[];
+  const pageInfo = (sourceData?.products?.pageInfo || {}) as {
+    hasNextPage?: boolean;
+    endCursor?: string | null;
+  };
+  const totalCount = withCount
+    ? await getProductsCount(sourceCreds).catch(() => null)
+    : null;
   const created: { sourceHandle: string; targetProductId?: string }[] = [];
   const skipped: { sourceHandle: string; targetProductId?: string }[] = [];
   const failed: { sourceHandle: string; error: string }[] = [];
@@ -465,7 +486,7 @@ export async function POST(request: NextRequest) {
         translate: translateProducts,
         supabase,
         userId,
-        targetLanguage: targetStore.target_language || "pt-BR",
+        targetLanguage,
         translateVariantOptions,
         neutralizationInstructions,
         aiMediaLimit,
@@ -528,7 +549,7 @@ export async function POST(request: NextRequest) {
           title: destination.productInput.title,
           mode: "stock-neutralize",
           customInstructions: neutralizationInstructions,
-          targetLanguage: targetStore.target_language || "pt-BR",
+          targetLanguage,
         });
       }
       if (neutralizeProducts) {
@@ -588,7 +609,11 @@ export async function POST(request: NextRequest) {
     imageQueueCount,
     neutralizeProducts,
     translateProducts,
-    limitApplied: limit,
+    targetLanguage,
+    pageSize,
+    nextCursor: pageInfo.endCursor || null,
+    hasMore: Boolean(pageInfo.hasNextPage),
+    totalCount,
     skuMap,
     variantMap,
     created,

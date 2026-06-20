@@ -5,11 +5,13 @@ import {
   ArrowRight,
   CheckCircle2,
   Copy,
+  Languages,
   Loader2,
   PackageCheck,
   Route as RouteIcon,
   Store,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -98,14 +100,25 @@ export function ConnectStoresWizard({
   const [inventoryTracked, setInventoryTracked] = useState(false);
   const [inventoryQuantity, setInventoryQuantity] = useState("100");
 
+  const [outputLanguage, setOutputLanguage] = useState("pt-BR");
+
   // Passo 2
   const [creatingDestination, setCreatingDestination] = useState(false);
   const [destinationResult, setDestinationResult] =
     useState<DestinationResult | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{
+    processed: number;
+    total: number;
+    created: number;
+    skipped: number;
+    failed: number;
+    canceled?: boolean;
+  } | null>(null);
   const [imageProgress, setImageProgress] = useState<ImageQueueProgress | null>(
     null
   );
   const imagePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const createAbortRef = useRef<AbortController | null>(null);
 
   // Passo 3
   const [creatingRoute, setCreatingRoute] = useState(false);
@@ -131,6 +144,7 @@ export function ConnectStoresWizard({
     }
     setStep(1);
     setDestinationResult(null);
+    setBatchProgress(null);
     setImageProgress(null);
     setRouteToken("");
     setRouteName("");
@@ -197,69 +211,154 @@ export function ConnectStoresWizard({
       }
     }
 
+    const controller = new AbortController();
+    createAbortRef.current = controller;
     setCreatingDestination(true);
     setStep(2);
+    setBatchProgress({ processed: 0, total: 0, created: 0, skipped: 0, failed: 0 });
+
+    // Base do payload por modo. Reuse copia a dark store ja neutralizada (sem IA).
+    const basePayload =
+      wizardMode === "reuse"
+        ? {
+            sourceStoreId: reuseFromStoreId,
+            targetStoreId,
+            inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
+            inventoryQuantity: Number(inventoryQuantity) || 0,
+            neutralizeProducts: false,
+            translateProducts: false,
+            translateVariantOptions: false,
+          }
+        : {
+            sourceStoreId,
+            targetStoreId,
+            inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
+            inventoryQuantity: Number(inventoryQuantity) || 0,
+            neutralizeProducts: neutralize,
+            imageNeutralizeMode: imageQueue ? "queue" : "inline",
+            aiMediaLimit: 1,
+            genericizeText,
+            neutralizationInstructions: instructions,
+            translateProducts: translate,
+            translateVariantOptions: translateVariants,
+            targetLanguage: outputLanguage,
+          };
+
+    const agg = {
+      created: 0,
+      skipped: 0,
+      failed: 0,
+      imageQueueCount: 0,
+      skuMap: {} as Record<string, string>,
+      variantMap: {} as Record<string, string>,
+    };
+    let cursor: string | null = null;
+    let total = 0;
+    let first = true;
+    let enqueuedImages = false;
+
     try {
-      // Modo reuse: copia a dark store ja neutralizada (B) para a nova (D),
-      // sem IA. Modo generate: neutraliza da vitrine.
-      const payload =
-        wizardMode === "reuse"
-          ? {
-              sourceStoreId: reuseFromStoreId,
-              targetStoreId,
-              limit: 250,
-              inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
-              inventoryQuantity: Number(inventoryQuantity) || 0,
-              neutralizeProducts: false,
-              translateProducts: false,
-              translateVariantOptions: false,
-            }
-          : {
-              sourceStoreId,
-              targetStoreId,
-              limit: neutralize && imageQueue ? 100 : 50,
-              inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
-              inventoryQuantity: Number(inventoryQuantity) || 0,
-              neutralizeProducts: neutralize,
-              imageNeutralizeMode: imageQueue ? "queue" : "inline",
-              aiMediaLimit: 1,
-              genericizeText,
-              neutralizationInstructions: instructions,
-              translateProducts: translate,
-              translateVariantOptions: translateVariants,
-            };
+      // Processa um lote por vez ate acabar, atualizando a barra de progresso.
+      for (;;) {
+        if (controller.signal.aborted) break;
+        const res: Response = await fetch(
+          "/api/checkout-routes/create-destination",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ ...basePayload, cursor, withCount: first }),
+          }
+        );
+        const data = (await res.json()) as {
+          error?: string;
+          createdCount?: number;
+          skippedCount?: number;
+          failedCount?: number;
+          imageQueueCount?: number;
+          skuMap?: Record<string, string>;
+          variantMap?: Record<string, string>;
+          totalCount?: number | null;
+          nextCursor?: string | null;
+          hasMore?: boolean;
+        };
+        if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
 
-      const res = await fetch("/api/checkout-routes/create-destination", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
+        agg.created += data.createdCount || 0;
+        agg.skipped += data.skippedCount || 0;
+        agg.failed += data.failedCount || 0;
+        agg.imageQueueCount += data.imageQueueCount || 0;
+        Object.assign(agg.skuMap, data.skuMap || {});
+        Object.assign(agg.variantMap, data.variantMap || {});
+        if (first && typeof data.totalCount === "number") total = data.totalCount;
+        first = false;
+        if (data.imageQueueCount) enqueuedImages = true;
 
-      setDestinationResult({
-        createdCount: data.createdCount || 0,
-        skippedCount: data.skippedCount || 0,
-        failedCount: data.failedCount || 0,
-        imageQueueCount: data.imageQueueCount || 0,
-        skuMap: data.skuMap || {},
-        variantMap: data.variantMap || {},
-      });
+        const processed = agg.created + agg.skipped + agg.failed;
+        setBatchProgress({
+          processed,
+          total,
+          created: agg.created,
+          skipped: agg.skipped,
+          failed: agg.failed,
+        });
 
-      toast.success(
-        `${data.createdCount || 0} criados, ${data.skippedCount || 0} reaproveitados.`
+        cursor = data.nextCursor || null;
+        if (!data.hasMore) break;
+      }
+
+      const canceled = controller.signal.aborted;
+      setBatchProgress((current) =>
+        current ? { ...current, canceled } : current
       );
-      if (data.imageQueueCount) {
-        refreshImageQueue(targetStoreId);
+      setDestinationResult({
+        createdCount: agg.created,
+        skippedCount: agg.skipped,
+        failedCount: agg.failed,
+        imageQueueCount: agg.imageQueueCount,
+        skuMap: agg.skuMap,
+        variantMap: agg.variantMap,
+      });
+      if (enqueuedImages) refreshImageQueue(targetStoreId);
+      if (canceled) {
+        toast("Cancelado. Os produtos já criados foram mantidos.");
+      } else {
+        toast.success(
+          `${agg.created} criados, ${agg.skipped} reaproveitados.`
+        );
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Falha ao criar destino."
-      );
-      setStep(1);
+      const isAbort =
+        controller.signal.aborted ||
+        (error instanceof DOMException && error.name === "AbortError");
+      if (isAbort) {
+        setBatchProgress((current) =>
+          current ? { ...current, canceled: true } : current
+        );
+        setDestinationResult({
+          createdCount: agg.created,
+          skippedCount: agg.skipped,
+          failedCount: agg.failed,
+          imageQueueCount: agg.imageQueueCount,
+          skuMap: agg.skuMap,
+          variantMap: agg.variantMap,
+        });
+        if (enqueuedImages) refreshImageQueue(targetStoreId);
+        toast("Cancelado. Os produtos já criados foram mantidos.");
+      } else {
+        toast.error(
+          error instanceof Error ? error.message : "Falha ao criar destino."
+        );
+        if (agg.created + agg.skipped === 0) setStep(1);
+      }
     } finally {
       setCreatingDestination(false);
+      createAbortRef.current = null;
     }
+  }
+
+  function cancelCreateDestination() {
+    createAbortRef.current?.abort();
   }
 
   async function handleActivateRoute() {
@@ -612,6 +711,32 @@ export function ConnectStoresWizard({
             </div>
             )}
 
+            {wizardMode === "generate" && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <Languages className="h-3.5 w-3.5" /> Idioma dos produtos
+                </Label>
+                <Select
+                  value={outputLanguage}
+                  onValueChange={(value) => setOutputLanguage(value || "pt-BR")}
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    <SelectItem value="pt-BR">Português (Brasil)</SelectItem>
+                    <SelectItem value="es">Espanhol</SelectItem>
+                    <SelectItem value="es-CL">Espanhol (Chile)</SelectItem>
+                    <SelectItem value="es-MX">Espanhol (México)</SelectItem>
+                    <SelectItem value="en">Inglês</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  Título, descrição, tags e SEO saem nesse idioma.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -663,20 +788,60 @@ export function ConnectStoresWizard({
         {step === 2 && (
           <div className="space-y-4">
             {creatingDestination && (
-              <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/45 p-4 text-sm">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <div>
-                  <p className="font-medium text-foreground">
-                    {wizardMode === "reuse"
-                      ? "Copiando produtos para a dark store…"
-                      : "Criando produtos na dark store…"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {wizardMode === "reuse"
-                      ? "Copiando o catálogo já neutralizado, sem rodar IA."
-                      : "Lendo a vitrine, neutralizando textos e conectando por SKU."}
-                  </p>
+              <div className="space-y-3 rounded-lg border border-border/60 bg-background/45 p-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground">
+                      {wizardMode === "reuse"
+                        ? "Copiando produtos para a dark store…"
+                        : "Criando produtos na dark store…"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {batchProgress && batchProgress.total > 0
+                        ? `${batchProgress.processed} de ${batchProgress.total} processados`
+                        : batchProgress && batchProgress.processed > 0
+                          ? `${batchProgress.processed} processados…`
+                          : "Lendo os produtos da origem…"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={cancelCreateDestination}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancelar
+                  </Button>
                 </div>
+
+                {batchProgress && batchProgress.total > 0 && (
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-primary/15">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.round((batchProgress.processed / Math.max(batchProgress.total, 1)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                )}
+
+                {batchProgress && (batchProgress.created > 0 || batchProgress.failed > 0) && (
+                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {batchProgress.created} criados
+                    </span>
+                    {batchProgress.skipped > 0 && (
+                      <span>{batchProgress.skipped} reaproveitados</span>
+                    )}
+                    {batchProgress.failed > 0 && (
+                      <span className="text-destructive">
+                        {batchProgress.failed} falhas
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

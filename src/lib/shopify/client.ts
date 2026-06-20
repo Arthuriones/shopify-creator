@@ -1116,6 +1116,7 @@ export async function getProducts(
         first?: number;
         status?: "ACTIVE" | "DRAFT" | "ARCHIVED";
         query?: string;
+        after?: string | null;
       } = 50
 ) {
   const parsedOptions =
@@ -1135,8 +1136,9 @@ export async function getProducts(
 
   const queryFilter = filters.join(" ");
   const query = `
-    query getProducts($first: Int!, $query: String) {
-      products(first: $first, query: $query) {
+    query getProducts($first: Int!, $query: String, $after: String) {
+      products(first: $first, query: $query, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           title
@@ -1177,7 +1179,30 @@ export async function getProducts(
   return shopifyGraphQL(creds, query, {
     first: safeFirst,
     query: queryFilter || null,
+    after: parsedOptions.after || null,
   });
+}
+
+// Conta os produtos de uma loja (para barra de progresso de import/clone).
+export async function getProductsCount(
+  creds: ShopifyCredentials,
+  options?: { status?: "ACTIVE" | "DRAFT" | "ARCHIVED"; query?: string }
+): Promise<number> {
+  const filters: string[] = [];
+  if (options?.status) filters.push(`status:${options.status}`);
+  if (options?.query?.trim()) filters.push(options.query.trim());
+  const queryFilter = filters.join(" ");
+
+  const query = `
+    query getProductsCount($query: String) {
+      productsCount(query: $query) { count }
+    }
+  `;
+  const result = await shopifyGraphQL(creds, query, {
+    query: queryFilter || null,
+  });
+  const count = Number(result?.productsCount?.count);
+  return Number.isFinite(count) ? count : 0;
 }
 
 export async function getProductById(creds: ShopifyCredentials, productId: string) {
