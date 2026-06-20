@@ -62,12 +62,8 @@ const navSections: NavSection[] = [
         label: "Loja vitrine",
         icon: Workflow,
         children: [
-          { href: "/clone/routed-checkout", label: "Visão do fluxo" },
-          { href: "/clone/routed-checkout/create-destination", label: "1. Criar destino" },
-          { href: "/clone/routed-checkout/create-route", label: "2. Vincular produtos" },
-          { href: "/clone/routed-checkout/script", label: "3. Instalar script" },
+          { href: "/clone/routed-checkout", label: "Conectar lojas" },
           { href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
-          { href: "/clone/routed-checkout/neutralize", label: "Neutralização IA" },
         ],
       },
     ],

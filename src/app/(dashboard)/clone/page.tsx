@@ -4,23 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  AlertCircle,
   ArrowLeftRight,
   ArrowRight,
-  CheckCircle2,
-  Code2,
   Copy,
-  Edit3,
   Download,
   FileJson,
   FileOutput,
   GitBranch,
   Image as ImageIcon,
-  Languages,
   Loader2,
   PackageCheck,
   Route,
-  ShieldCheck,
   SlidersHorizontal,
   Store,
   Trash2,
@@ -50,6 +44,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
+import { ConnectStoresWizard } from "@/components/routed-checkout/connect-stores-wizard";
 
 interface StoreOption {
   id: string;
@@ -104,14 +99,6 @@ interface CheckoutConfig {
   target_store_id: string;
   sku_map: Record<string, string>;
   variant_map: Record<string, string>;
-}
-
-interface ImageQueueProgress {
-  pending: number;
-  processing: number;
-  completed: number;
-  failed: number;
-  total: number;
 }
 
 interface CloneRun {
@@ -301,18 +288,6 @@ function cloneSourceKey(sourceValue: string, limitValue: number) {
   return `${sourceValue.trim().toLowerCase()}::${limitValue}`;
 }
 
-function parseJsonMap(value: string, label: string) {
-  try {
-    const parsed = JSON.parse(value || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error();
-    }
-    return parsed as Record<string, string>;
-  } catch {
-    throw new Error(`${label} precisa ser um JSON objeto valido.`);
-  }
-}
-
 function safeJsonMap(value: string) {
   try {
     const parsed = JSON.parse(value || "{}");
@@ -485,202 +460,6 @@ function ServiceIntro({
   );
 }
 
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
-function CodeBlock({ children }: { children: string }) {
-  return (
-    <pre className="overflow-x-auto rounded-lg border border-border/70 bg-background/70 p-3 text-xs leading-6 text-muted-foreground">
-      <code>{children}</code>
-    </pre>
-  );
-}
-
-function RoutedTaskHeader({
-  routedView,
-  hasRoutes,
-  routesCount,
-}: {
-  routedView: RoutedCheckoutView;
-  hasRoutes: boolean;
-  routesCount: number;
-}) {
-  const content = {
-    "create-destination": {
-      eyebrow: "Etapa 1",
-      title: "Criar produtos na dark store",
-      description:
-        "Use quando a dark store ainda não tem os produtos equivalentes. O app copia os produtos da vitrine, pode traduzir/neutralizar e já prepara os mapas.",
-      checklist: [
-        "Escolha vitrine e dark store",
-        "Marque tradução ou neutralização se precisar",
-        "Clique em Criar destino",
-      ],
-    },
-    "create-route": {
-      eyebrow: "Etapa 2",
-      title: "Vincular produto da vitrine ao produto da dark store",
-      description:
-        "Aqui você confere qual variante da vitrine vira qual variante da dark store. Se os produtos já batem por SKU ou título, use os mapas reais.",
-      checklist: [
-        "Escolha as duas lojas",
-        "Revise as correspondências",
-        "Crie a rota e copie o token",
-      ],
-    },
-    script: {
-      eyebrow: "Etapa 3",
-      title: "Instalar o script na vitrine",
-      description:
-        "Depois que a rota existe, cole o loader no tema da loja vitrine. O token no script é o que liga a vitrine à rota salva.",
-      checklist: [
-        "Copie o código pronto",
-        "Cole antes de </body>",
-        "Teste em janela anônima",
-      ],
-    },
-    "active-routes": {
-      eyebrow: "Gestão",
-      title: "Rotas, tokens e manutenção",
-      description:
-        "Edite, exclua ou copie tokens das rotas já criadas. Se o checkout não rotear, confira primeiro se o token instalado no tema está nesta lista.",
-      checklist: [
-        "Confira o token ativo",
-        "Edite mapas se necessário",
-        "Copie o script atualizado",
-      ],
-    },
-    neutralize: {
-      eyebrow: "IA opcional",
-      title: "Neutralizar produtos antes de criar destino",
-      description:
-        "Use para criar uma versao stock/unbranded, removendo marcas do proprio produto e tambem artefatos externos.",
-      checklist: [
-        "Escolha as lojas",
-        "Ative neutralização",
-        "Crie destino na dark store",
-      ],
-    },
-  }[routedView];
-
-  const mainSteps = [
-    { view: "create-destination", href: "/clone/routed-checkout/create-destination", label: "Criar destino" },
-    { view: "create-route", href: "/clone/routed-checkout/create-route", label: "Vincular produtos" },
-    { view: "script", href: "/clone/routed-checkout/script", label: "Instalar script" },
-  ];
-
-  // Passo "ativo" entre os principais. Neutralização faz parte do passo 1.
-  const activeMainView = routedView === "neutralize" ? "create-destination" : routedView;
-  const isManaging = routedView === "active-routes";
-
-  return (
-    <div className="rounded-lg border border-border/60 bg-card p-4">
-      {/* Stepper */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {mainSteps.map((step, index) => {
-          const active = !isManaging && step.view === activeMainView;
-          // Passos 1 e 2 ficam "feitos" quando já existe ao menos uma rota.
-          const done = !active && hasRoutes && index < 2;
-          return (
-            <div key={step.view} className="flex items-center gap-1.5">
-              {index > 0 && (
-                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-              )}
-              <Link
-                href={step.href}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm font-semibold transition-colors",
-                  active
-                    ? "border-primary/50 bg-primary/12 text-foreground"
-                    : done
-                      ? "border-primary/25 bg-primary/5 text-foreground"
-                      : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {done ? (
-                  <CheckCircle2 className="h-5 w-5 text-primary" />
-                ) : (
-                  <span
-                    className={cn(
-                      "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold",
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border/70 text-muted-foreground"
-                    )}
-                  >
-                    {index + 1}
-                  </span>
-                )}
-                {step.label}
-              </Link>
-            </div>
-          );
-        })}
-
-        <span className="mx-1 hidden h-5 w-px bg-border/60 sm:block" />
-
-        <Link
-          href="/clone/routed-checkout/active-routes"
-          className={cn(
-            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm font-semibold transition-colors",
-            isManaging
-              ? "border-primary/50 bg-primary/12 text-foreground"
-              : "border-border/60 bg-background/45 text-muted-foreground hover:text-foreground"
-          )}
-        >
-          Rotas ativas
-          {routesCount > 0 && (
-            <Badge variant="secondary" className="rounded-full px-1.5">
-              {routesCount}
-            </Badge>
-          )}
-        </Link>
-      </div>
-
-      {/* Sub-opção do passo 1 */}
-      <div className="mt-2">
-        <Link
-          href="/clone/routed-checkout/neutralize"
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
-            routedView === "neutralize"
-              ? "bg-primary/12 text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          Opcional: Neutralização IA (dentro do passo 1)
-        </Link>
-      </div>
-
-      {/* Contexto do passo atual */}
-      <div className="mt-3 border-t border-border/60 pt-3">
-        <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
-          {content.title}
-        </h2>
-        <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">
-          {content.description}
-        </p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {content.checklist.map((item, index) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/45 px-2 py-1 text-xs text-muted-foreground"
-            >
-              <span className="font-semibold text-primary">{index + 1}</span>
-              {item}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ServiceOverview() {
   const services = [
     {
@@ -742,264 +521,6 @@ function ServiceOverview() {
   );
 }
 
-function RoutedCheckoutTutorial({
-  installSnippet,
-  routeToken,
-}: {
-  installSnippet: string;
-  routeToken: string;
-}) {
-  const plainMeaning = [
-    {
-      title: "Vitrine",
-      detail:
-        "É a loja que o cliente vê, navega e adiciona produtos ao carrinho. O script é instalado aqui.",
-    },
-    {
-      title: "Dark store",
-      detail:
-        "É a loja que realmente recebe o checkout/pedido. Ela precisa ter produtos equivalentes aos da vitrine.",
-    },
-    {
-      title: "Mapa",
-      detail:
-        "É a tabela que diz: este SKU ou variant da vitrine vira esta variant da dark store.",
-    },
-  ];
-
-  const mapTerms = [
-    {
-      title: "SKU",
-      detail:
-        "É o código interno/comercial da variante. Você encontra no admin da Shopify em Products > produto > Variant > Inventory/SKU. Se a vitrine e a dark store usam o mesmo SKU, o mapa pode ser gerado sozinho.",
-    },
-    {
-      title: "Variant GID",
-      detail:
-        "É o identificador global da variante na API Admin da Shopify, no formato gid://shopify/ProductVariant/123. Esta tela lê esse valor pela API e mostra nas tabelas de variantes.",
-    },
-    {
-      title: "SKU map",
-      detail:
-        "Chave = SKU da vitrine. Valor = Variant GID da dark store. É o jeito mais simples quando os SKUs da vitrine estão preenchidos.",
-    },
-    {
-      title: "Variant map",
-      detail:
-        "Chave = Variant GID da vitrine. Valor = Variant GID da dark store. Use quando não houver SKU confiável ou quando quiser mapear item por item.",
-    },
-  ];
-
-  const modeGuide = [
-    {
-      title: "standard",
-      detail:
-        "Modo simples de teste. Usa os mapas e envia para a dark store escolhida, sem regras avançadas.",
-    },
-    {
-      title: "enterprise",
-      detail:
-        "Reservado para cenários com várias vitrines/dark stores e regras por campanha, país, estoque ou fonte. Hoje usa a mesma resolução por mapas.",
-    },
-    {
-      title: "enterprise_static",
-      detail:
-        "Recomendado para este fluxo. Mantém uma vitrine ligada a uma dark store fixa e previsível.",
-    },
-  ];
-
-  const flow = [
-    "Cliente adiciona produtos na loja vitrine.",
-    "O script intercepta o clique ou envio do checkout.",
-    "A vitrine envia token e linhas do carrinho para /api/checkout-routes/resolve.",
-    "O app troca SKU/variant da vitrine pelas variantes da dark store.",
-    "O cliente é enviado ao checkout da dark store sem perceber a troca.",
-  ];
-
-  const installSteps = [
-    {
-      title: "Abrir o arquivo certo",
-      detail:
-        "Na Shopify da loja vitrine, entre em Online Store > Themes > ... > Edit code e abra layout/theme.liquid.",
-    },
-    {
-      title: "Renderizar antes do fechamento do body",
-      detail:
-        "Cole o script pronto exatamente antes de </body>. Esse é o mesmo local indicado na referência.",
-    },
-    {
-      title: "Usar o token da rota",
-      detail:
-        "O atributo data-token recebe o token público da rota. Ele é gerado automaticamente quando você cria a rota e identifica qual mapeamento este script deve usar.",
-    },
-    {
-      title: "Ajustar o carrinho nativo",
-      detail:
-        "No Dawn e temas grátis, troque Cart type para Pop-up notification. Em temas pagos, procure Cart ou Product notifications.",
-    },
-  ];
-
-  const tokenGuide = [
-    {
-      title: "O que é",
-      detail:
-        "É um identificador público da configuração de roteamento. Ele não é a senha da Shopify e não dá acesso ao admin; ele só aponta para uma rota ativa deste app.",
-    },
-    {
-      title: "Como gera",
-      detail:
-        "Escolha vitrine, dark store, modo e mapas. Depois clique em Criar rota. O app salva a rota e cria o token automaticamente.",
-    },
-    {
-      title: "Onde pega",
-      detail:
-        "Depois de criar a rota, esta tela preenche o código pronto. Você também pode copiar pela lista de Rotas ativas quando houver uma rota habilitada.",
-    },
-    {
-      title: "Onde coloca",
-      detail:
-        "Cole no atributo data-token do script dentro de layout/theme.liquid, na loja vitrine, imediatamente antes de </body>.",
-    },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <Card
-        id="routed-script"
-        className="scroll-mt-6 rounded-lg border-primary/30 bg-primary/8"
-      >
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Code2 className="h-5 w-5 text-primary" />
-            Código pronto para colar na vitrine
-          </CardTitle>
-          <CardDescription>
-            Instale este loader na loja que o cliente visita. Não use o arquivo de referência <code>cartoriginals.web.app</code>, porque ele aponta para outro app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="space-y-3">
-            <CodeBlock>{installSnippet}</CodeBlock>
-            <div className="rounded-lg border border-border/60 bg-card/80 p-3 text-sm leading-6 text-muted-foreground">
-              Cole imediatamente antes de <code>&lt;/body&gt;</code> no arquivo
-              <code> layout/theme.liquid</code>. Se seu editor não mostrar esse
-              arquivo, pesquise por <code>&lt;/body&gt;</code> ou por
-              <code> theme.liquid</code> no painel de código do tema.
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-foreground">Passos exatos</p>
-            <ol className="space-y-2">
-              {installSteps.slice(0, 3).map((step, index) => (
-                <li key={step.title} className="rounded-lg border border-border/60 bg-card/80 p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/15 text-xs text-primary">
-                      {index + 1}
-                    </span>
-                    {step.title}
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {step.detail}
-                  </p>
-                </li>
-              ))}
-            </ol>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Token usado agora: {routeToken || "crie ou selecione uma rota para gerar o token real"}.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {plainMeaning.map((item) => (
-          <div key={item.title} className="rounded-lg border border-border/60 bg-card p-4">
-            <p className="font-heading text-base font-bold text-foreground">
-              {item.title}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {item.detail}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <details className="rounded-lg border border-border/60 bg-card p-4">
-        <summary className="cursor-pointer text-base font-bold text-foreground">
-          Entender token, SKU e GID
-        </summary>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {tokenGuide.map((item) => (
-            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
-              <p className="text-sm font-bold text-foreground">{item.title}</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {item.detail}
-              </p>
-            </div>
-          ))}
-          {mapTerms.map((item) => (
-            <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-4">
-              <p className="text-sm font-bold text-foreground">{item.title}</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {item.detail}
-              </p>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details className="rounded-lg border border-border/60 bg-card p-4">
-        <summary className="cursor-pointer text-base font-bold text-foreground">
-          Como o pedido muda de loja
-        </summary>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <ol className="space-y-2">
-            {flow.map((item, index) => (
-              <li key={item} className="flex gap-3 rounded-lg border border-border/60 bg-background/45 p-3 text-sm text-muted-foreground">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-                  {index + 1}
-                </span>
-                <span className="leading-6">{item}</span>
-              </li>
-            ))}
-          </ol>
-
-          <div className="space-y-2">
-            {modeGuide.map((item) => (
-              <div key={item.title} className="rounded-lg border border-border/60 bg-background/45 p-3">
-                <code className="rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
-                  {item.title}
-                </code>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  {item.detail}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </details>
-
-      <Card className="rounded-lg border-border/60">
-        <CardHeader>
-          <CardTitle className="text-lg">Checklist de teste</CardTitle>
-          <CardDescription>
-            Use depois de salvar o tema da vitrine.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CodeBlock>{`1. Remova a password protection da dark store
-2. Salve o theme.liquid da vitrine
-3. Abra a vitrine em janela anonima
-4. Adicione um produto que aparece na rota
-5. Clique em checkout
-6. Confirme se a URL final é da dark store`}</CodeBlock>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export default function ClonePage() {
   const pathname = usePathname();
   const [stores, setStores] = useState<StoreOption[]>([]);
@@ -1051,27 +572,9 @@ export default function ClonePage() {
   const [routeMode, setRouteMode] = useState("enterprise_static");
   const [skuMap, setSkuMap] = useState(DEFAULT_SKU_MAP);
   const [variantMap, setVariantMap] = useState(DEFAULT_VARIANT_MAP);
-  const [routeSaving, setRouteSaving] = useState(false);
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
   const [invertingRouteId, setInvertingRouteId] = useState("");
-  const [destinationCreating, setDestinationCreating] = useState(false);
-  const [translateDestinationProducts, setTranslateDestinationProducts] =
-    useState(false);
-  const [translateDestinationVariantOptions, setTranslateDestinationVariantOptions] =
-    useState(false);
-  const [neutralizeDestinationProducts, setNeutralizeDestinationProducts] =
-    useState(false);
-  const [destinationAiMediaLimit, setDestinationAiMediaLimit] = useState("1");
-  const [destinationGenericizeText, setDestinationGenericizeText] = useState(true);
-  // Processa a imagem neutralizada em background (1 hero por produto).
-  const [destinationImageQueue, setDestinationImageQueue] = useState(true);
-  const [imageQueueProgress, setImageQueueProgress] =
-    useState<ImageQueueProgress | null>(null);
-  const [
-    destinationNeutralizationInstructions,
-    setDestinationNeutralizationInstructions,
-  ] = useState("");
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -1079,61 +582,9 @@ export default function ClonePage() {
   const [routeProductsRefreshKey, setRouteProductsRefreshKey] = useState(0);
   const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const cloneAbortRef = useRef<AbortController | null>(null);
-  const destinationAbortRef = useRef<AbortController | null>(null);
-  const imageQueuePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  async function refreshImageQueue(storeId: string) {
-    if (!storeId) return;
-    if (imageQueuePollRef.current) {
-      clearTimeout(imageQueuePollRef.current);
-      imageQueuePollRef.current = null;
-    }
-    try {
-      const res = await fetch(
-        `/api/jobs/neutralize-images?storeId=${encodeURIComponent(storeId)}`
-      );
-      const data = await res.json();
-      if (!res.ok || !data.progress) return;
-
-      const progress = data.progress as ImageQueueProgress;
-      setImageQueueProgress(progress.total > 0 ? progress : null);
-
-      if (progress.pending > 0 || progress.processing > 0) {
-        // Se nada esta processando mas ha pendentes, o drain anterior terminou
-        // (ou estourou o tempo); reativa o processamento no servidor.
-        if (progress.pending > 0 && progress.processing === 0) {
-          fetch("/api/jobs/neutralize-images", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ storeId }),
-          }).catch(() => {});
-        }
-        imageQueuePollRef.current = setTimeout(
-          () => refreshImageQueue(storeId),
-          5000
-        );
-      }
-    } catch {
-      // Silencioso: a barra some sozinha quando a fila esvazia.
-    }
-  }
-
-  useEffect(() => {
-    if (routeTargetStoreId) {
-      refreshImageQueue(routeTargetStoreId);
-    } else {
-      setImageQueueProgress(null);
-    }
-    return () => {
-      if (imageQueuePollRef.current) {
-        clearTimeout(imageQueuePollRef.current);
-        imageQueuePollRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeTargetStoreId]);
 
   const activeView: CloneView = pathname === "/clone/shopify" || pathname.startsWith("/clone/shopify/")
     ? "shopify"
@@ -1143,20 +594,6 @@ export default function ClonePage() {
         ? "routed-checkout"
         : "overview";
 
-  const routedView: RoutedCheckoutView = pathname.endsWith("/create-destination")
-    ? "create-destination"
-    : pathname.endsWith("/neutralize")
-      ? "neutralize"
-      : pathname.endsWith("/active-routes")
-        ? "active-routes"
-        : pathname.endsWith("/script")
-          ? "script"
-          : "create-route";
-
-  const showRoutedSetup =
-    routedView === "create-route" ||
-    routedView === "create-destination" ||
-    routedView === "neutralize";
   const routedImportMode: ImportMode | null = pathname.endsWith("/individual")
     ? "single"
     : pathname.endsWith("/bulk")
@@ -1193,21 +630,6 @@ export default function ClonePage() {
     [stores, targetStoreId]
   );
 
-  const selectedSourceStore = useMemo(
-    () => stores.find((store) => store.id === sourceStoreId),
-    [stores, sourceStoreId]
-  );
-
-  const selectedRouteSourceStore = useMemo(
-    () => stores.find((store) => store.id === routeSourceStoreId),
-    [stores, routeSourceStoreId]
-  );
-
-  const selectedRouteTargetStore = useMemo(
-    () => stores.find((store) => store.id === routeTargetStoreId),
-    [stores, routeTargetStoreId]
-  );
-
   const selectedRouteConfig = useMemo(
     () =>
       configs.find(
@@ -1222,16 +644,6 @@ export default function ClonePage() {
   const suggestedRouteMaps = useMemo(
     () => buildSuggestedMaps(sourceProducts, targetProducts),
     [sourceProducts, targetProducts]
-  );
-
-  const sourceVariantSamples = useMemo(
-    () => suggestedRouteMaps.sourceVariants.slice(0, 12),
-    [suggestedRouteMaps.sourceVariants]
-  );
-
-  const targetVariantSamples = useMemo(
-    () => suggestedRouteMaps.targetVariants.slice(0, 12),
-    [suggestedRouteMaps.targetVariants]
   );
 
   const manualSourceVariants = useMemo(
@@ -1453,46 +865,6 @@ export default function ClonePage() {
     setVariantMap(formatJsonMap(suggestedRouteMaps.variantMap));
     setAutofilledMapKey(routeMapKey);
   }, [activeView, autofilledMapKey, editingRouteId, routeMapKey, suggestedRouteMaps]);
-
-  function handleCloneModeChange(value: string | null) {
-    const mode = (value || "identical") as CloneMode;
-    setCloneMode(mode);
-
-    if (mode === "identical") {
-      setPublishToStorefront(true);
-      setTranslateCloneProducts(false);
-      setTranslateVariantOptions(false);
-      setCreateRoutingConfig(false);
-      setDuplicatePolicy("skip");
-      return;
-    }
-
-    if (mode === "translated") {
-      setPublishToStorefront(true);
-      setTranslateCloneProducts(true);
-      setTranslateVariantOptions(true);
-      setCreateRoutingConfig(false);
-      setDuplicatePolicy("skip");
-      return;
-    }
-
-    if (mode === "routed") {
-      setPublishToStorefront(true);
-      setTranslateCloneProducts(false);
-      setTranslateVariantOptions(false);
-      setCreateRoutingConfig(true);
-      setDuplicatePolicy("skip");
-      return;
-    }
-
-    if (mode === "complete") {
-      setPublishToStorefront(true);
-      setTranslateCloneProducts(true);
-      setTranslateVariantOptions(true);
-      setCreateRoutingConfig(true);
-      setDuplicatePolicy("skip");
-    }
-  }
 
   async function runClone(
     action: "preview" | "export-json" | "export-csv" | "apply",
@@ -1909,17 +1281,6 @@ export default function ClonePage() {
     setVariantMap(DEFAULT_VARIANT_MAP);
   }
 
-  function loadRouteForEditing(config: CheckoutConfig) {
-    setEditingRouteId(config.id);
-    setRouteName(config.name);
-    setRouteSourceStoreId(config.source_store_id);
-    setRouteTargetStoreId(config.target_store_id);
-    setRouteMode(config.mode || "enterprise_static");
-    setSkuMap(formatJsonMap(config.sku_map || {}));
-    setVariantMap(formatJsonMap(config.variant_map || {}));
-    toast.success("Rota carregada para edicao.");
-  }
-
   async function handleDeleteRoute(config: CheckoutConfig) {
     const confirmed = window.confirm(`Excluir a rota "${config.name}"?`);
     if (!confirmed) return;
@@ -1991,168 +1352,6 @@ export default function ClonePage() {
     } finally {
       setInvertingRouteId("");
     }
-  }
-
-  async function handleCreateDestinationProducts() {
-    if (!routeSourceStoreId || !routeTargetStoreId) {
-      toast.error("Escolha vitrine e dark store.");
-      return;
-    }
-
-    if (routeSourceStoreId === routeTargetStoreId) {
-      toast.error("A dark store precisa ser diferente da vitrine.");
-      return;
-    }
-
-    setDestinationCreating(true);
-    const controller = new AbortController();
-    destinationAbortRef.current = controller;
-    try {
-      const res = await fetch("/api/checkout-routes/create-destination", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          sourceStoreId: routeSourceStoreId,
-          targetStoreId: routeTargetStoreId,
-          // Com a fila, a imagem nao trava o request: pode importar muito mais.
-          limit:
-            neutralizeDestinationProducts && destinationImageQueue ? 100 : 50,
-          inventoryMode,
-          inventoryQuantity: parseInventoryQuantity(inventoryQuantity),
-          neutralizeProducts: neutralizeDestinationProducts,
-          imageNeutralizeMode: destinationImageQueue ? "queue" : "inline",
-          aiMediaLimit: parseAiMediaLimit(destinationAiMediaLimit),
-          genericizeText: destinationGenericizeText,
-          neutralizationInstructions: destinationNeutralizationInstructions,
-          translateProducts: translateDestinationProducts,
-          translateVariantOptions: translateDestinationVariantOptions,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
-
-      setSkuMap(formatJsonMap(data.skuMap || {}));
-      setVariantMap(formatJsonMap(data.variantMap || {}));
-      setRouteProductsRefreshKey((key) => key + 1);
-      toast.success(
-        `${data.createdCount || 0} produto(s) criados e ${data.skippedCount || 0} reaproveitados na dark store.`
-      );
-      if (data.neutralizedCount) {
-        toast.success(`${data.neutralizedCount} produto(s) neutralizados com IA.`);
-      }
-      if (data.imageQueueCount) {
-        toast.success(
-          `${data.imageQueueCount} imagem(ns) na fila de neutralização (processando em background).`
-        );
-        refreshImageQueue(routeTargetStoreId);
-      }
-      if (data.translatedCount) {
-        toast.success(`${data.translatedCount} produto(s) traduzidos com IA.`);
-      }
-      if (data.failedCount) {
-        toast.error(`${data.failedCount} produto(s) falharam ao criar destino.`);
-      }
-    } catch (error) {
-      if (isAbortError(error)) {
-        toast("Operacao cancelada.");
-      } else {
-        toast.error(error instanceof Error ? error.message : "Falha ao criar destino.");
-      }
-    } finally {
-      if (destinationAbortRef.current === controller) destinationAbortRef.current = null;
-      setDestinationCreating(false);
-    }
-  }
-
-  async function handleCreateRoute() {
-    if (!routeSourceStoreId || !routeTargetStoreId || !routeName.trim()) {
-      toast.error("Preencha nome, vitrine e dark store.");
-      return;
-    }
-
-    if (routeSourceStoreId === routeTargetStoreId) {
-      toast.error("A vitrine e a dark store precisam ser lojas diferentes.");
-      return;
-    }
-
-    let parsedSkuMap: Record<string, string>;
-    let parsedVariantMap: Record<string, string>;
-    try {
-      parsedSkuMap = parseJsonMap(skuMap, "SKU map");
-      parsedVariantMap = parseJsonMap(variantMap, "Variant map");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Mapa invalido.");
-      return;
-    }
-
-    // Sem mapa de variantes a rota nao consegue rotear nada no checkout
-    // (cai no checkout da vitrine). Bloqueia e orienta a conectar antes.
-    if (
-      Object.keys(parsedVariantMap).length === 0 &&
-      Object.keys(parsedSkuMap).length === 0
-    ) {
-      toast.error(
-        "Nenhuma variante conectada. Rode \"Criar destino\" (passo 1) para conectar os produtos por SKU antes de salvar a rota."
-      );
-      return;
-    }
-
-    setRouteSaving(true);
-    try {
-      const res = await fetch("/api/checkout-routes", {
-        method: editingRouteId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingRouteId || undefined,
-          name: routeName,
-          sourceStoreId: routeSourceStoreId,
-          targetStoreId: routeTargetStoreId,
-          mode: routeMode,
-          skuMap: parsedSkuMap,
-          variantMap: parsedVariantMap,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao salvar rota.");
-      toast.success(editingRouteId ? "Checkout roteado atualizado." : "Checkout roteado criado.");
-      setEditingRouteId(data.config?.id || editingRouteId);
-      await loadConfigs();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar rota.");
-    } finally {
-      setRouteSaving(false);
-    }
-  }
-
-  function handleRouteSourceChange(value: string | null) {
-    const nextSource = value || "";
-    if (nextSource && nextSource === routeTargetStoreId) {
-      setRouteSourceStoreId(nextSource);
-      setRouteTargetStoreId(routeSourceStoreId);
-      return;
-    }
-    setRouteSourceStoreId(nextSource);
-  }
-
-  function handleRouteTargetChange(value: string | null) {
-    const nextTarget = value || "";
-    if (nextTarget && nextTarget === routeSourceStoreId) {
-      setRouteTargetStoreId(nextTarget);
-      setRouteSourceStoreId(routeTargetStoreId);
-      return;
-    }
-    setRouteTargetStoreId(nextTarget);
-  }
-
-  function handleManualVariantLink(sourceVariantId: string, targetVariantId: string | null) {
-    const nextMap = safeJsonMap(variantMap);
-    if (!targetVariantId || targetVariantId === "__none__") {
-      delete nextMap[sourceVariantId];
-    } else {
-      nextMap[sourceVariantId] = targetVariantId;
-    }
-    setVariantMap(formatJsonMap(nextMap));
   }
 
   return (
@@ -2898,948 +2097,105 @@ export default function ClonePage() {
       )}
 
       {activeView === "routed-checkout" && (
-      <section className="space-y-4" aria-labelledby="routed-checkout">
-        <RoutedTaskHeader
-          routedView={routedView}
-          hasRoutes={configs.length > 0}
-          routesCount={configs.length}
-        />
-
-        {routedView === "script" &&
-          (configs.length === 0 ? (
-            <Card className="rounded-lg border-border/60">
-              <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Route className="h-6 w-6" />
-                </span>
-                <h3 className="text-lg font-semibold text-foreground">
-                  Nenhuma rota criada ainda
-                </h3>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  O script só funciona com o token de uma rota. Volte ao passo 2,
-                  vincule a vitrine à dark store e crie a rota — o token é gerado
-                  automaticamente.
-                </p>
-                <Link
-                  href="/clone/routed-checkout/create-route"
-                  className="mt-1 inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-                >
-                  Ir para o passo 2: Vincular produtos
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {scriptConfig && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card px-4 py-2.5 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <span className="text-muted-foreground">Token da rota</span>
-                  <span className="font-semibold text-foreground">{scriptConfig.name}</span>
-                  <Link
-                    href="/clone/routed-checkout/active-routes"
-                    className="ml-auto text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    Trocar rota
-                  </Link>
-                </div>
-              )}
-              <RoutedCheckoutTutorial
-                installSnippet={installSnippet}
-                routeToken={installToken}
-              />
-            </div>
-          ))}
-
-        {routedView !== "script" && (
-        <div className="grid gap-5">
-        {showRoutedSetup && (
-        <Card className="rounded-lg border-border/60">
-          <CardContent className="space-y-5">
-            {routedView === "create-route" && (
-            <div className="space-y-2">
-              <Label htmlFor="route-name">Nome</Label>
-              <Input
-                id="route-name"
-                value={routeName}
-                onChange={(event) => setRouteName(event.target.value)}
-              />
-            </div>
-            )}
-
-            <div className={cn("grid gap-4", routedView === "create-route" ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
-              <div className="space-y-2">
-                <Label>Vitrine</Label>
-                <p className="text-xs text-muted-foreground/80">
-                  Onde o cliente compra (storefront com o script instalado).
-                </p>
-                <Select value={routeSourceStoreId} onValueChange={handleRouteSourceChange}>
-                  <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Origem">
-                      {formatStoreLabel(selectedRouteSourceStore)}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        <span className="block max-w-[260px] truncate">
-                          {formatStoreLabel(store)}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Dark store</Label>
-                <p className="text-xs text-muted-foreground/80">
-                  Onde fica o checkout/pagamento (recebe o pedido roteado).
-                </p>
-                <Select value={routeTargetStoreId} onValueChange={handleRouteTargetChange}>
-                  <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Destino">
-                      {formatStoreLabel(selectedRouteTargetStore)}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        <span className="block max-w-[260px] truncate">
-                          {formatStoreLabel(store)}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {routedView === "create-route" && (
-              <div className="space-y-2">
-              <Label>Modo</Label>
-                <Select value={routeMode} onValueChange={(value) => setRouteMode(value || "standard")}>
-                  <SelectTrigger className="w-full min-w-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    <SelectItem value="standard">standard - teste simples</SelectItem>
-                    <SelectItem value="enterprise">enterprise - regras futuras</SelectItem>
-                    <SelectItem value="enterprise_static">enterprise_static - dark store fixa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              )}
-            </div>
-
-            {stores.length < 2 && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm leading-6 text-destructive">
-                Conecte pelo menos duas lojas para criar uma rota: uma vitrine e uma dark store.
-              </div>
-            )}
-
-            <div
-              id="routed-create-destination"
-              className="scroll-mt-6 rounded-lg border border-border/60 bg-background/45 p-4"
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {routedView === "create-route"
-                      ? "Correspondências encontradas"
-                      : "Produtos que serão criados"}
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {routedView === "create-route"
-                      ? "O app lê as duas lojas e sugere pares por SKU ou título. Depois você salva isso como rota."
-                      : "O app lê a vitrine pela API da Shopify e cria equivalentes na dark store selecionada."}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {routedView !== "create-route" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCreateDestinationProducts}
-                    disabled={
-                      destinationCreating ||
-                      !routeSourceStoreId ||
-                      !routeTargetStoreId ||
-                      routeSourceStoreId === routeTargetStoreId ||
-                      suggestedRouteMaps.sourceVariants.length === 0
-                    }
-                  >
-                    {destinationCreating ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <PackageCheck className="h-3.5 w-3.5" />
-                    )}
-                    Criar destino na dark store
-                  </Button>
-                  )}
-                  {routedView !== "create-route" && destinationCreating && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    onClick={() => destinationAbortRef.current?.abort()}
-                  >
-                    Cancelar operação
-                  </Button>
-                  )}
-                  {routedView === "create-route" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSkuMap(formatJsonMap(suggestedRouteMaps.skuMap));
-                      setVariantMap(formatJsonMap(suggestedRouteMaps.variantMap));
-                      setAutofilledMapKey(routeMapKey);
-                      toast.success("Mapas reais aplicados nos campos.");
-                    }}
-                    disabled={suggestedRouteMaps.matches.length === 0}
-                  >
-                    <WandSparkles className="h-3.5 w-3.5" />
-                    Usar mapas reais
-                  </Button>
-                  )}
-                  {routedView === "create-route" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(installSnippet, "script")}
-                    disabled={!installToken}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copiar script
-                  </Button>
-                  )}
-                </div>
-              </div>
-
-              {routedView !== "create-route" && (
-              <div className="mt-4 grid gap-4 rounded-lg border border-border/70 bg-card/70 p-4 lg:grid-cols-[260px_180px_minmax(0,1fr)] lg:items-start">
-                <div className="space-y-2">
-                  <Label>Estoque na dark store</Label>
-                  <Select
-                    value={inventoryMode}
-                    onValueChange={(value) =>
-                      setInventoryMode((value || "not_tracked") as InventoryMode)
-                    }
-                    disabled={destinationCreating}
-                  >
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
-                      <SelectItem value="tracked">Definir estoque inicial</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="destination-inventory-quantity">Quantidade</Label>
-                  <Input
-                    id="destination-inventory-quantity"
-                    value={inventoryQuantity}
-                    onChange={(event) => setInventoryQuantity(event.target.value)}
-                    inputMode="numeric"
-                    min={0}
-                    type="number"
-                    disabled={destinationCreating || inventoryMode === "not_tracked"}
-                  />
-                </div>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Para dark store, o recomendado é <strong>Inventory not tracked</strong>:
-                  o produto fica vendável sem depender de saldo. Se quiser controle
-                  real, selecione “Definir estoque inicial”.
-                </p>
-              </div>
-              )}
-
-              {routedView !== "create-route" && (
-              <label className="mt-4 flex items-start gap-3 rounded-lg border border-border/70 bg-card/70 p-4 text-sm">
-                <input
-                  type="checkbox"
-                  checked={translateDestinationProducts}
-                  onChange={(event) =>
-                    setTranslateDestinationProducts(event.target.checked)
-                  }
-                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
-                  disabled={destinationCreating}
-                />
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 font-semibold text-foreground">
-                    <Languages className="h-4 w-4 text-primary" />
-                    Traduzir produto ao criar destino
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    Quando desligado, a dark store recebe titulo, descricao, tags e SEO
-                    iguais aos da vitrine. Quando ligado, a IA traduz esses textos
-                    para o idioma configurado na loja destino antes de criar o produto.
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    A traducao nao altera imagens. Para limpar marcas de agua,
-                    logos de loja e textos externos, use a neutralizacao IA.
-                  </span>
-                </span>
-              </label>
-              )}
-
-              {routedView !== "create-route" && (
-              <label className="mt-4 flex items-start gap-3 rounded-lg border border-border/70 bg-card/70 p-4 text-sm">
-                <input
-                  type="checkbox"
-                  checked={translateDestinationVariantOptions}
-                  onChange={(event) =>
-                    setTranslateDestinationVariantOptions(event.target.checked)
-                  }
-                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
-                  disabled={destinationCreating}
-                />
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2 font-semibold text-foreground">
-                    <Languages className="h-4 w-4 text-primary" />
-                    Traduzir cores e tamanhos ao criar destino
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    Use quando a dark store deve receber variantes em português.
-                    Exemplos: Color vira Cor, Size vira Tamanho, blue vira azul e
-                    small/S vira P.
-                  </span>
-                </span>
-              </label>
-              )}
-
-              {routedView === "neutralize" && (
-              <div
-                id="routed-neutralize"
-                className="mt-4 scroll-mt-6 rounded-lg border border-primary/25 bg-primary/8 p-4"
+      <section className="space-y-5" aria-labelledby="routed-checkout">
+        <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/60 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Route className="h-5 w-5 text-primary" />
+              <h2
+                id="routed-checkout"
+                className="text-lg font-semibold text-foreground"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <WandSparkles className="h-4 w-4 text-primary" />
-                      <h3 className="text-sm font-semibold text-foreground">
-                        Neutralizar produto ao criar destino
-                      </h3>
-                    </div>
-                    <p className="mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
-                      Quando ativo, o app usa Gemini para gerar uma versao stock:
-                      remove logos, simbolos, marcas e textos do proprio produto,
-                      alem de marcas d&apos;agua, textos externos e artefatos de marketplace.
-                    </p>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                      {destinationImageQueue
-                        ? "Com a fila ligada, o texto é neutralizado na hora e cada produto entra com 1 imagem (o hero), trocada pela versão neutralizada em background — sem travar por limite de tempo."
-                        : "Modo inline: a neutralização processa até 10 produtos por execução e gera as imagens na hora (mais lento)."}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant={neutralizeDestinationProducts ? "default" : "outline"}
-                    size="sm"
-                    aria-pressed={neutralizeDestinationProducts}
-                    onClick={() =>
-                      setNeutralizeDestinationProducts((enabled) => !enabled)
-                    }
-                    className="w-fit shrink-0"
-                    disabled={destinationCreating}
-                  >
-                    <WandSparkles className="h-3.5 w-3.5" />
-                    {neutralizeDestinationProducts
-                      ? "Neutralização ativa"
-                      : "Ativar neutralização"}
-                  </Button>
-                </div>
-                {neutralizeDestinationProducts && (
-                  <div className="mt-4 space-y-2 rounded-lg border border-primary/20 bg-background/60 p-3">
-                    <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-                      <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={destinationGenericizeText}
-                          onChange={(event) =>
-                            setDestinationGenericizeText(event.target.checked)
-                          }
-                          className="mt-0.5 h-4 w-4 accent-primary"
-                          disabled={destinationCreating}
-                        />
-                        <span>
-                          <span className="block font-medium text-foreground">
-                            Genericizar nome, descricao e SEO
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Ex.: Air Jordan shoes vira Tenis esportivo casual.
-                          </span>
-                        </span>
-                      </label>
-                      <div className="space-y-1">
-                        <Label htmlFor="destination-ai-media-limit">
-                          Midias com IA/produto
-                        </Label>
-                        <Input
-                          id="destination-ai-media-limit"
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={destinationImageQueue ? "1" : destinationAiMediaLimit}
-                          onChange={(event) =>
-                            setDestinationAiMediaLimit(event.target.value)
-                          }
-                          className="h-10 bg-background/70"
-                          disabled={destinationCreating || destinationImageQueue}
-                        />
-                        {destinationImageQueue && (
-                          <p className="text-[11px] text-muted-foreground">
-                            Fila usa 1 imagem por produto.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={destinationImageQueue}
-                        onChange={(event) =>
-                          setDestinationImageQueue(event.target.checked)
-                        }
-                        className="mt-0.5 h-4 w-4 accent-primary"
-                        disabled={destinationCreating}
-                      />
-                      <span>
-                        <span className="block font-medium text-foreground">
-                          Neutralizar imagens em background (fila)
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Recomendado para lojas grandes. Importa rápido e troca o
-                          hero pela versão neutralizada aos poucos (~US$0,04/imagem).
-                        </span>
-                      </span>
-                    </label>
-                    {imageQueueProgress && imageQueueProgress.total > 0 && (
-                      <div className="space-y-1 rounded-md border border-primary/20 bg-background/60 p-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>
-                            Imagens neutralizadas:{" "}
-                            {imageQueueProgress.completed}/{imageQueueProgress.total}
-                            {imageQueueProgress.failed > 0
-                              ? ` · ${imageQueueProgress.failed} falharam`
-                              : ""}
-                          </span>
-                          <span>
-                            {imageQueueProgress.pending +
-                              imageQueueProgress.processing >
-                            0
-                              ? "processando…"
-                              : "concluído"}
-                          </span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-primary/15">
-                          <div
-                            className="h-full rounded-full bg-primary transition-all"
-                            style={{
-                              width: `${Math.round(
-                                ((imageQueueProgress.completed +
-                                  imageQueueProgress.failed) /
-                                  Math.max(imageQueueProgress.total, 1)) *
-                                  100
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <Label htmlFor="destination-neutralization-instructions">
-                      Instruções extras para esta neutralização
-                    </Label>
-                    <Textarea
-                      id="destination-neutralization-instructions"
-                      rows={3}
-                      value={destinationNeutralizationInstructions}
-                      onChange={(event) =>
-                        setDestinationNeutralizationInstructions(event.target.value)
-                      }
-                      placeholder="Ex.: manter escudos do time, remover só selo de vendedor e texto promocional."
-                      className="bg-background/70 text-sm"
-                      disabled={destinationCreating}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      O comando customizado tem prioridade quando você pedir para
-                      remover, manter ou alterar um detalhe específico.
-                    </p>
-                  </div>
-                )}
-              </div>
-              )}
-
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <p className="text-xs text-muted-foreground">Vitrine</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">
-                    {routeProductsLoading ? "..." : suggestedRouteMaps.sourceVariants.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">variantes lidas</p>
-                </div>
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <p className="text-xs text-muted-foreground">Dark store</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">
-                    {routeProductsLoading ? "..." : suggestedRouteMaps.targetVariants.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">variantes lidas</p>
-                </div>
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <p className="text-xs text-muted-foreground">Correspondências</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">
-                    {routeProductsLoading ? "..." : suggestedRouteMaps.matches.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">por SKU/título</p>
-                </div>
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <p className="text-xs text-muted-foreground">Sem par</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">
-                    {routeProductsLoading ? "..." : suggestedRouteMaps.unmatched.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">revisar manualmente</p>
-                </div>
-              </div>
-
-              {routeProductsError ? (
-                <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  {routeProductsError}
-                </div>
-              ) : null}
-
-              {routedView === "create-route" && (routeLinkRows.length > 0 ? (
-                <div className="mt-4 max-h-56 overflow-auto rounded-lg border border-border/60">
-                  <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-card text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Cliente adiciona na vitrine</th>
-                        <th className="px-3 py-2 font-medium">Ligacao</th>
-                        <th className="px-3 py-2 font-medium">Checkout usa na dark store</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {routeLinkRows.slice(0, 40).map((row) => (
-                        <tr key={row.source.id} className="border-t border-border/50">
-                          <td className="max-w-[300px] px-3 py-2">
-                            <p className="truncate font-medium text-foreground">
-                              {row.source.label}
-                            </p>
-                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                              {row.source.id}
-                            </p>
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge
-                              variant={row.target ? "secondary" : "outline"}
-                              className="rounded-md"
-                            >
-                              {row.reason === "manual"
-                                ? "manual"
-                                : row.reason === "sku"
-                                  ? "por SKU"
-                                  : row.reason === "titulo"
-                                    ? "por titulo"
-                                    : "sem destino"}
-                            </Badge>
-                            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                              {row.source.sku || "sem SKU"}
-                            </p>
-                          </td>
-                          <td className="max-w-[300px] px-3 py-2">
-                            {row.target ? (
-                              <>
-                                <p className="truncate font-medium text-foreground">
-                                  {row.target.label}
-                                </p>
-                                <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                                  {row.target.id}
-                                </p>
-                              </>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                Nenhuma variante de destino escolhida.
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3 text-sm leading-6 text-muted-foreground">
-                  Ainda nao ha mapa real para copiar. Para gerar automaticamente, a vitrine e a dark store precisam ter variantes equivalentes. Se a dark store estiver vazia, clique em Criar destino na dark store para copiar os produtos da vitrine e gerar os mapas.
-                </div>
-              ))}
-
-              {routedView === "create-route" && (
-              <details className="mt-4 rounded-lg border border-border/60 bg-card/60 p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                  Ver IDs técnicos lidos das lojas
-                </summary>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Use esta área apenas para conferência. O fluxo normal usa as
-                  correspondências e seletores acima.
-                </p>
-              <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-foreground">Variantes da vitrine</h3>
-                    <Badge variant="outline">{sourceVariantSamples.length} visiveis</Badge>
-                  </div>
-                  <div className="mt-3 max-h-52 overflow-auto rounded-md border border-border/50">
-                    <table className="w-full text-left text-xs">
-                      <thead className="sticky top-0 bg-card text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Produto</th>
-                          <th className="px-3 py-2 font-medium">SKU</th>
-                          <th className="px-3 py-2 font-medium">GID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sourceVariantSamples.length === 0 ? (
-                          <tr>
-                            <td className="px-3 py-3 text-muted-foreground" colSpan={3}>
-                              Nenhuma variante lida na vitrine.
-                            </td>
-                          </tr>
-                        ) : (
-                          sourceVariantSamples.map((variant) => (
-                            <tr key={variant.id} className="border-t border-border/50">
-                              <td className="max-w-[190px] truncate px-3 py-2 text-foreground">{variant.label}</td>
-                              <td className="px-3 py-2 font-mono text-muted-foreground">{variant.sku || "-"}</td>
-                              <td className="max-w-[210px] truncate px-3 py-2 font-mono text-muted-foreground">{variant.id}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-foreground">Variantes da dark store</h3>
-                    <Badge variant="outline">{targetVariantSamples.length} visiveis</Badge>
-                  </div>
-                  <div className="mt-3 max-h-52 overflow-auto rounded-md border border-border/50">
-                    <table className="w-full text-left text-xs">
-                      <thead className="sticky top-0 bg-card text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Produto</th>
-                          <th className="px-3 py-2 font-medium">SKU</th>
-                          <th className="px-3 py-2 font-medium">GID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {targetVariantSamples.length === 0 ? (
-                          <tr>
-                            <td className="px-3 py-3 text-muted-foreground" colSpan={3}>
-                              Nenhuma variante lida na dark store.
-                            </td>
-                          </tr>
-                        ) : (
-                          targetVariantSamples.map((variant) => (
-                            <tr key={variant.id} className="border-t border-border/50">
-                              <td className="max-w-[190px] truncate px-3 py-2 text-foreground">{variant.label}</td>
-                              <td className="px-3 py-2 font-mono text-muted-foreground">{variant.sku || "-"}</td>
-                              <td className="max-w-[210px] truncate px-3 py-2 font-mono text-muted-foreground">{variant.id}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              </details>
-              )}
-
-              {routedView === "create-route" && (
-              <details className="mt-4 rounded-lg border border-primary/25 bg-primary/8 p-4">
-                <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                  Ajustar ligação item por item
-                </summary>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Leia cada linha como “quando o cliente comprar isto na vitrine,
-                      envie este item da dark store para o checkout”. Cada escolha
-                      atualiza o Variant map automaticamente.
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="w-fit">
-                    {Object.keys(currentVariantMap).length} links manuais
-                  </Badge>
-                </div>
-
-                <div className="mt-4 max-h-[520px] space-y-2 overflow-auto rounded-lg border border-border/60 bg-card/70 p-3">
-                  {manualSourceVariants.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
-                      Nenhuma variante da vitrine carregada ainda.
-                    </div>
-                  ) : suggestedRouteMaps.targetVariants.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm leading-6 text-muted-foreground">
-                      A dark store ainda nao retornou variantes. Cadastre produtos nela
-                      ou use Criar destino na dark store para gerar os produtos e depois
-                      escolher os destinos.
-                    </div>
-                  ) : (
-                    routeLinkRows.map((row) => (
-                      <div
-                        key={row.source.id}
-                        className="grid gap-3 rounded-lg border border-border/60 bg-background/60 p-3 lg:grid-cols-[minmax(0,1fr)_44px_minmax(320px,1fr)] lg:items-center"
-                      >
-                        <div className="min-w-0">
-                          <div className="mb-2 flex items-center gap-2">
-                            <Badge variant="outline" className="rounded-md">
-                              Vitrine
-                            </Badge>
-                            <span className="font-mono text-[11px] text-muted-foreground">
-                              {row.source.sku || "sem SKU"}
-                            </span>
-                          </div>
-                          <p className="truncate text-sm font-semibold text-foreground">
-                            {row.source.label}
-                          </p>
-                          <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                            {row.source.id}
-                          </p>
-                        </div>
-
-                        <div className="hidden h-9 w-9 items-center justify-center rounded-lg bg-primary/12 text-primary lg:flex">
-                          <ArrowRight className="h-4 w-4" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <Badge variant="secondary" className="rounded-md">
-                              Dark store
-                            </Badge>
-                            <span className="text-[11px] text-muted-foreground">
-                              {row.reason === "manual"
-                                ? "definido manualmente"
-                                : row.reason === "sku"
-                                  ? "sugerido por SKU"
-                                  : row.reason === "titulo"
-                                    ? "sugerido por titulo"
-                                    : "sem destino"}
-                            </span>
-                          </div>
-                          <Select
-                            value={currentVariantMap[row.source.id] || row.targetId}
-                            onValueChange={(value) =>
-                              handleManualVariantLink(row.source.id, value)
-                            }
-                          >
-                            <SelectTrigger className="h-11 w-full min-w-0 bg-background">
-                              <SelectValue placeholder="Escolha a variante da dark store" />
-                            </SelectTrigger>
-                            <SelectContent align="start" className="max-h-80">
-                              <SelectItem value="__none__">Sem destino para checkout</SelectItem>
-                              {suggestedRouteMaps.targetVariants.map((targetVariant) => (
-                                <SelectItem key={targetVariant.id} value={targetVariant.id}>
-                                  <span className="block max-w-[560px] truncate">
-                                    {targetVariant.label}
-                                    {targetVariant.sku ? ` - SKU ${targetVariant.sku}` : ""}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {row.target ? (
-                            <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                              {row.target.id}
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-[11px] text-destructive">
-                              Este produto ainda nao vai para checkout roteado.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </details>
-              )}
+                Loja vitrine para dark store
+              </h2>
             </div>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              Conecte duas lojas em poucos cliques: cria os produtos na dark
+              store, neutraliza, conecta por SKU e gera o script do checkout
+              roteado.
+            </p>
+          </div>
+          <Button
+            size="lg"
+            className="shrink-0"
+            onClick={() => setWizardOpen(true)}
+            disabled={stores.length < 2}
+          >
+            <Route className="h-4 w-4" />
+            Conectar lojas
+          </Button>
+        </div>
 
-            {routedView === "create-route" && (
-            <details className="rounded-lg border border-border/60 bg-background/35 p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                JSON avançado dos mapas
-              </summary>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Os campos abaixo são preenchidos automaticamente pelos seletores.
-                Edite manualmente só quando precisar colar um mapa externo.
-              </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="sku-map">SKU map</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(skuMap, "SKU map")}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copiar
-                  </Button>
-                </div>
-                <Textarea
-                  id="sku-map"
-                  value={skuMap}
-                  onChange={(event) => setSkuMap(event.target.value)}
-                  rows={7}
-                  className="min-h-36 resize-y overflow-auto font-mono text-xs leading-5"
-                />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Chave: SKU da vitrine. Valor: variant GID da dark store.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="variant-map">Variant map</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(variantMap, "Variant map")}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copiar
-                  </Button>
-                </div>
-                <Textarea
-                  id="variant-map"
-                  value={variantMap}
-                  onChange={(event) => setVariantMap(event.target.value)}
-                  rows={7}
-                  className="min-h-36 resize-y overflow-auto font-mono text-xs leading-5"
-                />
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Chave: variant GID da vitrine. Valor: variant GID da dark store.
-                </p>
-              </div>
-            </div>
-            </details>
-            )}
-
-            {routedView === "create-route" && (
-            <div className="rounded-lg border border-primary/25 bg-primary/8 p-3 text-sm text-muted-foreground">
-              <div className="flex items-start gap-2">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <p className="leading-6">
-                  Depois de criar a rota, copie o token exibido em Rotas ativas
-                  para as configurações do tema da vitrine.
-                </p>
-              </div>
-            </div>
-            )}
-
-            {routedView === "create-route" && (() => {
-              const connected = Object.keys(currentVariantMap).length;
-              const total = suggestedRouteMaps.sourceVariants.length;
-              const noneConnected = connected === 0;
-              return (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
-                    noneConnected
-                      ? "border-red-400/40 bg-red-500/10 text-red-300"
-                      : "border-primary/30 bg-primary/8 text-foreground"
-                  )}
-                >
-                  {noneConnected ? (
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                  )}
-                  <span>
-                    <strong>{connected}</strong>
-                    {total > 0 ? ` de ${total}` : ""} variante(s) conectada(s).
-                    {noneConnected
-                      ? " Rode \"Criar destino\" (passo 1) para conectar por SKU antes de salvar."
-                      : ""}
-                  </span>
-                </div>
-              );
-            })()}
-
-            {routedView === "create-route" && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={handleCreateRoute}
-                disabled={routeSaving || stores.length < 2 || routeSourceStoreId === routeTargetStoreId}
-              >
-                {routeSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Route className="h-4 w-4" />}
-                {editingRouteId ? "Salvar alteracoes" : "Criar rota"}
-              </Button>
-              {editingRouteId ? (
-                <Button variant="outline" onClick={resetRouteForm} disabled={routeSaving}>
-                  Cancelar edicao
-                </Button>
-              ) : null}
-            </div>
-            )}
-          </CardContent>
-        </Card>
+        {stores.length < 2 && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
+            Conecte pelo menos duas lojas (uma vitrine e uma dark store) em{" "}
+            <Link href="/stores" className="font-medium underline">
+              Lojas conectadas
+            </Link>
+            .
+          </div>
         )}
 
-        {routedView === "active-routes" && (
-        <Card
-          id="routed-active-routes"
-          className="scroll-mt-6 rounded-lg border-border/60"
-        >
+        <Card className="rounded-lg border-border/60">
           <CardHeader>
             <CardTitle className="text-lg">Rotas ativas</CardTitle>
             <CardDescription>
-              {configsLoading ? "Carregando" : `${configs.length} configuracoes`}
+              {configsLoading
+                ? "Carregando"
+                : `${configs.length} rota(s) - token e script para a vitrine`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {configs.length === 0 ? (
-              <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
-                Nenhuma rota criada.
+              <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
+                <Route className="h-6 w-6 text-muted-foreground/70" />
+                Nenhuma rota ainda. Clique em &quot;Conectar lojas&quot; para
+                criar a primeira.
               </div>
             ) : (
               <div className="space-y-3">
                 {configs.map((config) => {
-                  const routeSnippet = buildRoutedInstallSnippet(config.public_token);
+                  const routeSnippet = buildRoutedInstallSnippet(
+                    config.public_token
+                  );
                   return (
-                  <div
-                    key={config.id}
-                    className="rounded-lg border border-border/60 bg-background/45 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-medium text-foreground">{config.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {config.mode} · {config.enabled ? "ativo" : "pausado"}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {formatStoreLabel(stores.find((store) => store.id === config.source_store_id))}
-                          {" -> "}
-                          {formatStoreLabel(stores.find((store) => store.id === config.target_store_id))}
-                        </p>
+                    <div
+                      key={config.id}
+                      className="rounded-lg border border-border/60 bg-background/45 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {config.name}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatStoreLabel(
+                              stores.find(
+                                (store) => store.id === config.source_store_id
+                              )
+                            )}
+                            {" -> "}
+                            {formatStoreLabel(
+                              stores.find(
+                                (store) => store.id === config.target_store_id
+                              )
+                            )}
+                            {" - "}
+                            {config.enabled ? "ativo" : "pausado"}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={config.enabled ? "secondary" : "outline"}
+                          className="rounded-md"
+                        >
+                          {Object.keys(config.sku_map || {}).length +
+                            Object.keys(config.variant_map || {}).length}{" "}
+                          mapas
+                        </Badge>
                       </div>
-                      <Badge variant={config.enabled ? "secondary" : "outline"} className="rounded-md">
-                        {Object.keys(config.sku_map || {}).length + Object.keys(config.variant_map || {}).length} mapas
-                      </Badge>
-                    </div>
-                    <div className="mt-3 rounded-md bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
-                      <span className="mr-2 inline-flex items-center gap-1 font-sans text-foreground">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                        Token
-                      </span>
-                      <span className="break-all">{config.public_token}</span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="mt-3 flex items-center justify-between gap-2">
                         <Label className="text-xs font-semibold text-foreground">
-                          Código completo para colar na vitrine
+                          Script para colar na vitrine
                         </Label>
                         <Button
                           variant="ghost"
@@ -3855,61 +2211,53 @@ export default function ClonePage() {
                       <Textarea
                         readOnly
                         value={routeSnippet}
-                        className="min-h-32 resize-y font-mono text-xs leading-6"
+                        className="mt-2 min-h-24 resize-y font-mono text-xs leading-6"
                         onFocus={(event) => event.currentTarget.select()}
                       />
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        Cole este bloco inteiro em <code>layout/theme.liquid</code>,
-                        imediatamente antes de <code>&lt;/body&gt;</code>, na loja vitrine.
-                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleInvertRoute(config)}
+                          disabled={invertingRouteId === config.id}
+                          title="Troca vitrine e dark store."
+                        >
+                          {invertingRouteId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          )}
+                          Inverter lojas
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteRoute(config)}
+                          disabled={deletingRouteId === config.id}
+                        >
+                          {deletingRouteId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Excluir
+                        </Button>
+                      </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => loadRouteForEditing(config)}
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleInvertRoute(config)}
-                        disabled={invertingRouteId === config.id}
-                        title="Troca vitrine e dark store. Use se o cliente compra na loja que esta como dark store."
-                      >
-                        {invertingRouteId === config.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <ArrowLeftRight className="h-3.5 w-3.5" />
-                        )}
-                        Inverter lojas
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteRoute(config)}
-                        disabled={deletingRouteId === config.id}
-                      >
-                        {deletingRouteId === config.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                        Excluir
-                      </Button>
-                    </div>
-                  </div>
                   );
                 })}
               </div>
             )}
           </CardContent>
         </Card>
-        )}
-        </div>
-        )}
+
+        <ConnectStoresWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          stores={stores}
+          appOrigin={appOrigin}
+          onRouteCreated={loadConfigs}
+        />
       </section>
       )}
     </div>
