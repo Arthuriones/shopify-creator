@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   ArrowRight,
+  CheckCircle2,
   Copy,
   Download,
   FileJson,
@@ -45,6 +46,13 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
 import { ConnectStoresWizard } from "@/components/routed-checkout/connect-stores-wizard";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface StoreOption {
   id: string;
@@ -583,6 +591,8 @@ export default function ClonePage() {
   const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [importWizardOpen, setImportWizardOpen] = useState(false);
+  const [importStep, setImportStep] = useState(1);
 
   const cloneAbortRef = useRef<AbortController | null>(null);
 
@@ -738,6 +748,26 @@ export default function ClonePage() {
     setImportMode(mode);
     setSelectedImportMode(mode);
   }
+
+  function openImportWizard(mode: ImportMode) {
+    openInlineImport(mode);
+    setImportStep(1);
+    setImportWizardOpen(true);
+  }
+
+  // Sub-rotas /individual, /bulk, /configuracao abrem o wizard direto.
+  useEffect(() => {
+    if (isImportSubpage) {
+      setImportStep(1);
+      setImportWizardOpen(true);
+    } else if (isCloneConfigSubpage) {
+      setImportMode("bulk");
+      setSelectedImportMode("bulk");
+      setImportStep(1);
+      setImportWizardOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isImportSubpage, isCloneConfigSubpage]);
 
   useEffect(() => {
     async function loadStores() {
@@ -1372,21 +1402,20 @@ export default function ClonePage() {
         {!isCloneConfigSubpage && (
           <ServiceIntro
             icon={Copy}
-            title="Serviço 1: clonar loja Shopify"
-            description="Use quando quiser copiar produtos de uma vitrine pública. A origem pode ser um domínio próprio ou myshopify.com; o sistema busca o catálogo público e mostra uma prévia antes de gravar algo."
+            title="Serviço 1: importar produtos da Shopify"
+            description="Copie produtos de uma vitrine pública (domínio próprio ou myshopify.com). O assistente abre em um passo a passo: origem, seleção, opções e importação."
             steps={[
-              "Informe a loja pública de origem.",
-              "Analise a prévia para conferir produtos e variantes.",
-              "Aplique na loja conectada ou exporte o catálogo.",
+              "Escolha individual ou em massa.",
+              "Informe a origem e selecione produtos.",
+              "Configure opções e importe na sua loja.",
             ]}
           />
         )}
 
-        {!isImportSubpage && !isCloneConfigSubpage && (
         <div className="grid gap-3 md:grid-cols-2">
           <button
             type="button"
-            onClick={() => openInlineImport("single")}
+            onClick={() => openImportWizard("single")}
             className="group rounded-lg border border-primary/35 bg-primary/10 p-4 text-left shadow-sm transition-colors hover:border-primary/65 hover:bg-primary/15"
           >
             <span className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
@@ -1397,13 +1426,14 @@ export default function ClonePage() {
               Importar produto individual
             </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Use uma URL de produto Shopify específica, configure destino e publique só aquele item.
+              Cole a URL de um produto Shopify, configure e publique só aquele
+              item.
             </p>
             <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
           </button>
           <button
             type="button"
-            onClick={() => openInlineImport("bulk")}
+            onClick={() => openImportWizard("bulk")}
             className="group rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/55 hover:bg-card/80"
           >
             <span className="inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-sm font-bold text-foreground">
@@ -1414,71 +1444,123 @@ export default function ClonePage() {
               Importar em massa
             </h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Leia a loja, selecione produtos, veja coleções encontradas e importe em lotes com progresso.
+              Leia a loja, selecione vários produtos e importe em lotes com
+              progresso.
             </p>
             <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
           </button>
         </div>
-        )}
 
-        {(selectedImportMode || isImportSubpage) && (
-          <Card className="rounded-lg border-border/60">
-            <CardHeader className="border-b border-border/60 pb-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <CardTitle>
-                    {isCloneConfigSubpage
-                      ? "Configurações de clone"
-                      : importMode === "single"
-                        ? "Importar produto individual"
-                        : "Selecionar produtos para importar"}
-                  </CardTitle>
-                  <CardDescription className="mt-1">
-                    {isCloneConfigSubpage
-                      ? "Ajuste origem, destino, publicação, estoque, IA e seleção antes de importar na Shopify."
-                      : "Configure origem, destino, publicação, estoque e seleção antes de gravar na Shopify."}
-                  </CardDescription>
-                </div>
-                {!isImportSubpage && !isCloneConfigSubpage && (
-                  <div className="inline-flex rounded-md border border-border bg-muted p-1">
-                    <button
-                      type="button"
-                      onClick={() => openInlineImport("single")}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-                        importMode === "single"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Individual
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openInlineImport("bulk")}
-                      className={cn(
-                        "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-                        importMode === "bulk"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Em massa
-                    </button>
-                  </div>
+        <Dialog open={importWizardOpen} onOpenChange={setImportWizardOpen}>
+          <DialogContent
+            className="max-h-[88vh] overflow-y-auto sm:max-w-2xl"
+            showCloseButton={!applyLoading}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Download className="h-4 w-4 text-primary" />
+                {importMode === "single"
+                  ? "Importar produto individual"
+                  : "Importar produtos em massa"}
+              </DialogTitle>
+              <DialogDescription>
+                Siga os passos: origem, seleção, opções e importação.
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Alterna individual / massa */}
+            <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  openInlineImport("single");
+                  setImportStep(1);
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                  importMode === "single"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
-              </div>
-            </CardHeader>
+              >
+                Individual
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  openInlineImport("bulk");
+                  setImportStep(1);
+                }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
+                  importMode === "bulk"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Em massa
+              </button>
+            </div>
 
-            <CardContent className="grid gap-0 p-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-4 px-5 py-4">
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
-                  <div className="space-y-2">
-                    <Label htmlFor="modal-source">
-                      {importMode === "single" ? "URL do produto" : "Loja de origem"}
+            {/* Stepper */}
+            <div className="flex items-center gap-1.5">
+              {(importMode === "bulk"
+                ? [
+                    [1, "Origem"],
+                    [2, "Produtos"],
+                    [3, "Opções"],
+                    [4, "Revisar"],
+                  ]
+                : [
+                    [1, "Origem"],
+                    [3, "Opções"],
+                    [4, "Revisar"],
+                  ]
+              ).map(([n, label]) => {
+                const active = importStep === n;
+                const done = importStep > Number(n);
+                return (
+                  <div
+                    key={String(n)}
+                    className="flex flex-1 items-center gap-1.5"
+                  >
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                        done && "bg-primary/15 text-primary",
+                        active && "bg-primary text-primary-foreground",
+                        !active && !done && "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : String(n)}
+                    </div>
+                    <span
+                      className={cn(
+                        "truncate text-xs",
+                        active
+                          ? "font-medium text-foreground"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Passo 1 - Origem e destino */}
+            {importStep === 1 && (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px]">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wiz-source">
+                      {importMode === "single"
+                        ? "URL do produto"
+                        : "Loja de origem"}
                     </Label>
                     <Input
-                      id="modal-source"
+                      id="wiz-source"
                       value={source}
                       onChange={(event) => setSource(event.target.value)}
                       placeholder={
@@ -1489,10 +1571,10 @@ export default function ClonePage() {
                     />
                   </div>
                   {importMode === "bulk" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="modal-limit">Limite</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="wiz-limit">Limite</Label>
                       <Input
-                        id="modal-limit"
+                        id="wiz-limit"
                         value={limit}
                         onChange={(event) => setLimit(event.target.value)}
                         inputMode="numeric"
@@ -1505,9 +1587,12 @@ export default function ClonePage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Destino conectado</Label>
-                    <Select value={targetStoreId} onValueChange={(value) => setTargetStoreId(value || "")}>
+                  <div className="space-y-1.5">
+                    <Label>Loja de destino</Label>
+                    <Select
+                      value={targetStoreId}
+                      onValueChange={(value) => setTargetStoreId(value || "")}
+                    >
                       <SelectTrigger className="w-full min-w-0">
                         <SelectValue placeholder="Selecione uma loja">
                           {formatStoreLabel(selectedTarget)}
@@ -1522,9 +1607,14 @@ export default function ClonePage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Duplicados</Label>
-                    <Select value={duplicatePolicy} onValueChange={(value) => setDuplicatePolicy(value || "skip")}>
+                  <div className="space-y-1.5">
+                    <Label>Produtos duplicados</Label>
+                    <Select
+                      value={duplicatePolicy}
+                      onValueChange={(value) =>
+                        setDuplicatePolicy(value || "skip")
+                      }
+                    >
                       <SelectTrigger className="w-full min-w-0">
                         <SelectValue />
                       </SelectTrigger>
@@ -1535,47 +1625,156 @@ export default function ClonePage() {
                     </Select>
                   </div>
                 </div>
+              </div>
+            )}
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
+            {/* Passo 2 - Selecionar produtos (massa) */}
+            {importStep === 2 && importMode === "bulk" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={previewLoading || !source.trim()}
+                  >
+                    {previewLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <WandSparkles className="h-4 w-4" />
+                    )}
+                    Analisar origem
+                  </Button>
+                  {preview.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedProductHandles.length === preview.length
+                        }
+                        onChange={(event) =>
+                          toggleAllProducts(event.target.checked)
+                        }
+                        className="h-4 w-4 accent-primary"
+                      />
+                      Selecionar todos
+                    </label>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {preview.length
+                    ? `${selectedProductHandles.length} de ${preview.length} selecionado(s)`
+                    : "Clique em analisar para carregar os produtos da origem."}
+                </p>
+                <div className="max-h-72 overflow-auto rounded-lg border border-border/60">
+                  {preview.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum produto carregado ainda.
+                    </div>
+                  ) : (
+                    preview.map((product) => (
+                      <label
+                        key={product.handle}
+                        className="grid cursor-pointer grid-cols-[24px_48px_minmax(0,1fr)] gap-3 border-b border-border/50 p-3 last:border-b-0 hover:bg-muted/35"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedProductHandles.includes(
+                            product.handle
+                          )}
+                          onChange={(event) =>
+                            toggleProductHandle(
+                              product.handle,
+                              event.target.checked
+                            )
+                          }
+                          className="mt-3 h-4 w-4 accent-primary"
+                        />
+                        <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border/60 bg-muted">
+                          {product.images?.[0]?.src ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={product.images[0].src}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {product.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {product.variants.length} variante(s) ·{" "}
+                            {product.variants[0]?.price || "0.00"}
+                          </p>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Passo 3 - Opções */}
+            {importStep === 3 && (
+              <div className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={publishToStorefront}
-                      onChange={(event) => setPublishToStorefront(event.target.checked)}
+                      onChange={(event) =>
+                        setPublishToStorefront(event.target.checked)
+                      }
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
-                      <span className="block font-medium text-foreground">Publicar produto</span>
-                      <span className="text-xs text-muted-foreground">Online Store ao importar.</span>
+                      <span className="block font-medium text-foreground">
+                        Publicar produto
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Online Store ao importar.
+                      </span>
                     </span>
                   </label>
-                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={translateCloneProducts}
-                      onChange={(event) => setTranslateCloneProducts(event.target.checked)}
+                      onChange={(event) =>
+                        setTranslateCloneProducts(event.target.checked)
+                      }
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
-                      <span className="block font-medium text-foreground">Traduzir produto</span>
-                      <span className="text-xs text-muted-foreground">Usa idioma da loja destino.</span>
+                      <span className="block font-medium text-foreground">
+                        Traduzir produto
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Idioma da loja destino.
+                      </span>
                     </span>
                   </label>
-                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={translateVariantOptions}
-                      onChange={(event) => setTranslateVariantOptions(event.target.checked)}
+                      onChange={(event) =>
+                        setTranslateVariantOptions(event.target.checked)
+                      }
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
-                      <span className="block font-medium text-foreground">Traduzir variações</span>
+                      <span className="block font-medium text-foreground">
+                        Traduzir variações
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         blue {"->"} azul, S/small {"->"} P.
                       </span>
                     </span>
                   </label>
-                  <label className="flex min-h-[132px] min-w-0 items-start gap-2 rounded-lg border border-border bg-card p-4 text-sm">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={neutralizeCloneProducts}
@@ -1584,48 +1783,50 @@ export default function ClonePage() {
                         if (event.target.checked) {
                           setRemoveExternalReferencesCloneProducts(false);
                         }
-                        setCloneMode("custom");
                       }}
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
                       <span className="flex items-center gap-1.5 font-medium text-foreground">
                         <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                        Neutralizar produto (stock)
+                        Neutralizar (stock)
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Remove marcas inclusive quando fazem parte do produto.
+                        Remove marcas, inclusive do próprio produto.
                       </span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={removeExternalReferencesCloneProducts}
                       onChange={(event) => {
-                        setRemoveExternalReferencesCloneProducts(event.target.checked);
+                        setRemoveExternalReferencesCloneProducts(
+                          event.target.checked
+                        );
                         if (event.target.checked) {
                           setNeutralizeCloneProducts(false);
                         }
-                        setCloneMode("custom");
                       }}
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
                       <span className="flex items-center gap-1.5 font-medium text-foreground">
                         <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                        Retirar referencias externas
+                        Retirar referências externas
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Mantem marcas reais do produto e limpa origem/vendedor.
+                        Mantém marcas reais, limpa origem/vendedor.
                       </span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
                     <input
                       type="checkbox"
                       checked={applyLogoToCloneImages}
-                      onChange={(event) => setApplyLogoToCloneImages(event.target.checked)}
+                      onChange={(event) =>
+                        setApplyLogoToCloneImages(event.target.checked)
+                      }
                       className="mt-0.5 h-4 w-4 accent-primary"
                     />
                     <span>
@@ -1638,125 +1839,105 @@ export default function ClonePage() {
                       </span>
                     </span>
                   </label>
-                  <label className="flex min-h-14 items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={createRoutingConfig}
-                      onChange={(event) => setCreateRoutingConfig(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-primary"
-                    />
-                    <span>
-                      <span className="block font-medium text-foreground">Preparar rota</span>
-                      <span className="text-xs text-muted-foreground">Gera mapa para Loja vitrine.</span>
-                    </span>
-                  </label>
                 </div>
 
-                {(neutralizeCloneProducts || removeExternalReferencesCloneProducts) && (
-                  <div className="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-[minmax(0,1fr)_180px]">
-                    <div className="space-y-3">
+                {(neutralizeCloneProducts ||
+                  removeExternalReferencesCloneProducts) && (
+                  <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 md:grid-cols-[minmax(0,1fr)_140px]">
+                    <div className="space-y-2">
                       <div>
-                        <Label htmlFor="clone-ai-media-limit">
-                          Midias com IA por produto
+                        <Label htmlFor="wiz-ai-media-limit">
+                          Mídias com IA por produto
                         </Label>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Controle o custo: a IA processa so as primeiras midias; as outras seguem originais.
+                          A IA processa só as primeiras; as outras seguem
+                          originais (controle de custo).
                         </p>
                       </div>
                       {neutralizeCloneProducts && (
-                        <label className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/8 p-2 text-sm">
+                        <label className="flex items-start gap-2 text-sm">
                           <input
                             type="checkbox"
                             checked={cloneGenericizeText}
-                            onChange={(event) => {
-                              setCloneGenericizeText(event.target.checked);
-                              setCloneMode("custom");
-                            }}
+                            onChange={(event) =>
+                              setCloneGenericizeText(event.target.checked)
+                            }
                             className="mt-0.5 h-4 w-4 accent-primary"
                           />
-                          <span>
-                            <span className="block font-medium text-foreground">
-                              Genericizar nome, descricao e SEO
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Ex.: Air Jordan shoes vira Tenis esportivo casual.
-                            </span>
+                          <span className="text-xs text-muted-foreground">
+                            Genericizar nome/descrição (Air Jordan → Tênis
+                            esportivo).
                           </span>
                         </label>
                       )}
                     </div>
                     <Input
-                      id="clone-ai-media-limit"
+                      id="wiz-ai-media-limit"
                       type="number"
                       min={1}
                       max={20}
                       value={cloneAiMediaLimit}
-                      onChange={(event) => {
-                        setCloneAiMediaLimit(event.target.value);
-                        setCloneMode("custom");
-                      }}
+                      onChange={(event) =>
+                        setCloneAiMediaLimit(event.target.value)
+                      }
                       className="h-10 bg-background/70"
                     />
                   </div>
                 )}
 
                 {neutralizeCloneProducts && (
-                  <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
-                    <Label htmlFor="clone-neutralization-instructions">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wiz-neutralization-instructions">
                       Instruções extras para neutralização
                     </Label>
                     <Textarea
-                      id="clone-neutralization-instructions"
-                      rows={3}
+                      id="wiz-neutralization-instructions"
+                      rows={2}
                       value={cloneNeutralizationInstructions}
-                      onChange={(event) => {
-                        setCloneNeutralizationInstructions(event.target.value);
-                        setCloneMode("custom");
-                      }}
-                      placeholder="Ex.: remover apenas o patch FIFA, manter o escudo AFA e preservar o padrão azul da camisa."
+                      onChange={(event) =>
+                        setCloneNeutralizationInstructions(event.target.value)
+                      }
+                      placeholder="Ex.: remover só o patch FIFA, manter o escudo do time."
                       className="bg-background/70 text-sm"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Vale para os produtos selecionados nesta importação.
-                    </p>
                   </div>
                 )}
 
-                <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
-                  <CustomPromptDialog
-                    value={cloneCustomPrompt}
-                    onChange={(nextPrompt) => {
-                      setCloneCustomPrompt(nextPrompt);
-                      setCloneMode("custom");
-                    }}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Vale para os produtos selecionados nesta importacao.
-                  </p>
-                </div>
+                <CustomPromptDialog
+                  value={cloneCustomPrompt}
+                  onChange={(nextPrompt) => setCloneCustomPrompt(nextPrompt)}
+                  className="w-full"
+                />
 
-                <div className="grid gap-3 rounded-lg border border-border/60 bg-background/45 p-3 md:grid-cols-[1fr_160px]">
-                  <div className="space-y-2">
+                <div className="grid gap-3 md:grid-cols-[1fr_140px]">
+                  <div className="space-y-1.5">
                     <Label>Estoque</Label>
                     <Select
                       value={inventoryMode}
-                      onValueChange={(value) => setInventoryMode((value || "not_tracked") as InventoryMode)}
+                      onValueChange={(value) =>
+                        setInventoryMode((value || "not_tracked") as InventoryMode)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
-                        <SelectItem value="not_tracked">Inventory not tracked</SelectItem>
-                        <SelectItem value="tracked">Definir estoque inicial</SelectItem>
+                        <SelectItem value="not_tracked">
+                          Inventory not tracked
+                        </SelectItem>
+                        <SelectItem value="tracked">
+                          Definir estoque inicial
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label>Quantidade</Label>
                     <Input
                       value={inventoryQuantity}
-                      onChange={(event) => setInventoryQuantity(event.target.value)}
+                      onChange={(event) =>
+                        setInventoryQuantity(event.target.value)
+                      }
                       type="number"
                       min={0}
                       disabled={inventoryMode === "not_tracked"}
@@ -1764,114 +1945,59 @@ export default function ClonePage() {
                   </div>
                 </div>
 
-                {importMode === "bulk" && (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-sm font-semibold text-foreground">
-                          Produtos da origem
-                        </h3>
-                        <p className="text-xs text-muted-foreground">
-                          {preview.length
-                            ? `Mostrando ${preview.length}/${parseCloneLimit(limit)} carregados`
-                            : "Clique em analisar para carregar a lista."}
-                        </p>
-                      </div>
-                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={preview.length > 0 && selectedProductHandles.length === preview.length}
-                          onChange={(event) => toggleAllProducts(event.target.checked)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                        Selecionar todos
-                      </label>
-                    </div>
-                    <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
-                      {preview.length === 0 ? (
-                        <div className="p-8 text-center text-sm text-muted-foreground">
-                          Nenhum produto carregado ainda.
-                        </div>
-                      ) : (
-                        preview.map((product) => (
-                          <label
-                            key={product.handle}
-                            className="grid cursor-pointer grid-cols-[24px_56px_minmax(0,1fr)] gap-3 border-b border-border/50 p-3 last:border-b-0 hover:bg-muted/35"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedProductHandles.includes(product.handle)}
-                              onChange={(event) =>
-                                toggleProductHandle(product.handle, event.target.checked)
-                              }
-                              className="mt-4 h-4 w-4 accent-primary"
-                            />
-                            <div className="relative h-14 w-14 overflow-hidden rounded-md border border-border/60 bg-muted">
-                              {product.images?.[0]?.src ? (
-                                <img
-                                  src={product.images[0].src}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : null}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-foreground">
-                                {product.title}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {product.variants.length} variante(s) · {product.variants[0]?.price || "0.00"}
-                              </p>
-                              <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                                {product.handle}
-                              </p>
-                            </div>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+                <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={createRoutingConfig}
+                    onChange={(event) =>
+                      setCreateRoutingConfig(event.target.checked)
+                    }
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block font-medium text-foreground">
+                      Preparar rota (checkout roteado)
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Gera o mapa para usar com a Loja vitrine.
+                    </span>
+                  </span>
+                </label>
               </div>
+            )}
 
-              <aside className="space-y-4 border-t border-border/60 bg-muted/25 px-5 py-4 lg:border-l lg:border-t-0">
+            {/* Passo 4 - Revisar e importar */}
+            {importStep === 4 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    {importMode === "bulk"
+                      ? `${selectedProductHandles.length} produto(s) selecionado(s)`
+                      : "Produto individual"}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTransformPreview}
+                    disabled={
+                      transformPreviewLoading || !source.trim() || !targetStoreId
+                    }
+                  >
+                    {transformPreviewLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <SlidersHorizontal className="h-4 w-4" />
+                    )}
+                    Visualizar 1 produto
+                  </Button>
+                </div>
+
                 {transformedPreview ? (
                   <TransformedPreviewCard preview={transformedPreview} />
                 ) : (
                   <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
-                    Clique em Visualizar para transformar 1 produto com os criterios atuais antes de importar tudo.
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Coleções reconhecidas
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Quando a origem expõe /collections.json, elas aparecem aqui para referência.
-                  </p>
-                </div>
-                {sourceCollections.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
-                    Nenhuma coleção pública carregada.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {sourceCollections.slice(0, 20).map((collection) => (
-                      <div
-                        key={collection.handle}
-                        className="rounded-lg border border-border/60 bg-background/55 p-3 text-sm"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium text-foreground">
-                            {collection.title}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            /collections/{collection.handle}
-                          </span>
-                        </span>
-                      </div>
-                    ))}
+                    Clique em Visualizar para conferir como 1 produto fica com os
+                    critérios atuais antes de importar tudo.
                   </div>
                 )}
 
@@ -1889,7 +2015,7 @@ export default function ClonePage() {
                     </div>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/70">
                       <div
-                        className="h-full rounded-full bg-primary"
+                        className="h-full rounded-full bg-primary transition-all"
                         style={{
                           width:
                             applyProgress.total > 0
@@ -1900,50 +2026,70 @@ export default function ClonePage() {
                     </div>
                   </div>
                 )}
-              </aside>
-            </CardContent>
-
-            <div className="flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-muted-foreground">
-                {importMode === "bulk"
-                  ? `${selectedProductHandles.length} produto(s) selecionado(s)`
-                  : "Produto individual"}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handlePreview} disabled={previewLoading || !source.trim()}>
-                  {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  {importMode === "single" ? "Analisar produto" : "Analisar origem"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleTransformPreview}
-                  disabled={transformPreviewLoading || !source.trim() || !targetStoreId}
-                >
-                  {transformPreviewLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <SlidersHorizontal className="h-4 w-4" />
-                  )}
-                  Visualizar
-                </Button>
+            )}
+
+            {/* Navegação */}
+            <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setImportStep((current) =>
+                    current === 4
+                      ? 3
+                      : current === 3
+                        ? importMode === "bulk"
+                          ? 2
+                          : 1
+                        : 1
+                  )
+                }
+                disabled={importStep === 1 || applyLoading}
+              >
+                Voltar
+              </Button>
+              {importStep === 4 ? (
                 <Button
                   onClick={handleApply}
                   disabled={
                     applyLoading ||
                     !source.trim() ||
                     !targetStoreId ||
-                    (importMode === "bulk" && preview.length > 0 && selectedProductHandles.length === 0)
+                    (importMode === "bulk" &&
+                      preview.length > 0 &&
+                      selectedProductHandles.length === 0)
                   }
                 >
-                  {applyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
-                  Importar
+                  {applyLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Store className="h-4 w-4" />
+                  )}
+                  Importar agora
                 </Button>
-              </div>
+              ) : (
+                <Button
+                  onClick={() =>
+                    setImportStep((current) =>
+                      current === 1
+                        ? importMode === "bulk"
+                          ? 2
+                          : 3
+                        : current === 2
+                          ? 3
+                          : 4
+                    )
+                  }
+                  disabled={importStep === 1 && (!source.trim() || !targetStoreId)}
+                >
+                  Próximo
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-          </Card>
-        )}
-
-        {null}
+          </DialogContent>
+        </Dialog>
       </section>
       )}
 
