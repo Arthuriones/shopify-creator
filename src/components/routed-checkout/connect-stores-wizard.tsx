@@ -80,6 +80,12 @@ export function ConnectStoresWizard({
 }: ConnectStoresWizardProps) {
   const [step, setStep] = useState(1);
 
+  // "generate" = neutraliza da vitrine. "reuse" = copia uma dark store ja
+  // neutralizada e conecta por SKU (sem gerar IA de novo).
+  const [wizardMode, setWizardMode] = useState<"generate" | "reuse">("generate");
+  const [reuseFromStoreId, setReuseFromStoreId] = useState("");
+  const [reuseMatched, setReuseMatched] = useState<number | null>(null);
+
   // Passo 1
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [targetStoreId, setTargetStoreId] = useState("");
@@ -128,9 +134,11 @@ export function ConnectStoresWizard({
     setImageProgress(null);
     setRouteToken("");
     setRouteName("");
+    setReuseMatched(null);
     routeRequestedRef.current = false;
     setSourceStoreId((current) => current || stores[0]?.id || "");
     setTargetStoreId((current) => current || stores[1]?.id || "");
+    setReuseFromStoreId((current) => current || stores[1]?.id || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -175,27 +183,56 @@ export function ConnectStoresWizard({
       toast.error("A dark store precisa ser diferente da vitrine.");
       return;
     }
+    if (wizardMode === "reuse") {
+      if (!reuseFromStoreId) {
+        toast.error("Escolha a dark store que será copiada.");
+        return;
+      }
+      if (
+        reuseFromStoreId === targetStoreId ||
+        reuseFromStoreId === sourceStoreId
+      ) {
+        toast.error("A dark store de origem precisa ser diferente das outras.");
+        return;
+      }
+    }
 
     setCreatingDestination(true);
     setStep(2);
     try {
+      // Modo reuse: copia a dark store ja neutralizada (B) para a nova (D),
+      // sem IA. Modo generate: neutraliza da vitrine.
+      const payload =
+        wizardMode === "reuse"
+          ? {
+              sourceStoreId: reuseFromStoreId,
+              targetStoreId,
+              limit: 250,
+              inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
+              inventoryQuantity: Number(inventoryQuantity) || 0,
+              neutralizeProducts: false,
+              translateProducts: false,
+              translateVariantOptions: false,
+            }
+          : {
+              sourceStoreId,
+              targetStoreId,
+              limit: neutralize && imageQueue ? 100 : 50,
+              inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
+              inventoryQuantity: Number(inventoryQuantity) || 0,
+              neutralizeProducts: neutralize,
+              imageNeutralizeMode: imageQueue ? "queue" : "inline",
+              aiMediaLimit: 1,
+              genericizeText,
+              neutralizationInstructions: instructions,
+              translateProducts: translate,
+              translateVariantOptions: translateVariants,
+            };
+
       const res = await fetch("/api/checkout-routes/create-destination", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceStoreId,
-          targetStoreId,
-          limit: neutralize && imageQueue ? 100 : 50,
-          inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
-          inventoryQuantity: Number(inventoryQuantity) || 0,
-          neutralizeProducts: neutralize,
-          imageNeutralizeMode: imageQueue ? "queue" : "inline",
-          aiMediaLimit: 1,
-          genericizeText,
-          neutralizationInstructions: instructions,
-          translateProducts: translate,
-          translateVariantOptions: translateVariants,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
@@ -236,6 +273,30 @@ export function ConnectStoresWizard({
       `${storeLabel(sourceStore)} -> ${storeLabel(targetStore)}`;
 
     try {
+      if (wizardMode === "reuse") {
+        // Vitrine (C) e dark store (D) ja populadas: casa por SKU e cria rota.
+        const res = await fetch("/api/checkout-routes/connect-by-sku", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, sourceStoreId, targetStoreId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Falha ao conectar por SKU.");
+        if (!data.route?.public_token) {
+          throw new Error(
+            "Nenhuma variante casou por SKU. Confira se a vitrine já tem os produtos importados."
+          );
+        }
+        setReuseMatched(data.matchedCount || 0);
+        setRouteName(name);
+        setRouteToken(data.route.public_token);
+        onRouteCreated?.();
+        toast.success(
+          `${data.matchedCount || 0} variantes conectadas por SKU.`
+        );
+        return;
+      }
+
       const res = await fetch("/api/checkout-routes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -349,6 +410,41 @@ export function ConnectStoresWizard({
               </div>
             )}
 
+            {/* Como montar a dark store */}
+            <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setWizardMode("generate")}
+                className={cn(
+                  "rounded-md px-2 py-1.5 font-semibold transition-colors",
+                  wizardMode === "generate"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Gerar neutralizando
+              </button>
+              <button
+                type="button"
+                onClick={() => setWizardMode("reuse")}
+                className={cn(
+                  "rounded-md px-2 py-1.5 font-semibold transition-colors",
+                  wizardMode === "reuse"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Reaproveitar dark store
+              </button>
+            </div>
+            {wizardMode === "reuse" && (
+              <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
+                Copia uma dark store já neutralizada para a nova (sem gerar
+                imagem de novo) e conecta a vitrine por SKU. Importe os produtos
+                na vitrine antes de conectar.
+              </p>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
@@ -398,6 +494,35 @@ export function ConnectStoresWizard({
               </div>
             </div>
 
+            {wizardMode === "reuse" && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <PackageCheck className="h-3.5 w-3.5" /> Copiar produtos de
+                  (dark store já neutralizada)
+                </Label>
+                <Select
+                  value={reuseFromStoreId}
+                  onValueChange={(value) => setReuseFromStoreId(value || "")}
+                >
+                  <SelectTrigger className="w-full min-w-0">
+                    <SelectValue placeholder="Escolha" />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {storeLabel(store)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  A nova dark store recebe uma cópia dela (texto + imagens), sem
+                  rodar IA.
+                </p>
+              </div>
+            )}
+
+            {wizardMode === "generate" && (
             <div className="space-y-2 rounded-lg border border-border/60 p-3">
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -485,6 +610,7 @@ export function ConnectStoresWizard({
                 </span>
               </label>
             </div>
+            )}
 
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-sm">
@@ -517,11 +643,17 @@ export function ConnectStoresWizard({
                 stores.length < 2 ||
                 !sourceStoreId ||
                 !targetStoreId ||
-                sourceStoreId === targetStoreId
+                sourceStoreId === targetStoreId ||
+                (wizardMode === "reuse" &&
+                  (!reuseFromStoreId ||
+                    reuseFromStoreId === targetStoreId ||
+                    reuseFromStoreId === sourceStoreId))
               }
               onClick={handleCreateDestination}
             >
-              Criar destino na dark store
+              {wizardMode === "reuse"
+                ? "Copiar para a dark store"
+                : "Criar destino na dark store"}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -535,10 +667,14 @@ export function ConnectStoresWizard({
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 <div>
                   <p className="font-medium text-foreground">
-                    Criando produtos na dark store…
+                    {wizardMode === "reuse"
+                      ? "Copiando produtos para a dark store…"
+                      : "Criando produtos na dark store…"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Lendo a vitrine, neutralizando textos e conectando por SKU.
+                    {wizardMode === "reuse"
+                      ? "Copiando o catálogo já neutralizado, sem rodar IA."
+                      : "Lendo a vitrine, neutralizando textos e conectando por SKU."}
                   </p>
                 </div>
               </div>
@@ -637,7 +773,9 @@ export function ConnectStoresWizard({
                     Rota <span className="font-semibold">{routeName}</span> criada
                   </span>
                   <Badge variant="secondary" className="ml-auto rounded-md">
-                    {Object.keys(destinationResult?.variantMap || {}).length}{" "}
+                    {wizardMode === "reuse"
+                      ? reuseMatched ?? 0
+                      : Object.keys(destinationResult?.variantMap || {}).length}{" "}
                     conexões
                   </Badge>
                 </div>
