@@ -4,7 +4,7 @@ import { getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 interface ConnectedVariant {
   id: string;
@@ -45,6 +45,23 @@ function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
     }
   }
   return flat;
+}
+
+async function getAllProducts(
+  creds: ShopifyCredentials
+): Promise<ConnectedProduct[]> {
+  const all: ConnectedProduct[] = [];
+  let after: string | null = null;
+  // Hard cap defensivo: 40 paginas * 250 = 10k produtos.
+  for (let page = 0; page < 40; page += 1) {
+    const data = await getProducts(creds, { first: 250, after });
+    const nodes = (data?.products?.nodes || []) as ConnectedProduct[];
+    all.push(...nodes);
+    const pageInfo = data?.products?.pageInfo;
+    if (!pageInfo?.hasNextPage || !pageInfo?.endCursor) break;
+    after = pageInfo.endCursor;
+  }
+  return all;
 }
 
 async function getStoreCredentials(storeId: string, userId: string) {
@@ -116,15 +133,10 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    const [sourceData, targetData] = await Promise.all([
-      getProducts(sourceCreds, { first: 250 }),
-      getProducts(targetCreds, { first: 250 }),
+    const [sourceProducts, targetProducts] = await Promise.all([
+      getAllProducts(sourceCreds),
+      getAllProducts(targetCreds),
     ]);
-
-    const sourceProducts = (sourceData?.products?.nodes ||
-      []) as ConnectedProduct[];
-    const targetProducts = (targetData?.products?.nodes ||
-      []) as ConnectedProduct[];
 
     const sourceVariants = flattenVariants(sourceProducts);
     const targetVariants = flattenVariants(targetProducts);
