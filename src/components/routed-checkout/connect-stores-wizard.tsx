@@ -258,6 +258,36 @@ export function ConnectStoresWizard({
     let enqueuedImages = false;
 
     try {
+      // Contagem rapida primeiro: a barra ja aparece com "0 de N" antes do
+      // primeiro lote pesado de IA, deixando claro que esta funcionando.
+      try {
+        const countRes = await fetch(
+          "/api/checkout-routes/create-destination",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ ...basePayload, countOnly: true }),
+          }
+        );
+        const countData = (await countRes.json()) as {
+          totalCount?: number | null;
+        };
+        if (countRes.ok && typeof countData.totalCount === "number") {
+          total = countData.totalCount;
+          first = false;
+          setBatchProgress({
+            processed: 0,
+            total,
+            created: 0,
+            skipped: 0,
+            failed: 0,
+          });
+        }
+      } catch {
+        // Sem contagem previa caimos no withCount do primeiro lote.
+      }
+
       // Processa um lote por vez ate acabar, atualizando a barra de progresso.
       for (;;) {
         if (controller.signal.aborted) break;
@@ -452,12 +482,19 @@ export function ConnectStoresWizard({
     ? imageProgress.pending + imageProgress.processing > 0
     : false;
 
+  const busy = creatingDestination || creatingRoute;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-lg"
-        showCloseButton={!creatingDestination && !creatingRoute}
-      >
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Nao deixa fechar no meio da criacao (Escape/clique fora): evita o
+        // usuario perder a visao do progresso achando que travou.
+        if (!next && busy) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-lg" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RouteIcon className="h-4 w-4 text-primary" />
@@ -802,7 +839,7 @@ export function ConnectStoresWizard({
                         ? `${batchProgress.processed} de ${batchProgress.total} processados`
                         : batchProgress && batchProgress.processed > 0
                           ? `${batchProgress.processed} processados…`
-                          : "Lendo os produtos da origem…"}
+                          : "Contando os produtos da origem…"}
                     </p>
                   </div>
                   <Button
@@ -842,6 +879,13 @@ export function ConnectStoresWizard({
                     )}
                   </div>
                 )}
+
+                <p className="text-[11px] leading-4 text-muted-foreground">
+                  Mantenha esta janela aberta até terminar. Lojas grandes podem
+                  levar alguns minutos — a barra avança a cada lote. Você pode
+                  cancelar a qualquer momento; os produtos já criados ficam
+                  salvos.
+                </p>
               </div>
             )}
 

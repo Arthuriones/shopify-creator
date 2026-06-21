@@ -454,6 +454,13 @@ export async function POST(request: NextRequest) {
   const targetLanguage =
     targetLanguageOverride || targetStore.target_language || "pt-BR";
 
+  // Contagem rapida (sem processar nada): a UI mostra "0 de N" na hora,
+  // antes do primeiro lote pesado de IA, pra nao parecer travado.
+  if (body.countOnly === true) {
+    const totalCountOnly = await getProductsCount(sourceCreds).catch(() => null);
+    return NextResponse.json({ totalCount: totalCountOnly });
+  }
+
   const sourceData = await getProducts(sourceCreds, {
     first: pageSize,
     after: cursor,
