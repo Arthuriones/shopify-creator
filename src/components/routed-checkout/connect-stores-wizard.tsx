@@ -117,6 +117,7 @@ export function ConnectStoresWizard({
   const [imageProgress, setImageProgress] = useState<ImageQueueProgress | null>(
     null
   );
+  const [createError, setCreateError] = useState<string | null>(null);
   const imagePollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const createAbortRef = useRef<AbortController | null>(null);
 
@@ -146,6 +147,7 @@ export function ConnectStoresWizard({
     setDestinationResult(null);
     setBatchProgress(null);
     setImageProgress(null);
+    setCreateError(null);
     setRouteToken("");
     setRouteName("");
     setReuseMatched(null);
@@ -214,6 +216,7 @@ export function ConnectStoresWizard({
     const controller = new AbortController();
     createAbortRef.current = controller;
     setCreatingDestination(true);
+    setCreateError(null);
     setStep(2);
     setBatchProgress({ processed: 0, total: 0, created: 0, skipped: 0, failed: 0 });
 
@@ -288,31 +291,68 @@ export function ConnectStoresWizard({
         // Sem contagem previa caimos no withCount do primeiro lote.
       }
 
+      type BatchData = {
+        error?: string;
+        createdCount?: number;
+        skippedCount?: number;
+        failedCount?: number;
+        imageQueueCount?: number;
+        skuMap?: Record<string, string>;
+        variantMap?: Record<string, string>;
+        totalCount?: number | null;
+        nextCursor?: string | null;
+        hasMore?: boolean;
+      };
+
+      // Busca um lote com ate 3 tentativas em erro transitorio (rede, 5xx,
+      // timeout). Aborts e erros 4xx (ex.: perfil incompleto) sobem na hora.
+      // Assim um soluco no Gemini/Shopify nao joga tudo fora.
+      async function fetchBatch(): Promise<BatchData> {
+        let lastError: Error | null = null;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          if (controller.signal.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+          }
+          try {
+            const res: Response = await fetch(
+              "/api/checkout-routes/create-destination",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({ ...basePayload, cursor, withCount: first }),
+              }
+            );
+            const data = (await res.json().catch(() => ({}))) as BatchData;
+            if (res.ok) return data;
+            // 4xx: erro definitivo do pedido, nao adianta repetir.
+            if (res.status >= 400 && res.status < 500) {
+              const fatal = new Error(data.error || "Falha ao criar destino.");
+              fatal.name = "FatalRequestError";
+              throw fatal;
+            }
+            throw new Error(data.error || `Erro ${res.status} ao criar destino.`);
+          } catch (err) {
+            if (
+              controller.signal.aborted ||
+              (err instanceof DOMException && err.name === "AbortError") ||
+              (err instanceof Error && err.name === "FatalRequestError")
+            ) {
+              throw err;
+            }
+            lastError = err instanceof Error ? err : new Error("Falha de rede.");
+            if (attempt < 3) {
+              await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+            }
+          }
+        }
+        throw lastError || new Error("Falha ao criar destino.");
+      }
+
       // Processa um lote por vez ate acabar, atualizando a barra de progresso.
       for (;;) {
         if (controller.signal.aborted) break;
-        const res: Response = await fetch(
-          "/api/checkout-routes/create-destination",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: controller.signal,
-            body: JSON.stringify({ ...basePayload, cursor, withCount: first }),
-          }
-        );
-        const data = (await res.json()) as {
-          error?: string;
-          createdCount?: number;
-          skippedCount?: number;
-          failedCount?: number;
-          imageQueueCount?: number;
-          skuMap?: Record<string, string>;
-          variantMap?: Record<string, string>;
-          totalCount?: number | null;
-          nextCursor?: string | null;
-          hasMore?: boolean;
-        };
-        if (!res.ok) throw new Error(data.error || "Falha ao criar destino.");
+        const data = await fetchBatch();
 
         agg.created += data.createdCount || 0;
         agg.skipped += data.skippedCount || 0;
@@ -376,10 +416,23 @@ export function ConnectStoresWizard({
         if (enqueuedImages) refreshImageQueue(targetStoreId);
         toast("Cancelado. Os produtos já criados foram mantidos.");
       } else {
-        toast.error(
-          error instanceof Error ? error.message : "Falha ao criar destino."
-        );
-        if (agg.created + agg.skipped === 0) setStep(1);
+        const message =
+          error instanceof Error ? error.message : "Falha ao criar destino.";
+        toast.error(message);
+        // Fica no passo 2 mostrando o erro (e o que ja foi criado), em vez de
+        // voltar mudo pro passo 1. O usuario pode tentar de novo de onde parou.
+        setCreateError(message);
+        if (agg.created + agg.skipped > 0) {
+          setDestinationResult({
+            createdCount: agg.created,
+            skippedCount: agg.skipped,
+            failedCount: agg.failed,
+            imageQueueCount: agg.imageQueueCount,
+            skuMap: agg.skuMap,
+            variantMap: agg.variantMap,
+          });
+          if (enqueuedImages) refreshImageQueue(targetStoreId);
+        }
       }
     } finally {
       setCreatingDestination(false);
@@ -889,7 +942,44 @@ export function ConnectStoresWizard({
               </div>
             )}
 
-            {destinationResult && (
+            {createError && !creatingDestination && (
+              <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/8 p-4">
+                <div className="flex items-start gap-2">
+                  <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-destructive">
+                      A criação parou por um erro
+                    </p>
+                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                      {createError}
+                    </p>
+                    {batchProgress && batchProgress.processed > 0 && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {batchProgress.created} já criados foram mantidos. Tentar
+                        de novo continua de onde parou (pula os existentes).
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setCreateError(null);
+                      setStep(1);
+                    }}
+                  >
+                    Voltar
+                  </Button>
+                  <Button className="flex-1" onClick={handleCreateDestination}>
+                    Tentar de novo
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {destinationResult && !createError && (
               <>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="rounded-lg border border-border/60 bg-background/45 p-3 text-center">
