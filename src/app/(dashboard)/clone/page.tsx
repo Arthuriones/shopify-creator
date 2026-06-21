@@ -46,6 +46,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
 import { ConnectStoresWizard } from "@/components/routed-checkout/connect-stores-wizard";
+import { SwapImagesDialog } from "@/components/routed-checkout/swap-images-dialog";
 import {
   Dialog,
   DialogContent,
@@ -593,6 +594,9 @@ export default function ClonePage() {
   const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
   const [autofilledMapKey, setAutofilledMapKey] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [swapStore, setSwapStore] = useState<{ id: string; label: string } | null>(
+    null
+  );
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
   const [importScope, setImportScope] = useState<"all" | "collection">("all");
@@ -2662,6 +2666,24 @@ export default function ClonePage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() =>
+                            setSwapStore({
+                              id: config.target_store_id,
+                              label: formatStoreLabel(
+                                stores.find(
+                                  (store) => store.id === config.target_store_id
+                                )
+                              ),
+                            })
+                          }
+                          title="Recria as fotos sem marca na dark store."
+                        >
+                          <ImageIcon className="h-3.5 w-3.5" />
+                          Trocar imagens
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleInvertRoute(config)}
                           disabled={invertingRouteId === config.id}
                           title="Troca vitrine e dark store."
@@ -2701,6 +2723,15 @@ export default function ClonePage() {
           stores={stores}
           appOrigin={appOrigin}
           onRouteCreated={loadConfigs}
+        />
+
+        <SwapImagesDialog
+          open={!!swapStore}
+          onOpenChange={(next) => {
+            if (!next) setSwapStore(null);
+          }}
+          storeId={swapStore?.id || ""}
+          storeLabel={swapStore?.label || ""}
         />
       </section>
       )}
