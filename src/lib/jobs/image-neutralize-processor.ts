@@ -99,6 +99,29 @@ export async function enqueueImageNeutralizeJobs(input: {
   return { queued: rows.length };
 }
 
+// Dispara (fire-and-forget) um ciclo de drenagem pela rota HTTP, que se
+// auto-encadeia ate a fila esvaziar. Usa o cookie da requisicao original para
+// autenticar. Independente do cliente manter a janela aberta.
+export async function requestImageQueueDrain(input: {
+  origin: string;
+  cookie: string;
+  storeId: string;
+  chain?: boolean;
+}): Promise<void> {
+  try {
+    await fetch(`${input.origin}/api/jobs/neutralize-images`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: input.cookie,
+      },
+      body: JSON.stringify({ storeId: input.storeId, chain: input.chain === true }),
+    });
+  } catch {
+    // fire-and-forget: a fila tambem e retomada na proxima abertura da janela.
+  }
+}
+
 async function countByStatus(
   supabase: AdminClient,
   userId: string,
@@ -180,6 +203,20 @@ export async function processImageNeutralizeJobs(input: {
 
   const { creds } = loaded;
   const storageClient = createAdminClient();
+
+  // Recupera jobs orfaos: ficaram marcados "processing" mas a invocacao
+  // serverless morreu antes de terminar (sem isso eles nunca mais sao pegos,
+  // pois a fila so busca status "pending"). updated_at e atualizado pelo
+  // trigger do banco quando o job foi reivindicado.
+  const staleCutoff = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+  await supabase
+    .from("background_jobs")
+    .update({ status: "pending" })
+    .eq("user_id", input.userId)
+    .eq("store_id", input.storeId)
+    .eq("type", IMAGE_JOB_TYPE)
+    .eq("status", "processing")
+    .lt("updated_at", staleCutoff);
 
   while (Date.now() - start < timeBudgetMs) {
     const { data: batch } = await supabase

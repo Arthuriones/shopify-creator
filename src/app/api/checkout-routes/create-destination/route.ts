@@ -13,7 +13,7 @@ import {
 } from "@/lib/ai/product-neutralizer";
 import {
   enqueueImageNeutralizeJobs,
-  processImageNeutralizeJobs,
+  requestImageQueueDrain,
   type ImageNeutralizeItem,
 } from "@/lib/jobs/image-neutralize-processor";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
@@ -588,16 +588,11 @@ export async function POST(request: NextRequest) {
         items: imageQueueItems,
       });
       imageQueueCount = queued;
-      after(async () => {
-        try {
-          await processImageNeutralizeJobs({ userId, storeId: targetStoreId });
-        } catch (error) {
-          console.error(
-            "[api/checkout-routes/create-destination] image queue error",
-            error
-          );
-        }
-      });
+      const origin = request.nextUrl.origin;
+      const cookie = request.headers.get("cookie") || "";
+      after(() =>
+        requestImageQueueDrain({ origin, cookie, storeId: targetStoreId })
+      );
     } catch (error) {
       console.error(
         "[api/checkout-routes/create-destination] enqueue images error",

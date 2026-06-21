@@ -543,7 +543,9 @@ export default function ClonePage() {
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
-  const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
+  // Liga por padrao: a ferramenta e para lojas de replica, neutralizar marca/
+  // imagem e o comportamento esperado (alinhado ao fluxo de criar destino).
+  const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(true);
   const [
     removeExternalReferencesCloneProducts,
     setRemoveExternalReferencesCloneProducts,
@@ -952,6 +954,10 @@ export default function ClonePage() {
       translateVariantOptions,
       neutralizeProducts: neutralizeCloneProducts,
       removeExternalReferences: removeExternalReferencesCloneProducts,
+      // Imagem sempre em background: gerar inline durante o import em massa
+      // estoura o timeout e a maioria das imagens falha. A fila se auto-encadeia
+      // ate terminar, independente da janela ficar aberta.
+      imageNeutralizeMode: "queue",
       aiMediaLimit: parseAiMediaLimit(cloneAiMediaLimit),
       genericizeText: cloneGenericizeText,
       neutralizationInstructions: cloneNeutralizationInstructions,

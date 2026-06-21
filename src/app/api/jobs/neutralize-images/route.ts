@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getImageQueueProgress,
   processImageNeutralizeJobs,
+  requestImageQueueDrain,
 } from "@/lib/jobs/image-neutralize-processor";
 
 export const runtime = "nodejs";
@@ -47,9 +48,20 @@ export async function POST(request: NextRequest) {
   }
 
   const userId = user.id;
+  const origin = request.nextUrl.origin;
+  const cookie = request.headers.get("cookie") || "";
+
   after(async () => {
     try {
-      await processImageNeutralizeJobs({ userId, storeId });
+      const result = await processImageNeutralizeJobs({ userId, storeId });
+      // Se a fila ainda tem trabalho (estourou o orcamento de tempo desta
+      // invocacao), encadeia outra invocacao serverless para continuar
+      // drenando ate esvaziar — sem depender do cliente. So encadeia se houve
+      // progresso: evita loop infinito quando nada pode ser processado (ex.:
+      // credenciais da loja removidas).
+      if (result.remaining > 0 && result.processed > 0) {
+        await requestImageQueueDrain({ origin, cookie, storeId, chain: true });
+      }
     } catch (error) {
       console.error("[api/jobs/neutralize-images] process error", error);
     }

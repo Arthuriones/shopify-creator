@@ -8,7 +8,7 @@ import {
 } from "@/lib/shopify/client";
 import {
   enqueueImageNeutralizeJobs,
-  processImageNeutralizeJobs,
+  requestImageQueueDrain,
   type ImageNeutralizeItem,
 } from "@/lib/jobs/image-neutralize-processor";
 import { optimizeProduct } from "@/lib/gemini/client";
@@ -840,16 +840,11 @@ export async function POST(request: NextRequest) {
           items: imageQueueItems,
         });
         imageQueueCount = queued;
-        after(async () => {
-          try {
-            await processImageNeutralizeJobs({
-              userId,
-              storeId: targetStoreId,
-            });
-          } catch (error) {
-            console.error("[api/shopify/clone] image queue error", error);
-          }
-        });
+        const origin = request.nextUrl.origin;
+        const cookie = request.headers.get("cookie") || "";
+        after(() =>
+          requestImageQueueDrain({ origin, cookie, storeId: targetStoreId })
+        );
       } catch (error) {
         console.error("[api/shopify/clone] enqueue images error", error);
       }
