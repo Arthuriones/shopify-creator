@@ -92,7 +92,9 @@ export function ConnectStoresWizard({
   const [sourceStoreId, setSourceStoreId] = useState("");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [neutralize, setNeutralize] = useState(true);
-  const [imageQueue, setImageQueue] = useState(true);
+  // "queue" = recria a imagem sem marca em background. "none" = nao gera imagem
+  // nenhuma (mantem a original e o usuario recria depois em outro app).
+  const [imageMode, setImageMode] = useState<"queue" | "none">("queue");
   const [genericizeText, setGenericizeText] = useState(true);
   const [translate, setTranslate] = useState(false);
   const [translateVariants, setTranslateVariants] = useState(false);
@@ -238,7 +240,7 @@ export function ConnectStoresWizard({
             inventoryMode: inventoryTracked ? "tracked" : "not_tracked",
             inventoryQuantity: Number(inventoryQuantity) || 0,
             neutralizeProducts: neutralize,
-            imageNeutralizeMode: imageQueue ? "queue" : "inline",
+            imageNeutralizeMode: imageMode,
             aiMediaLimit: 1,
             genericizeText,
             neutralizationInstructions: instructions,
@@ -733,24 +735,48 @@ export function ConnectStoresWizard({
 
               {neutralize && (
                 <div className="ml-6 space-y-2 border-l border-border/60 pl-3">
-                  <label className="flex items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={imageQueue}
-                      onChange={(event) => setImageQueue(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-primary"
-                    />
-                    <span>
-                      <span className="block font-medium text-foreground">
-                        Imagens em background (fila)
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        Recomendado p/ lojas grandes. 1 imagem/produto, troca aos
-                        poucos (~US$0,04 cada).
-                      </span>
+                  <div className="space-y-1">
+                    <span className="block text-xs font-medium text-foreground">
+                      Imagens
                     </span>
-                  </label>
-                  <label className="flex items-start gap-2 text-sm">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="imageMode"
+                        checked={imageMode === "queue"}
+                        onChange={() => setImageMode("queue")}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      <span>
+                        <span className="block text-foreground">
+                          Recriar imagem sem marca (em background)
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          1 imagem/produto, troca aos poucos (~US$0,04 cada).
+                          Pode demorar e às vezes falha em lojas grandes.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="imageMode"
+                        checked={imageMode === "none"}
+                        onChange={() => setImageMode("none")}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      <span>
+                        <span className="block text-foreground">
+                          Não gerar imagem (mais rápido)
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Linka tudo com a imagem original e neutraliza só o
+                          texto. Recrie as imagens depois num app da Shopify.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                  <label className="flex items-start gap-2 border-t border-border/60 pt-2 text-sm">
                     <input
                       type="checkbox"
                       checked={genericizeText}

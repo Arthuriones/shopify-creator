@@ -370,11 +370,23 @@ export async function POST(request: NextRequest) {
   const targetStoreId =
     typeof body.targetStoreId === "string" ? body.targetStoreId : "";
   const neutralizeProducts = body.neutralizeProducts === true;
-  // "queue": neutraliza texto na hora e processa a imagem em background.
+  // Modo da imagem:
+  // - "queue": neutraliza texto na hora e troca a imagem em background (fila).
+  // - "none": neutraliza so o texto; a imagem original e mantida (o usuario
+  //   recria depois num app da Shopify). Mais rapido e sem custo de imagem.
+  // - "inline": neutraliza imagem na hora (mais lento por produto).
   const imageNeutralizeMode =
-    body.imageNeutralizeMode === "queue" ? "queue" : "inline";
-  const deferImages = neutralizeProducts && imageNeutralizeMode === "queue";
-  // Dark store usa 1 imagem por produto; o modo fila forca hero unico.
+    body.imageNeutralizeMode === "queue"
+      ? "queue"
+      : body.imageNeutralizeMode === "none"
+        ? "none"
+        : "inline";
+  const queueImages = neutralizeProducts && imageNeutralizeMode === "queue";
+  const skipImages = neutralizeProducts && imageNeutralizeMode === "none";
+  // deferImages = neutraliza so o texto aqui (maxImages 0) e mantem a imagem
+  // original no produto. Vale tanto para "queue" (troca depois) quanto "none".
+  const deferImages = queueImages || skipImages;
+  // Dark store usa 1 imagem por produto; modo fila/none forca hero unico.
   const heroOnly = body.heroOnly === true || deferImages;
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;
@@ -547,9 +559,9 @@ export async function POST(request: NextRequest) {
       });
 
       // Modo fila: produto entra com a imagem original; o hero neutralizado
-      // sera trocado em background.
+      // sera trocado em background. No modo "none" nao enfileira nada.
       const heroSource = destination.productInput.images?.[0]?.src;
-      if (deferImages && targetProduct?.id && heroSource) {
+      if (queueImages && targetProduct?.id && heroSource) {
         imageQueueItems.push({
           productId: targetProduct.id,
           imageUrl: heroSource,
