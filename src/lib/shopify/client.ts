@@ -233,47 +233,66 @@ async function shopifyGraphQL(
 
   const url = `https://${normalizedShopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": accessToken,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+  // Ate 4 tentativas com backoff quando a Shopify limita (429 HTTP ou erro
+  // GraphQL THROTTLED). Necessario porque criamos varios produtos em paralelo.
+  const MAX_THROTTLE_RETRIES = 4;
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
 
-  if (!res.ok) {
-    if (res.status === 402) {
+    if (!res.ok) {
+      if (res.status === 402) {
+        throw new ShopifyClientError(
+          "A Shopify recusou a chamada API com 402 Payment Required. Normalmente isso acontece quando a loja esta pausada, congelada, sem plano ativo ou com restricao de billing. Ative um plano/trial valido nessa loja e tente novamente.",
+          "REQUEST_FAILED",
+          402
+        );
+      }
+
+      if (res.status === 429 && attempt < MAX_THROTTLE_RETRIES) {
+        const retryAfter = Number(res.headers.get("retry-after")) || 0;
+        const waitMs = retryAfter > 0 ? retryAfter * 1000 : (attempt + 1) * 1500;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+
+      const body = await res.text().catch(() => "");
+      const details = sanitizeErrorText(body);
       throw new ShopifyClientError(
-        "A Shopify recusou a chamada API com 402 Payment Required. Normalmente isso acontece quando a loja esta pausada, congelada, sem plano ativo ou com restricao de billing. Ative um plano/trial valido nessa loja e tente novamente.",
+        details
+          ? `Shopify API error: ${res.status} ${res.statusText} - ${details}`
+          : `Shopify API error: ${res.status} ${res.statusText}`,
         "REQUEST_FAILED",
-        402
+        res.status
       );
     }
 
-    const contentType = res.headers.get("content-type") || "";
-    const body = await res.text().catch(() => "");
-    const details = sanitizeErrorText(body);
-    throw new ShopifyClientError(
-      details
-        ? `Shopify API error: ${res.status} ${res.statusText} - ${details}`
-        : `Shopify API error: ${res.status} ${res.statusText}`,
-      "REQUEST_FAILED",
-      res.status
-    );
-  }
+    const json = await res.json();
+    if (json.errors) {
+      // Throttle do GraphQL vem como 200 com erro THROTTLED: espera e retenta.
+      const throttled = JSON.stringify(json.errors).includes("THROTTLED");
+      if (throttled && attempt < MAX_THROTTLE_RETRIES) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, (attempt + 1) * 1500)
+        );
+        continue;
+      }
+      console.error("[shopifyGraphQL] GraphQL errors", {
+        shopDomain: normalizedShopDomain,
+        operation: getOperationName(query),
+        errors: json.errors,
+      });
+      throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
+    }
 
-  const json = await res.json();
-  if (json.errors) {
-    console.error("[shopifyGraphQL] GraphQL errors", {
-      shopDomain: normalizedShopDomain,
-      operation: getOperationName(query),
-      errors: json.errors,
-    });
-    throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
+    return json.data;
   }
-
-  return json.data;
 }
 
 export async function getShopInfo(creds: ShopifyCredentials) {

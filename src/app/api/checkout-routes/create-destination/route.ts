@@ -494,17 +494,19 @@ export async function POST(request: NextRequest) {
   const variantMap: Record<string, string> = {};
   const imageQueueItems: ImageNeutralizeItem[] = [];
 
-  for (const product of sourceProducts) {
-    if (request.signal.aborted) {
-      break;
-    }
+  // userId ja foi garantido nao-nulo pelo guard no inicio; capturado aqui para
+  // manter o tipo string dentro do closure processOne.
+  const resolvedUserId: string = userId;
+
+  async function processOne(product: ConnectedProduct) {
+    if (request.signal.aborted) return;
     try {
       const destination = await toDestinationProductInput({
         product,
         neutralize: neutralizeProducts,
         translate: translateProducts,
         supabase,
-        userId,
+        userId: resolvedUserId,
         targetLanguage,
         translateVariantOptions,
         neutralizationInstructions,
@@ -539,7 +541,7 @@ export async function POST(request: NextRequest) {
           }
         }
         skipped.push({ sourceHandle: product.handle, targetProductId: existing.id });
-        continue;
+        return;
       }
 
       const result = await createProduct(
@@ -590,6 +592,25 @@ export async function POST(request: NextRequest) {
       });
     }
   }
+
+  // Pool de concorrencia: processa varios produtos do lote em paralelo. Em
+  // sequencia, 20 produtos com chamada de IA + Shopify levavam ~2min e
+  // estouravam o timeout da funcao (a barra ficava presa no 0). Em paralelo
+  // cada lote volta em ~20-30s.
+  const CONCURRENCY = 6;
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(CONCURRENCY, sourceProducts.length) },
+      async () => {
+        while (nextIndex < sourceProducts.length) {
+          if (request.signal.aborted) break;
+          const current = sourceProducts[nextIndex++];
+          await processOne(current);
+        }
+      }
+    )
+  );
 
   let imageQueueCount = 0;
   if (imageQueueItems.length > 0) {
