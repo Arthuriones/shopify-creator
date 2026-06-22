@@ -16,6 +16,7 @@ import {
   Loader2,
   PackageCheck,
   Route,
+  Settings2,
   SlidersHorizontal,
   Store,
   Trash2,
@@ -47,6 +48,7 @@ import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
 import { ConnectStoresWizard } from "@/components/routed-checkout/connect-stores-wizard";
 import { SwapImagesDialog } from "@/components/routed-checkout/swap-images-dialog";
+import { CheckoutSettingsDialog } from "@/components/routed-checkout/checkout-settings-dialog";
 import {
   Dialog,
   DialogContent,
@@ -108,6 +110,11 @@ interface CheckoutConfig {
   target_store_id: string;
   sku_map: Record<string, string>;
   variant_map: Record<string, string>;
+  settings?: {
+    checkout_domain?: string;
+    checkout_country?: string;
+    checkout_locale?: string;
+  };
 }
 
 interface CloneRun {
@@ -598,6 +605,7 @@ export default function ClonePage() {
   const [swapStore, setSwapStore] = useState<{ id: string; label: string } | null>(
     null
   );
+  const [settingsRoute, setSettingsRoute] = useState<CheckoutConfig | null>(null);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
   const [importScope, setImportScope] = useState<"all" | "collection">("all");
@@ -2685,6 +2693,15 @@ export default function ClonePage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => setSettingsRoute(config)}
+                          title="Domínio e moeda do checkout."
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Checkout
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleInvertRoute(config)}
                           disabled={invertingRouteId === config.id}
                           title="Troca vitrine e dark store."
@@ -2733,6 +2750,17 @@ export default function ClonePage() {
           }}
           storeId={swapStore?.id || ""}
           storeLabel={swapStore?.label || ""}
+        />
+
+        <CheckoutSettingsDialog
+          open={!!settingsRoute}
+          onOpenChange={(next) => {
+            if (!next) setSettingsRoute(null);
+          }}
+          routeId={settingsRoute?.id || ""}
+          routeName={settingsRoute?.name || ""}
+          settings={settingsRoute?.settings}
+          onSaved={loadConfigs}
         />
       </section>
       )}

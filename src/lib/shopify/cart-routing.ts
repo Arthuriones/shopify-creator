@@ -81,10 +81,26 @@ export function resolveCheckoutLinesDetailed(
   });
 }
 
+// Deriva o mercado (pais/locale) do idioma da loja destino para o checkout
+// abrir na moeda certa via Shopify Markets. Ex.: "es-CL" => country CL.
+// Exige que a dark store tenha esse mercado/moeda configurado na Shopify.
+export function marketParamsFromLanguage(
+  language?: string | null
+): { country?: string; locale?: string } {
+  const lang = String(language || "").trim();
+  if (!lang) return {};
+  const [, region] = lang.split("-");
+  return {
+    country: region ? region.toUpperCase() : undefined,
+    locale: lang,
+  };
+}
+
 export function buildCartPermalink(
   targetDomain: string,
   lines: { variantId: string; quantity: number }[],
-  attributes?: Record<string, string>
+  attributes?: Record<string, string>,
+  market?: { country?: string; locale?: string }
 ) {
   const domain = normalizeShopDomain(targetDomain);
   if (!domain) {
@@ -98,6 +114,11 @@ export function buildCartPermalink(
     .map((line) => `${line.variantId}:${line.quantity}`)
     .join(",");
   const url = new URL(`https://${domain}/cart/${cartPath}`);
+
+  // country/locale fazem o checkout abrir no mercado/moeda certos (Shopify
+  // Markets). Sem isso, cai na moeda base da loja (ex.: USD).
+  if (market?.country) url.searchParams.set("country", market.country);
+  if (market?.locale) url.searchParams.set("locale", market.locale);
 
   for (const [key, value] of Object.entries(attributes || {})) {
     if (key && value) url.searchParams.set(`attributes[${key}]`, value);

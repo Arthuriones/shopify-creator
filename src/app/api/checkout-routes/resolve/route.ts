@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildCartPermalink,
+  marketParamsFromLanguage,
   resolveCheckoutLinesDetailed,
   type CheckoutRouteLine,
 } from "@/lib/shopify/cart-routing";
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { data: config, error } = await supabase
       .from("routed_checkout_configs")
       .select(
-        "id, name, enabled, mode, sku_map, variant_map, settings, target:target_store_id(shop_domain)"
+        "id, name, enabled, mode, sku_map, variant_map, settings, target:target_store_id(shop_domain, target_language)"
       )
       .eq("public_token", token)
       .eq("enabled", true)
@@ -54,7 +55,14 @@ export async function POST(request: NextRequest) {
     const target = Array.isArray(config.target)
       ? config.target[0]
       : config.target;
-    const targetDomain = target?.shop_domain;
+    const settings = (config.settings || {}) as {
+      checkout_domain?: string;
+      checkout_country?: string;
+      checkout_locale?: string;
+    };
+    // Override de dominio na rota: usado quando o dominio mudou na Shopify e
+    // ainda nao foi atualizado na loja conectada (ou para rota so por link).
+    const targetDomain = settings.checkout_domain?.trim() || target?.shop_domain;
 
     const detailed = resolveCheckoutLinesDetailed(lines, {
       skuMap: (config.sku_map || {}) as Record<string, string | number>,
@@ -87,10 +95,21 @@ export async function POST(request: NextRequest) {
       }));
     const unroutedCount = detailed.length - resolvedLines.length;
 
-    const redirectUrl = buildCartPermalink(targetDomain, resolvedLines, {
-      routed_checkout: config.id,
-      routed_mode: config.mode,
-    });
+    // Mercado/moeda do checkout: override da rota tem prioridade, senao deriva
+    // do idioma da loja destino (ex.: es-CL => country CL, moeda peso chileno).
+    const market = settings.checkout_country
+      ? { country: settings.checkout_country, locale: settings.checkout_locale }
+      : marketParamsFromLanguage(target?.target_language);
+
+    const redirectUrl = buildCartPermalink(
+      targetDomain,
+      resolvedLines,
+      {
+        routed_checkout: config.id,
+        routed_mode: config.mode,
+      },
+      market
+    );
 
     return NextResponse.json(
       {
