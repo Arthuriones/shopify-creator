@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildCartPermalink,
-  resolveCheckoutLines,
+  resolveCheckoutLinesDetailed,
   type CheckoutRouteLine,
 } from "@/lib/shopify/cart-routing";
+import { resolveVariantIdsBySku } from "@/lib/shopify/public-store";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -54,10 +55,37 @@ export async function POST(request: NextRequest) {
       ? config.target[0]
       : config.target;
     const targetDomain = target?.shop_domain;
-    const resolvedLines = resolveCheckoutLines(lines, {
+
+    const detailed = resolveCheckoutLinesDetailed(lines, {
       skuMap: (config.sku_map || {}) as Record<string, string | number>,
       variantMap: (config.variant_map || {}) as Record<string, string | number>,
     });
+
+    // Fallback: linhas que o mapa nao cobriu mas tem SKU sao resolvidas por SKU
+    // direto no products.json publico da dark store. Conserta variantes nao
+    // mapeadas e permite rota so com o dominio (sem conectar a loja).
+    const unresolvedSkus = detailed
+      .filter((line) => !line.variantId && line.sku)
+      .map((line) => line.sku);
+    if (unresolvedSkus.length > 0 && targetDomain) {
+      const bySku = await resolveVariantIdsBySku(targetDomain, unresolvedSkus);
+      if (bySku.size > 0) {
+        for (const line of detailed) {
+          if (!line.variantId && line.sku) {
+            const variantId = bySku.get(line.sku);
+            if (variantId) line.variantId = String(variantId);
+          }
+        }
+      }
+    }
+
+    const resolvedLines = detailed
+      .filter((line) => line.variantId)
+      .map((line) => ({
+        variantId: line.variantId as string,
+        quantity: line.quantity,
+      }));
+    const unroutedCount = detailed.length - resolvedLines.length;
 
     const redirectUrl = buildCartPermalink(targetDomain, resolvedLines, {
       routed_checkout: config.id,
@@ -69,6 +97,7 @@ export async function POST(request: NextRequest) {
         redirectUrl,
         mode: config.mode,
         routedLines: resolvedLines.length,
+        unroutedLines: unroutedCount,
       },
       { headers: corsHeaders }
     );

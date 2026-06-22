@@ -502,6 +502,57 @@ export async function fetchPublicShopifyProducts(
   return { domain, products };
 }
 
+// Indice SKU -> variantId numerico de uma loja, lido do products.json publico.
+// Cacheado em memoria por dominio para nao refazer a cada checkout (TTL curto).
+const skuIndexCache = new Map<
+  string,
+  { at: number; index: Map<string, number> }
+>();
+const SKU_INDEX_TTL_MS = 30 * 60 * 1000;
+
+async function buildSkuIndex(domain: string): Promise<Map<string, number>> {
+  const { products } = await fetchPublicShopifyProducts(domain, { limit: 5000 });
+  const index = new Map<string, number>();
+  for (const product of products) {
+    for (const variant of product.variants) {
+      const sku = variant.sku?.trim().toLowerCase();
+      if (sku && !index.has(sku)) index.set(sku, variant.id);
+    }
+  }
+  return index;
+}
+
+// Resolve varios SKUs de uma vez para o variantId numerico da loja destino.
+// Usa cache; em caso de falha de rede devolve um mapa vazio (o chamador trata).
+export async function resolveVariantIdsBySku(
+  source: string,
+  skus: string[]
+): Promise<Map<string, number>> {
+  const domain = normalizePublicShopifyDomain(source);
+  if (!domain || skus.length === 0) return new Map();
+
+  const cached = skuIndexCache.get(domain);
+  let index = cached && Date.now() - cached.at < SKU_INDEX_TTL_MS
+    ? cached.index
+    : null;
+  if (!index) {
+    try {
+      index = await buildSkuIndex(domain);
+      skuIndexCache.set(domain, { at: Date.now(), index });
+    } catch {
+      return new Map();
+    }
+  }
+
+  const result = new Map<string, number>();
+  for (const sku of skus) {
+    const key = sku.trim().toLowerCase();
+    const variantId = key ? index.get(key) : undefined;
+    if (variantId) result.set(sku, variantId);
+  }
+  return result;
+}
+
 export function toShopifyCreateProductInput(product: PublicShopifyProduct) {
   return {
     title: product.title,
