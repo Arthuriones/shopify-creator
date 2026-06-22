@@ -83,8 +83,11 @@ export function ConnectStoresWizard({
   const [step, setStep] = useState(1);
 
   // "generate" = neutraliza da vitrine. "reuse" = copia uma dark store ja
-  // neutralizada e conecta por SKU (sem gerar IA de novo).
-  const [wizardMode, setWizardMode] = useState<"generate" | "reuse">("generate");
+  // neutralizada e conecta por SKU. "connect" = as duas lojas ja tem os
+  // produtos (importados), so casa por SKU e gera o script.
+  const [wizardMode, setWizardMode] = useState<"generate" | "reuse" | "connect">(
+    "generate"
+  );
   const [reuseFromStoreId, setReuseFromStoreId] = useState("");
   const [reuseMatched, setReuseMatched] = useState<number | null>(null);
 
@@ -457,8 +460,8 @@ export function ConnectStoresWizard({
       `${storeLabel(sourceStore)} -> ${storeLabel(targetStore)}`;
 
     try {
-      if (wizardMode === "reuse") {
-        // Vitrine (C) e dark store (D) ja populadas: casa por SKU e cria rota.
+      if (wizardMode === "reuse" || wizardMode === "connect") {
+        // Vitrine e dark store ja populadas: casa por SKU e cria rota.
         const res = await fetch("/api/checkout-routes/connect-by-sku", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -506,7 +509,8 @@ export function ConnectStoresWizard({
         error instanceof Error ? error.message : "Falha ao criar rota."
       );
       routeRequestedRef.current = false;
-      setStep(2);
+      // Em "connect" nao existe passo 2 (nada e criado): volta pro passo 1.
+      setStep(wizardMode === "connect" ? 1 : 2);
     } finally {
       setCreatingRoute(false);
     }
@@ -602,7 +606,7 @@ export function ConnectStoresWizard({
             )}
 
             {/* Como montar a dark store */}
-            <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-muted p-1 text-xs">
+            <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted p-1 text-xs">
               <button
                 type="button"
                 onClick={() => setWizardMode("generate")}
@@ -613,7 +617,7 @@ export function ConnectStoresWizard({
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                Gerar neutralizando
+                Gerar
               </button>
               <button
                 type="button"
@@ -625,14 +629,39 @@ export function ConnectStoresWizard({
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                Reaproveitar dark store
+                Reaproveitar
+              </button>
+              <button
+                type="button"
+                onClick={() => setWizardMode("connect")}
+                className={cn(
+                  "rounded-md px-2 py-1.5 font-semibold transition-colors",
+                  wizardMode === "connect"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Só conectar
               </button>
             </div>
+            {wizardMode === "generate" && (
+              <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
+                Cria os produtos na dark store a partir da vitrine,
+                neutralizando marca e (opcional) imagem.
+              </p>
+            )}
             {wizardMode === "reuse" && (
               <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
                 Copia uma dark store já neutralizada para a nova (sem gerar
                 imagem de novo) e conecta a vitrine por SKU. Importe os produtos
                 na vitrine antes de conectar.
+              </p>
+            )}
+            {wizardMode === "connect" && (
+              <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
+                As duas lojas já têm os produtos (você importou). Não cria nada:
+                só casa as variantes por SKU e gera o script. Use quando a
+                vitrine e a dark store já estão prontas.
               </p>
             )}
 
@@ -853,7 +882,12 @@ export function ConnectStoresWizard({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex items-center gap-2",
+                wizardMode === "connect" && "hidden"
+              )}
+            >
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -890,11 +924,17 @@ export function ConnectStoresWizard({
                     reuseFromStoreId === targetStoreId ||
                     reuseFromStoreId === sourceStoreId))
               }
-              onClick={handleCreateDestination}
+              onClick={
+                wizardMode === "connect"
+                  ? handleActivateRoute
+                  : handleCreateDestination
+              }
             >
-              {wizardMode === "reuse"
-                ? "Copiar para a dark store"
-                : "Criar destino na dark store"}
+              {wizardMode === "connect"
+                ? "Conectar por SKU e gerar script"
+                : wizardMode === "reuse"
+                  ? "Copiar para a dark store"
+                  : "Criar destino na dark store"}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
