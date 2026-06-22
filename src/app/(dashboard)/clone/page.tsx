@@ -544,9 +544,10 @@ export default function ClonePage() {
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
-  // Liga por padrao: a ferramenta e para lojas de replica, neutralizar marca/
-  // imagem e o comportamento esperado (alinhado ao fluxo de criar destino).
-  const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(true);
+  // Desligado por padrao: o import em massa serve para CLONAR replicas (ex.:
+  // montar uma nova vitrine identica a outra). A neutralizacao da dark store
+  // acontece no fluxo de "Criar destino", nao aqui.
+  const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
   const [
     removeExternalReferencesCloneProducts,
     setRemoveExternalReferencesCloneProducts,
