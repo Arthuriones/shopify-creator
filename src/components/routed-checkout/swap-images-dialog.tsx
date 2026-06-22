@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImageIcon, Loader2, Sparkles } from "lucide-react";
+import { ImageIcon, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +42,7 @@ export function SwapImagesDialog({
     "stock-neutralize"
   );
   const [progress, setProgress] = useState<ImageQueueProgress | null>(null);
+  const [canceling, setCanceling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function stopPoll() {
@@ -117,6 +118,31 @@ export function SwapImagesDialog({
       );
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleCancel() {
+    setCanceling(true);
+    stopPoll();
+    try {
+      const res = await fetch(
+        `/api/jobs/neutralize-store-images?storeId=${encodeURIComponent(storeId)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao cancelar.");
+      if (data.progress) {
+        const p = data.progress as ImageQueueProgress;
+        setProgress(p.total > 0 ? p : null);
+      }
+      toast(
+        `Cancelado. ${data.canceled || 0} imagem(ns) na fila foram paradas. As já trocadas continuam.`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao cancelar.");
+      void poll();
+    } finally {
+      setCanceling(false);
     }
   }
 
@@ -217,22 +243,30 @@ export function SwapImagesDialog({
             </div>
           )}
 
-          <Button
-            className="w-full"
-            onClick={handleStart}
-            disabled={starting || running}
-          >
-            {starting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            {running
-              ? "Trocando imagens…"
-              : started
-                ? "Trocar de novo"
-                : "Trocar imagens agora"}
-          </Button>
+          {running ? (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleCancel}
+              disabled={canceling}
+            >
+              {canceling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <X className="h-4 w-4" />
+              )}
+              Cancelar troca de imagens
+            </Button>
+          ) : (
+            <Button className="w-full" onClick={handleStart} disabled={starting}>
+              {starting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {started ? "Trocar de novo" : "Trocar imagens agora"}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

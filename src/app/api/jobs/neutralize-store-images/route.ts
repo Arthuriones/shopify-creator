@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
 import { createClient } from "@/lib/supabase/server";
 import {
+  cancelImageNeutralizeJobs,
   enqueueImageNeutralizeJobs,
   getImageQueueProgress,
   requestImageQueueDrain,
@@ -49,6 +50,27 @@ export async function GET(request: NextRequest) {
   }
   const progress = await getImageQueueProgress({ userId: user.id, storeId });
   return NextResponse.json({ progress });
+}
+
+// DELETE ?storeId= -> cancela a fila (marca pendentes como cancelados).
+export async function DELETE(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const storeId = request.nextUrl.searchParams.get("storeId");
+  if (!storeId) {
+    return NextResponse.json({ error: "storeId obrigatorio." }, { status: 400 });
+  }
+  const { canceled } = await cancelImageNeutralizeJobs({
+    userId: user.id,
+    storeId,
+  });
+  const progress = await getImageQueueProgress({ userId: user.id, storeId });
+  return NextResponse.json({ canceled, progress });
 }
 
 // POST { storeId, mode?, customInstructions? } -> enfileira a troca da foto

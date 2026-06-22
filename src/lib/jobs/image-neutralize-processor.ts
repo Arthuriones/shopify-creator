@@ -122,6 +122,26 @@ export async function requestImageQueueDrain(input: {
   }
 }
 
+// Cancela a fila de imagens de uma loja: marca os jobs pendentes como
+// "canceled" para o dreno parar (os que ja estao "processing" terminam o lote
+// atual e o loop encerra ao nao achar mais pendentes).
+export async function cancelImageNeutralizeJobs(input: {
+  userId: string;
+  storeId: string;
+}): Promise<{ canceled: number }> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("background_jobs")
+    .update({ status: "canceled" })
+    .eq("user_id", input.userId)
+    .eq("store_id", input.storeId)
+    .eq("type", IMAGE_JOB_TYPE)
+    .eq("status", "pending")
+    .select("id");
+  if (error) return { canceled: 0 };
+  return { canceled: (data || []).length };
+}
+
 async function countByStatus(
   supabase: AdminClient,
   userId: string,
