@@ -32,6 +32,10 @@ import {
   fetchWooCommerceProducts,
   isWooCommerceStore,
 } from "@/lib/import/woocommerce";
+import {
+  fetchShoplazzaProducts,
+  isShoplazzaStore,
+} from "@/lib/import/shoplazza";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
@@ -540,7 +544,7 @@ export async function POST(request: NextRequest) {
   try {
     let domain = "";
     let products: PublicShopifyProduct[] = [];
-    let sourceIsWoo = false;
+    let skipShopifyCollections = false;
 
     if (selectedProductHandles.length > 0) {
       const result = await fetchPublicShopifyProductsByHandles(
@@ -583,7 +587,12 @@ export async function POST(request: NextRequest) {
           const result = await fetchWooCommerceProducts(source, fetchOpts);
           domain = result.domain;
           products = result.products;
-          sourceIsWoo = true;
+          skipShopifyCollections = true;
+        } else if (await isShoplazzaStore(source)) {
+          const result = await fetchShoplazzaProducts(source, fetchOpts);
+          domain = result.domain;
+          products = result.products;
+          skipShopifyCollections = true; // pula leitura de colecoes (so existe no Shopify)
         } else {
           throw shopifyError;
         }
@@ -591,7 +600,7 @@ export async function POST(request: NextRequest) {
     }
     // Colecoes/categorias da origem so existem no Shopify; pula no Woo.
     const shouldReadCollections =
-      !sourceIsWoo &&
+      !skipShopifyCollections &&
       (action === "preview" ||
         action === "export-json" ||
         (action === "apply" &&
