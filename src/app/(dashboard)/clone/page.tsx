@@ -1624,9 +1624,14 @@ export default function ClonePage() {
                       placeholder={
                         importMode === "single"
                           ? "https://loja.com/products/produto"
-                          : "exemplo.myshopify.com ou dominio.com"
+                          : "Shopify ou WooCommerce: dominio.com"
                       }
                     />
+                    {importMode === "bulk" && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Detecta automaticamente Shopify ou WooCommerce pelo link.
+                      </p>
+                    )}
                   </div>
                   {importMode === "bulk" && (
                     <div className="space-y-1.5">

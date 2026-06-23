@@ -28,6 +28,10 @@ import {
   productsToCsv,
   toShopifyCreateProductInput,
 } from "@/lib/shopify/public-store";
+import {
+  fetchWooCommerceProducts,
+  isWooCommerceStore,
+} from "@/lib/import/woocommerce";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
@@ -536,6 +540,7 @@ export async function POST(request: NextRequest) {
   try {
     let domain = "";
     let products: PublicShopifyProduct[] = [];
+    let sourceIsWoo = false;
 
     if (selectedProductHandles.length > 0) {
       const result = await fetchPublicShopifyProductsByHandles(
@@ -548,15 +553,12 @@ export async function POST(request: NextRequest) {
       const result = await fetchPublicShopifyProduct(source);
       domain = result.domain;
       products = [result.product];
-    } else {
-      // Quando ha colecao escolhida, le os produtos so dela (via URL da colecao).
-      const normalizedDomain = collectionHandle
-        ? normalizePublicShopifyDomain(source)
-        : null;
-      const fetchSource =
-        collectionHandle && normalizedDomain
-          ? `https://${normalizedDomain}/collections/${collectionHandle}`
-          : source;
+    } else if (collectionHandle) {
+      // Colecao escolhida (Shopify): le os produtos so dela via URL da colecao.
+      const normalizedDomain = normalizePublicShopifyDomain(source);
+      const fetchSource = normalizedDomain
+        ? `https://${normalizedDomain}/collections/${collectionHandle}`
+        : source;
       const result = await fetchPublicShopifyProducts(fetchSource, {
         limit,
         page,
@@ -564,14 +566,38 @@ export async function POST(request: NextRequest) {
       });
       domain = result.domain;
       products = result.products;
+    } else {
+      // Auto-detecta a plataforma: tenta Shopify e, se nao for, WooCommerce.
+      // Ambos devolvem o mesmo shape, entao o resto do fluxo nao muda.
+      const fetchOpts = {
+        limit,
+        page,
+        pageSize: page ? pageSize : undefined,
+      };
+      try {
+        const result = await fetchPublicShopifyProducts(source, fetchOpts);
+        domain = result.domain;
+        products = result.products;
+      } catch (shopifyError) {
+        if (await isWooCommerceStore(source)) {
+          const result = await fetchWooCommerceProducts(source, fetchOpts);
+          domain = result.domain;
+          products = result.products;
+          sourceIsWoo = true;
+        } else {
+          throw shopifyError;
+        }
+      }
     }
+    // Colecoes/categorias da origem so existem no Shopify; pula no Woo.
     const shouldReadCollections =
-      action === "preview" ||
-      action === "export-json" ||
-      (action === "apply" &&
-        applyCollections &&
-        sourceCollections.length === 0 &&
-        Object.keys(productCollections).length === 0);
+      !sourceIsWoo &&
+      (action === "preview" ||
+        action === "export-json" ||
+        (action === "apply" &&
+          applyCollections &&
+          sourceCollections.length === 0 &&
+          Object.keys(productCollections).length === 0));
     const collectionsResult = shouldReadCollections
       ? await fetchPublicShopifyCollections(source)
       : { collections: [] };
