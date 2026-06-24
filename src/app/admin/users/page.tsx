@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Check, Loader2, Lock, Settings2, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -141,7 +142,12 @@ export default function AdminUsersPage() {
                 {filtered.map((u) => (
                   <tr key={u.id} className="border-b border-border/40 align-top">
                     <td className="py-2.5 pl-4 pr-3 text-foreground">
-                      {u.email}
+                      <Link
+                        href={`/admin/users/${u.id}`}
+                        className="hover:underline"
+                      >
+                        {u.email}
+                      </Link>
                       {u.isAdmin && (
                         <Badge variant="secondary" className="ml-2 rounded-md">
                           admin

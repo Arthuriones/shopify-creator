@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users } from "lucide-react";
+import { BarChart3, LayoutDashboard, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/admin", label: "Visão geral", icon: LayoutDashboard, exact: true },
   { href: "/admin/users", label: "Usuários", icon: Users, exact: false },
+  { href: "/admin/usage", label: "Uso & Custos", icon: BarChart3, exact: false },
 ];
 
 export function AdminNav() {
