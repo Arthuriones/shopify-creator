@@ -9,6 +9,7 @@ import {
 } from "@/lib/shopify/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AI_COST, logAiUsage } from "@/lib/billing/usage";
+import { consumeCredits, refundCredits } from "@/lib/billing/credits";
 
 export const IMAGE_JOB_TYPE = "neutralize_image";
 const MAX_ATTEMPTS = 3;
@@ -268,7 +269,26 @@ export async function processImageNeutralizeJobs(input: {
 
     await runPool(jobs, concurrency, async (job) => {
       const payload = (job.progress || {}) as ImageJobPayload;
+      let creditConsumed = false;
       try {
+        // Gating (Fase 5): debita 1 credito ANTES de gastar Gemini. Sem credito,
+        // marca o job e nao chama a IA (zero custo). So bloqueia se
+        // BILLING_ENFORCED=true; senao sempre passa e nao debita.
+        const credit = await consumeCredits(input.userId, 1);
+        if (!credit.ok) {
+          await supabase
+            .from("background_jobs")
+            .update({
+              status: "failed",
+              progress: { ...payload, step: "Sem creditos" },
+              error: "Sem creditos de IA. Recarregue para continuar.",
+            })
+            .eq("id", job.id);
+          summary.failed += 1;
+          return;
+        }
+        creditConsumed = credit.enforced;
+
         const neutral = await neutralizeProductImage({
           userId: input.userId,
           imageUrl: payload.imageUrl,
@@ -322,6 +342,9 @@ export async function processImageNeutralizeJobs(input: {
           metadata: { productId: payload.productId, mode: payload.mode },
         });
       } catch (error) {
+        // Debitou mas a neutralizacao falhou: devolve o credito (so cobra no
+        // sucesso). Numa retentativa o credito e debitado de novo.
+        if (creditConsumed) await refundCredits(input.userId, 1);
         const attempts = (payload.attempts || 0) + 1;
         const message =
           error instanceof Error

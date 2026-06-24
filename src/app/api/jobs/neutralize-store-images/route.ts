@@ -8,6 +8,7 @@ import {
   requestImageQueueDrain,
   type ImageNeutralizeItem,
 } from "@/lib/jobs/image-neutralize-processor";
+import { billingEnforced, getCreditBalance } from "@/lib/billing/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -154,10 +155,33 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Gating (Fase 5): quando a cobranca esta ligada, so enfileira ate o saldo
+    // de creditos (1 imagem = 1 credito). Evita criar milhares de jobs que
+    // falhariam por falta de credito; informa quantos ficaram de fora.
+    let creditsShort = 0;
+    let queueItems = items;
+    if (billingEnforced()) {
+      const balance = await getCreditBalance(user.id);
+      if (items.length > balance) {
+        creditsShort = items.length - balance;
+        queueItems = items.slice(0, Math.max(0, balance));
+      }
+    }
+
+    if (queueItems.length === 0) {
+      return NextResponse.json({
+        queued: 0,
+        totalProducts,
+        alreadyClean,
+        creditsShort,
+        message: "Sem creditos suficientes. Recarregue para trocar as imagens.",
+      });
+    }
+
     const { queued } = await enqueueImageNeutralizeJobs({
       userId: user.id,
       storeId,
-      items,
+      items: queueItems,
     });
 
     const origin = request.nextUrl.origin;
@@ -166,7 +190,7 @@ export async function POST(request: NextRequest) {
     // cliente manter a janela aberta).
     await requestImageQueueDrain({ origin, cookie, storeId });
 
-    return NextResponse.json({ queued, totalProducts, alreadyClean });
+    return NextResponse.json({ queued, totalProducts, alreadyClean, creditsShort });
   } catch (error) {
     return NextResponse.json(
       {
