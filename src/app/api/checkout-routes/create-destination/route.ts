@@ -17,6 +17,7 @@ import {
   type ImageNeutralizeItem,
 } from "@/lib/jobs/image-neutralize-processor";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
+import { AI_COST, logAiUsage } from "@/lib/billing/usage";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -515,6 +516,38 @@ export async function POST(request: NextRequest) {
         deferImages,
         heroOnly,
       });
+
+      // Medicao do custo de texto (imagem e medida na fila). deferImages cobre
+      // os modos "queue" e "none" (so texto aqui). Inline tambem gera texto.
+      if (neutralizeProducts) {
+        await logAiUsage({
+          userId: resolvedUserId,
+          storeId: targetStoreId,
+          action: "neutralize_text",
+          costUsd: AI_COST.text,
+          metadata: { handle: product.handle },
+        });
+        // Modo inline: a imagem foi neutralizada agora (nao na fila) -> mede aqui.
+        if (!deferImages) {
+          await logAiUsage({
+            userId: resolvedUserId,
+            storeId: targetStoreId,
+            action: "neutralize_image",
+            costUsd: AI_COST.image,
+            creditsUsed: 1,
+            metadata: { handle: product.handle, inline: true },
+          });
+        }
+      } else if (translateProducts && destination.translated) {
+        await logAiUsage({
+          userId: resolvedUserId,
+          storeId: targetStoreId,
+          action: "translate",
+          costUsd: AI_COST.text,
+          metadata: { handle: product.handle },
+        });
+      }
+
       const existing = await findExistingProduct(
         targetCreds,
         destination.productForLookup

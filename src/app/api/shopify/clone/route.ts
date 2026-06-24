@@ -39,6 +39,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
+import { AI_COST, logAiUsage } from "@/lib/billing/usage";
 import type { StoreContext } from "@/types";
 
 export const runtime = "nodejs";
@@ -862,6 +863,30 @@ export async function POST(request: NextRequest) {
             error instanceof Error
               ? error.message
               : "Falha ao criar produto.",
+        });
+      }
+    }
+
+    // Medicao (Fase 2): registra volume de clone e custo de texto da neutralizacao/
+    // traducao. A imagem (cara) e medida na fila de imagens, por imagem.
+    if (action === "apply") {
+      const neutralizedCount = transformed.filter((t) => t.neutralized).length;
+      if (created.length > 0) {
+        await logAiUsage({
+          userId,
+          storeId: targetStoreId,
+          action: "clone",
+          costUsd: 0,
+          metadata: { count: created.length, source: domain },
+        });
+      }
+      if (neutralizedCount > 0) {
+        await logAiUsage({
+          userId,
+          storeId: targetStoreId,
+          action: "neutralize_text",
+          costUsd: AI_COST.text * neutralizedCount,
+          metadata: { count: neutralizedCount, aggregate: true },
         });
       }
     }

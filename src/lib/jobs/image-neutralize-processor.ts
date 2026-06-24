@@ -8,6 +8,7 @@ import {
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { AI_COST, logAiUsage } from "@/lib/billing/usage";
 
 export const IMAGE_JOB_TYPE = "neutralize_image";
 const MAX_ATTEMPTS = 3;
@@ -310,6 +311,16 @@ export async function processImageNeutralizeJobs(input: {
           })
           .eq("id", job.id);
         summary.completed += 1;
+
+        // Medicao: 1 imagem neutralizada = 1 credito (acao mais cara).
+        await logAiUsage({
+          userId: input.userId,
+          storeId: input.storeId,
+          action: "neutralize_image",
+          costUsd: AI_COST.image,
+          creditsUsed: 1,
+          metadata: { productId: payload.productId, mode: payload.mode },
+        });
       } catch (error) {
         const attempts = (payload.attempts || 0) + 1;
         const message =
