@@ -47,6 +47,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Roteamento por host: o painel admin vive num subdominio separado
+  // (ex.: adm.xcart.app). A separacao SO e ativada quando ADMIN_HOST esta
+  // configurado — assim em local/transicao o /admin continua acessivel.
+  const adminHost = process.env.ADMIN_HOST || "";
+  if (adminHost) {
+    const host = request.headers.get("host") || "";
+    const isAdminHost = host === adminHost;
+    if (!isAdminHost && pathname.startsWith("/admin")) {
+      // No host principal, /admin nao e acessivel.
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+    if (isAdminHost && user && (pathname === "/" || pathname === "/dashboard")) {
+      // No subdominio admin, a raiz cai direto no painel.
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (user) {
     const hasPassword = user.user_metadata?.has_password === true;
     if (

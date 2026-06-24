@@ -24,7 +24,6 @@ import {
   LayoutDashboard,
   LogOut,
   Settings,
-  ShieldCheck,
   ShoppingBag,
   Sparkles,
   Store,
@@ -119,7 +118,6 @@ export function Sidebar() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -135,29 +133,11 @@ export function Sidebar() {
         (user?.email ? user.email.split("@")[0] : "");
       setUserName(name);
       setUserEmail(user?.email ?? "");
-      if (user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("is_admin")
-          .eq("id", user.id)
-          .single();
-        if (active) setIsAdmin(profile?.is_admin === true);
-      }
     })();
     return () => {
       active = false;
     };
   }, []);
-
-  const sections: NavSection[] = isAdmin
-    ? [
-        ...navSections,
-        {
-          label: "Admin",
-          items: [{ href: "/admin", label: "Painel admin", icon: ShieldCheck }],
-        },
-      ]
-    : navSections;
 
   const displayName = userName || "Conta";
   const userInitial = (userName || userEmail || "?").charAt(0).toUpperCase();
@@ -193,7 +173,7 @@ export function Sidebar() {
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-1">
           <div className="space-y-6">
-            {sections.map((section) => (
+            {navSections.map((section) => (
               <div key={section.label} className="space-y-1">
                 <div className="px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
                   {section.label}
