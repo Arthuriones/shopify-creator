@@ -11,6 +11,61 @@ export async function updateSession(request: NextRequest) {
     "/routed-checkout-loader.js",
   ];
 
+  // ----- Roteamento por host (3 dominios, 1 deploy) -----
+  // xcart.app           -> landing comercial (publica, sem login)
+  // user.xcart.app      -> o app (sistema de acesso)
+  // adm.xcart.app       -> painel admin
+  // localhost / *.vercel.app -> app completo (dev/preview)
+  const host = request.headers.get("host") || "";
+  const isLocal =
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.endsWith(".vercel.app");
+  const isAdminHost = host.startsWith("adm.");
+  const isAppHost = host.startsWith("user.");
+  const isMarketingHost = !isLocal && !isAdminHost && !isAppHost;
+
+  // Origem do app para mandar quem cair no host comercial em rota do sistema.
+  const appOrigin =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    `https://user.${host.replace(/^www\./, "")}`;
+
+  if (isMarketingHost) {
+    // APIs passam direto (o webhook do Stripe vive em xcart.app/api/...).
+    if (pathname.startsWith("/api")) {
+      return NextResponse.next({ request });
+    }
+    // Paginas publicas servidas no host comercial.
+    const marketingPaths = [
+      "/lp",
+      "/privacy",
+      "/terms",
+      "/data-deletion",
+      "/user-data-deletion",
+      "/routed-checkout-loader.js",
+    ];
+    if (
+      marketingPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
+    ) {
+      return NextResponse.next({ request });
+    }
+    if (pathname === "/") {
+      // Callback de install da Shopify pode bater na raiz: manda pro app.
+      if (/[?&](shop|code|hmac|host|state)=/.test(request.nextUrl.search)) {
+        return NextResponse.redirect(
+          new URL(`/${request.nextUrl.search}`, appOrigin)
+        );
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/lp";
+      return NextResponse.rewrite(url);
+    }
+    // Qualquer rota do app no host comercial -> subdominio do app.
+    return NextResponse.redirect(
+      new URL(pathname + request.nextUrl.search, appOrigin)
+    );
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -47,13 +102,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Roteamento por host: o painel admin vive num subdominio separado
-  // (ex.: adm.xcart.app). Detecta automaticamente qualquer host "adm." (ou o
-  // ADMIN_HOST configurado). Em localhost a separacao fica off (testavel).
-  const host = request.headers.get("host") || "";
-  const adminHost = process.env.ADMIN_HOST || "";
-  const isAdminHost = host.startsWith("adm.") || (!!adminHost && host === adminHost);
-
+  // Painel admin vive em adm.xcart.app. Em localhost/*.vercel.app a separacao
+  // fica off (admin acessivel pra testar).
   if (isAdminHost) {
     // No subdominio admin so existe o painel: tudo que nao for admin/api/auth
     // e redirecionado para /admin (nao mostra o app do cliente).
@@ -69,8 +119,8 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/admin";
       return NextResponse.redirect(url);
     }
-  } else if (adminHost && pathname.startsWith("/admin")) {
-    // No host principal (quando ja existe subdominio dedicado), bloqueia /admin.
+  } else if (!isLocal && pathname.startsWith("/admin")) {
+    // No host do app (user.xcart.app), bloqueia /admin -> manda pro dashboard.
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
