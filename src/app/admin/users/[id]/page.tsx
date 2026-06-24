@@ -2,7 +2,15 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  Package,
+  Route as RouteIcon,
+  Settings as SettingsIcon,
+  Store as StoreIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +38,24 @@ interface Detail {
     hasAccess: boolean;
     created_at: string;
   };
-  stores: { id: string; shop_domain: string; name: string; created_at: string }[];
+  stores: {
+    id: string;
+    shop_domain: string;
+    name: string;
+    niche: string | null;
+    target_language: string | null;
+    created_at: string;
+    productCount: number;
+  }[];
+  routes: {
+    id: string;
+    name: string;
+    public_token: string;
+    enabled: boolean;
+    sourceName: string;
+    targetName: string;
+  }[];
+  totals: { stores: number; products: number; routes: number };
   usage: {
     action: string;
     cost_usd: number;
@@ -143,6 +168,26 @@ export default function UserDetailPage({
         )}
       </div>
 
+      {/* Resumo */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {[
+          { label: "Plano", value: p.plan },
+          { label: "Créditos", value: p.ai_credits },
+          { label: "Lojas", value: data.totals.stores },
+          { label: "Produtos", value: data.totals.products },
+          { label: "Rotas", value: data.totals.routes },
+        ].map((c) => (
+          <Card key={c.label}>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">{c.label}</p>
+              <p className="mt-0.5 text-xl font-semibold text-foreground">
+                {c.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       {/* Gestão */}
       <Card>
         <CardHeader>
@@ -210,30 +255,104 @@ export default function UserDetailPage({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Lojas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Lojas ({data.stores.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.stores.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma loja.</p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {data.stores.map((s) => (
-                  <li key={s.id} className="flex justify-between">
-                    <span className="text-foreground">{s.name || s.shop_domain}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {s.shop_domain}
+      {/* Lojas */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <StoreIcon className="h-4 w-4" /> Lojas ({data.stores.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.stores.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma loja conectada.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {data.stores.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-lg border border-border/60 bg-background/45 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">
+                        {s.name || s.shop_domain}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {s.shop_domain}
+                      </p>
+                    </div>
+                    <span className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" />
+                      {s.productCount}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                    {s.niche && <span>{s.niche}</span>}
+                    {s.target_language && <span>· {s.target_language}</span>}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <a
+                      href={`https://${s.shop_domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="outline" size="sm">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Abrir loja
+                      </Button>
+                    </a>
+                    <a
+                      href={`https://${s.shop_domain}/admin`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="ghost" size="sm">
+                        <SettingsIcon className="h-3.5 w-3.5" />
+                        Shopify admin
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
+      {/* Rotas de checkout */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RouteIcon className="h-4 w-4" /> Rotas de checkout ({data.routes.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.routes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma rota.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {data.routes.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-3 py-2"
+                >
+                  <span className="text-foreground">
+                    {r.sourceName} → {r.targetName}
+                  </span>
+                  <Badge
+                    variant={r.enabled ? "secondary" : "outline"}
+                    className="rounded-md"
+                  >
+                    {r.enabled ? "ativa" : "pausada"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Compras */}
         <Card>
           <CardHeader>

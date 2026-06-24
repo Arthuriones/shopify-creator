@@ -32,7 +32,7 @@ export async function GET(
   const { admin } = auth;
   const { id } = await params;
 
-  const [{ data: profile }, userRes, { data: stores }, { data: usage }, { data: purchases }] =
+  const [{ data: profile }, userRes, { data: stores }, { data: routes }, { data: usage }, { data: purchases }] =
     await Promise.all([
       admin
         .from("profiles")
@@ -44,7 +44,13 @@ export async function GET(
       admin.auth.admin.getUserById(id),
       admin
         .from("stores")
-        .select("id, shop_domain, name, created_at")
+        .select("id, shop_domain, name, niche, target_language, created_at")
+        .eq("user_id", id),
+      admin
+        .from("routed_checkout_configs")
+        .select(
+          "id, name, source_store_id, target_store_id, public_token, enabled"
+        )
         .eq("user_id", id),
       admin
         .from("ai_usage_log")
@@ -64,6 +70,25 @@ export async function GET(
     return NextResponse.json({ error: "Usuario nao encontrado." }, { status: 404 });
   }
 
+  // Contagem de produtos por loja.
+  const storeIds = (stores || []).map((s) => s.id);
+  const productCountByStore = new Map<string, number>();
+  if (storeIds.length > 0) {
+    const { data: products } = await admin
+      .from("products")
+      .select("store_id")
+      .in("store_id", storeIds);
+    for (const p of products || []) {
+      productCountByStore.set(
+        p.store_id,
+        (productCountByStore.get(p.store_id) || 0) + 1
+      );
+    }
+  }
+
+  const storeNameById = new Map<string, string>();
+  for (const s of stores || []) storeNameById.set(s.id, s.name || s.shop_domain);
+
   return NextResponse.json({
     profile: {
       ...profile,
@@ -73,7 +98,20 @@ export async function GET(
         profile.plan === "pro" ||
         profile.access_granted === true,
     },
-    stores: stores || [],
+    stores: (stores || []).map((s) => ({
+      ...s,
+      productCount: productCountByStore.get(s.id) || 0,
+    })),
+    routes: (routes || []).map((r) => ({
+      ...r,
+      sourceName: storeNameById.get(r.source_store_id) || "—",
+      targetName: storeNameById.get(r.target_store_id) || "—",
+    })),
+    totals: {
+      stores: stores?.length || 0,
+      products: [...productCountByStore.values()].reduce((a, b) => a + b, 0),
+      routes: routes?.length || 0,
+    },
     usage: usage || [],
     purchases: purchases || [],
   });
