@@ -1,6 +1,10 @@
-import { neutralizeProductImage } from "@/lib/ai/product-neutralizer";
+import {
+  neutralizeProductImage,
+  deleteNeutralizedImageByUrl,
+} from "@/lib/ai/product-neutralizer";
 import {
   replaceProductHeroImage,
+  waitForMediaReady,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -274,10 +278,27 @@ export async function processImageNeutralizeJobs(input: {
           storageClient,
         });
 
-        await replaceProductHeroImage(creds, payload.productId, {
+        const mediaId = await replaceProductHeroImage(creds, payload.productId, {
           src: neutral.src,
           altText: payload.title,
         });
+
+        // Assim que a Shopify terminar de ingerir (READY), a copia vive no CDN
+        // dela e o buffer no Supabase nao e mais necessario: apaga na hora para
+        // nao acumular Storage. Se nao ficar READY a tempo, deixa o arquivo (a
+        // limpeza nao e critica) em vez de arriscar uma imagem quebrada.
+        if (mediaId) {
+          try {
+            const status = await waitForMediaReady(creds, mediaId, {
+              timeoutMs: 45000,
+            });
+            if (status === "READY") {
+              await deleteNeutralizedImageByUrl(storageClient, neutral.src);
+            }
+          } catch {
+            // silencioso: melhor deixar o buffer do que quebrar a imagem.
+          }
+        }
 
         await supabase
           .from("background_jobs")

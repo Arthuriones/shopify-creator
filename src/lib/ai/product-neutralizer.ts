@@ -368,15 +368,19 @@ async function neutralizeImage(
   }
 
   const generatedBuffer = Buffer.from(imagePart.inlineData.data, "base64");
-  const finalBuffer = await sharp(generatedBuffer).png().toBuffer();
+  // JPEG em vez de PNG: ~85% menor por imagem (a foto de produto nao precisa de
+  // transparencia), economizando muito o Storage do Supabase.
+  const finalBuffer = await sharp(generatedBuffer)
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toBuffer();
   const fileName = `${input.userId}/${Date.now()}-${index}-${Math.random()
     .toString(36)
-    .slice(2, 8)}-${mode === "external-references" ? "clean" : "neutral"}.png`;
+    .slice(2, 8)}-${mode === "external-references" ? "clean" : "neutral"}.jpg`;
 
   const { error } = await input.storageClient.storage
     .from("product-images")
     .upload(fileName, finalBuffer, {
-      contentType: "image/png",
+      contentType: "image/jpeg",
       upsert: false,
     });
 
@@ -449,6 +453,24 @@ interface ProductSingleImageInput {
   index?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   storageClient: any;
+}
+
+// Apaga um buffer ja ingerido pela Shopify do bucket product-images, dado a URL
+// publica retornada no upload. Deriva o path (parte apos /product-images/).
+export async function deleteNeutralizedImageByUrl(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  storageClient: any,
+  url: string
+): Promise<boolean> {
+  const marker = "/product-images/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return false;
+  const path = decodeURIComponent(url.slice(idx + marker.length).split("?")[0]);
+  if (!path) return false;
+  const { error } = await storageClient.storage
+    .from("product-images")
+    .remove([path]);
+  return !error;
 }
 
 // Neutraliza UMA imagem e devolve a URL publica processada.

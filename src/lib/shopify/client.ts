@@ -2209,6 +2209,33 @@ export async function replaceProductHeroImage(
   return createRes?.productCreateMedia?.media?.[0]?.id || null;
 }
 
+// Aguarda a Shopify terminar de ingerir a midia (status READY). Enquanto nao
+// estiver READY, o originalSource (ex.: URL do Supabase) ainda pode ser
+// buscado pela Shopify; so depois de READY a copia no CDN dela esta garantida
+// e o arquivo de origem pode ser apagado com seguranca.
+export async function waitForMediaReady(
+  creds: ShopifyCredentials,
+  mediaId: string,
+  options?: { timeoutMs?: number; intervalMs?: number }
+): Promise<"READY" | "FAILED" | "TIMEOUT"> {
+  const timeoutMs = Math.min(Math.max(options?.timeoutMs ?? 45000, 2000), 120000);
+  const intervalMs = Math.min(Math.max(options?.intervalMs ?? 2000, 500), 10000);
+  const query = `query mediaStatus($id: ID!) {
+    node(id: $id) { ... on MediaImage { status } }
+  }`;
+  const start = Date.now();
+  for (;;) {
+    const data = await shopifyGraphQL(creds, query, { id: mediaId }).catch(
+      () => null
+    );
+    const status = data?.node?.status as string | undefined;
+    if (status === "READY") return "READY";
+    if (status === "FAILED") return "FAILED";
+    if (Date.now() - start >= timeoutMs) return "TIMEOUT";
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 export async function getMenus(creds: ShopifyCredentials) {
   const query = `
     query {
