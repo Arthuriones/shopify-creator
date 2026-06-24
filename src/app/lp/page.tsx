@@ -69,12 +69,9 @@ export default function LandingPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-2 text-lg font-bold tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              x
-            </span>
-            xcart
-          </div>
+          <Link href="/lp" className="flex items-center">
+            <img src="/logo.png" alt="xcart" className="h-8 w-auto" />
+          </Link>
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
             <a href="#recursos" className="hover:text-foreground">Recursos</a>
             <a href="#como-funciona" className="hover:text-foreground">Como funciona</a>
@@ -96,13 +93,13 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--primary)/0.12),transparent)]" />
-        <div className="mx-auto max-w-6xl px-5 py-20 text-center md:py-28">
+        <div className="pointer-events-none absolute -top-32 left-1/2 -z-0 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/15 blur-[120px]" />
+        <div className="relative z-10 mx-auto max-w-6xl px-5 py-20 text-center md:py-28">
           <div className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-3 py-1 text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
             Importa de Shopify, WooCommerce, Shoplazza e AliExpress
           </div>
-          <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight md:text-6xl">
+          <h1 className="mx-auto max-w-3xl font-heading text-4xl font-bold leading-tight tracking-tight md:text-6xl">
             Clone qualquer loja para a{" "}
             <span className="text-primary">Shopify</span> em minutos
           </h1>
@@ -133,7 +130,7 @@ export default function LandingPage() {
       {/* Features */}
       <section id="recursos" className="mx-auto max-w-6xl px-5 py-16">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight">Tudo pra montar a loja rápido</h2>
+          <h2 className="font-heading text-3xl font-bold tracking-tight">Tudo pra montar a loja rápido</h2>
           <p className="mt-3 text-muted-foreground">
             Da importação à publicação, sem trabalho manual repetitivo.
           </p>
@@ -161,7 +158,7 @@ export default function LandingPage() {
       <section id="como-funciona" className="border-y border-border/40 bg-muted/30">
         <div className="mx-auto max-w-6xl px-5 py-16">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold tracking-tight">Como funciona</h2>
+            <h2 className="font-heading text-3xl font-bold tracking-tight">Como funciona</h2>
             <p className="mt-3 text-muted-foreground">Quatro passos do link à loja no ar.</p>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-4">
@@ -181,7 +178,7 @@ export default function LandingPage() {
       {/* Preços */}
       <section id="precos" className="mx-auto max-w-6xl px-5 py-20">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight">Preço simples</h2>
+          <h2 className="font-heading text-3xl font-bold tracking-tight">Preço simples</h2>
           <p className="mt-3 text-muted-foreground">
             Um plano com tudo liberado. Pague só por imagem neutralizada a mais.
           </p>
@@ -254,7 +251,7 @@ export default function LandingPage() {
       {/* CTA final */}
       <section className="border-t border-border/40">
         <div className="mx-auto max-w-3xl px-5 py-20 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="font-heading text-3xl font-bold tracking-tight">
             Comece a clonar hoje
           </h2>
           <p className="mt-3 text-muted-foreground">
@@ -272,12 +269,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-border/40">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-muted-foreground sm:flex-row">
-          <div className="flex items-center gap-2 font-semibold text-foreground">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-xs text-primary-foreground">
-              x
-            </span>
-            xcart
-          </div>
+          <img src="/logo.png" alt="xcart" className="h-6 w-auto" />
           <div className="flex items-center gap-5">
             <Link href="/privacy" className="hover:text-foreground">Privacidade</Link>
             <Link href="/terms" className="hover:text-foreground">Termos</Link>
