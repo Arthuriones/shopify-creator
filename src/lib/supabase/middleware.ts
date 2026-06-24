@@ -48,24 +48,32 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Roteamento por host: o painel admin vive num subdominio separado
-  // (ex.: adm.xcart.app). A separacao SO e ativada quando ADMIN_HOST esta
-  // configurado — assim em local/transicao o /admin continua acessivel.
+  // (ex.: adm.xcart.app). Detecta automaticamente qualquer host "adm." (ou o
+  // ADMIN_HOST configurado). Em localhost a separacao fica off (testavel).
+  const host = request.headers.get("host") || "";
   const adminHost = process.env.ADMIN_HOST || "";
-  if (adminHost) {
-    const host = request.headers.get("host") || "";
-    const isAdminHost = host === adminHost;
-    if (!isAdminHost && pathname.startsWith("/admin")) {
-      // No host principal, /admin nao e acessivel.
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
-    }
-    if (isAdminHost && user && (pathname === "/" || pathname === "/dashboard")) {
-      // No subdominio admin, a raiz cai direto no painel.
+  const isAdminHost = host.startsWith("adm.") || (!!adminHost && host === adminHost);
+
+  if (isAdminHost) {
+    // No subdominio admin so existe o painel: tudo que nao for admin/api/auth
+    // e redirecionado para /admin (nao mostra o app do cliente).
+    if (
+      user &&
+      !pathname.startsWith("/admin") &&
+      !pathname.startsWith("/api") &&
+      !pathname.startsWith("/login") &&
+      !pathname.startsWith("/callback") &&
+      !pathname.startsWith("/set-password")
+    ) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
       return NextResponse.redirect(url);
     }
+  } else if (adminHost && pathname.startsWith("/admin")) {
+    // No host principal (quando ja existe subdominio dedicado), bloqueia /admin.
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
   }
 
   if (user) {
