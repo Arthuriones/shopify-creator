@@ -19,6 +19,7 @@ import {
   Boxes,
   Camera,
   ChevronDown,
+  CreditCard,
   Download,
   LayoutDashboard,
   LogOut,
@@ -90,8 +91,11 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "Configurações",
-    items: [{ href: "/store-setup", label: "Configurações", icon: Settings }],
+    label: "Conta",
+    items: [
+      { href: "/billing", label: "Assinatura e créditos", icon: CreditCard },
+      { href: "/store-setup", label: "Configurações", icon: Settings },
+    ],
   },
 ];
 
