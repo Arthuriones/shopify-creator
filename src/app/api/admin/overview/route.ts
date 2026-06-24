@@ -34,7 +34,7 @@ export async function GET() {
       admin
         .from("profiles")
         .select(
-          "id, plan, subscription_status, ai_credits, current_period_end, created_at"
+          "id, plan, subscription_status, ai_credits, current_period_end, created_at, access_granted, is_admin"
         ),
       admin.from("stores").select("id, user_id, shop_domain, name"),
       admin
@@ -72,12 +72,17 @@ export async function GET() {
   const users = (profiles || [])
     .map((p) => {
       const usageAgg = usageByUser.get(p.id) || { costUsd: 0, credits: 0 };
+      const hasAccess =
+        p.is_admin === true || p.plan === "pro" || p.access_granted === true;
       return {
         id: p.id,
         email: emailById.get(p.id) || "—",
         plan: p.plan,
         subscriptionStatus: p.subscription_status,
         aiCredits: p.ai_credits,
+        accessGranted: p.access_granted === true,
+        isAdmin: p.is_admin === true,
+        hasAccess,
         stores: storesByUser.get(p.id) || [],
         usageThisMonth: {
           costUsd: Number(usageAgg.costUsd.toFixed(4)),
@@ -89,11 +94,13 @@ export async function GET() {
     .sort((a, b) => b.usageThisMonth.costUsd - a.usageThisMonth.costUsd);
 
   const proUsers = users.filter((u) => u.plan === "pro").length;
+  const withAccess = users.filter((u) => u.hasAccess).length;
 
   return NextResponse.json({
     summary: {
       totalUsers: users.length,
       proUsers,
+      withAccess,
       mrrBrl: proUsers * PRO_PRICE_BRL,
       aiCostThisMonthUsd: Number(totalCostUsd.toFixed(2)),
       totalStores: stores?.length || 0,

@@ -47,6 +47,9 @@ export async function PATCH(
   if (typeof body.aiCredits === "number") {
     update.ai_credits = Math.max(0, Math.floor(body.aiCredits));
   }
+  if (typeof body.accessGranted === "boolean") {
+    update.access_granted = body.accessGranted;
+  }
   if (typeof body.isAdmin === "boolean") update.is_admin = body.isAdmin;
 
   // Evita o admin remover o proprio acesso sem querer.
@@ -69,7 +72,7 @@ export async function PATCH(
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("id, plan, ai_credits, is_admin, subscription_status")
+    .select("id, plan, ai_credits, is_admin, access_granted, subscription_status")
     .eq("id", id)
     .single();
 
