@@ -1,5 +1,8 @@
 // Configuracao de planos e pacotes de credito do SaaS.
 
+// Preco do plano Pro (R$/mes). Usado para calcular MRR no painel admin.
+export const PRO_PRICE_BRL = 89;
+
 // Creditos de IA inclusos no plano Pro (R$89/mes). 1 credito = 1 produto
 // neutralizado com foto. Resetados a cada fatura paga.
 export const PRO_INCLUDED_CREDITS = 20;

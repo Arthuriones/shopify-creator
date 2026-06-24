@@ -17,7 +17,7 @@ export async function GET() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "plan, subscription_status, ai_credits, current_period_end, credits_reset_at"
+      "plan, subscription_status, ai_credits, current_period_end, credits_reset_at, is_admin"
     )
     .eq("id", user.id)
     .single();
@@ -44,6 +44,7 @@ export async function GET() {
 
   return NextResponse.json({
     email: user.email,
+    isAdmin: profile?.is_admin === true,
     plan: profile?.plan || "free",
     subscriptionStatus: profile?.subscription_status || null,
     aiCredits: profile?.ai_credits ?? 0,
