@@ -35,12 +35,12 @@ export default function NoAccessPage() {
           <Lock className="h-6 w-6 text-primary" />
         </div>
         <h1 className="mt-4 text-xl font-semibold text-foreground">
-          Acesso ainda não liberado
+          Sua avaliação gratuita terminou
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Sua conta não tem um plano ativo. Assine o Pro para liberar a
-          clonagem, tradução e neutralização — ou fale com o suporte se já
-          deveria ter acesso.
+          Você já usou sua clonagem gratuita. Assine o Pro para continuar
+          clonando lojas, traduzindo e neutralizando produtos — ou fale com o
+          suporte se já deveria ter acesso.
         </p>
         <Button className="mt-6 w-full" onClick={subscribe} disabled={busy === "checkout"}>
           {busy === "checkout" ? (

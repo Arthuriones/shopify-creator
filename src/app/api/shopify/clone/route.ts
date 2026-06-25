@@ -40,6 +40,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { AI_COST, logAiUsage } from "@/lib/billing/usage";
+import { checkAndConsumeFreeClone } from "@/lib/billing/access";
 import type { StoreContext } from "@/types";
 
 export const runtime = "nodejs";
@@ -540,6 +541,22 @@ export async function POST(request: NextRequest) {
 
   if (!["preview", "export-json", "export-csv", "apply"].includes(action)) {
     return NextResponse.json({ error: "Acao invalida." }, { status: 400 });
+  }
+
+  // Trava do trial: clonar (apply) so e liberado para quem assinou OU na 1a
+  // loja gratuita. Preview/export nao consomem o trial.
+  if (action === "apply" && targetStoreId) {
+    const permission = await checkAndConsumeFreeClone(userId, targetStoreId);
+    if (!permission.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Você já usou sua clonagem gratuita. Assine o Pro para clonar mais lojas.",
+          code: "subscribe_required",
+        },
+        { status: 402 }
+      );
+    }
   }
 
   try {

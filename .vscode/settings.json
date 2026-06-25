@@ -1,0 +1,21 @@
+{
+  "// nota": "Tira pastas pesadas do file-watcher, da busca e do indexador — evita o VS Code/TS server travarem ao abrir.",
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/.git/**": true,
+    "**/dist/**": true,
+    "**/public/Combo bot/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/public/Combo bot": true,
+    "**/package-lock.json": true
+  },
+  "files.exclude": {
+    "**/.next": true,
+    "**/public/Combo bot": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 3072
+}

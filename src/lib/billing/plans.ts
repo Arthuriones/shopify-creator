@@ -7,6 +7,10 @@ export const PRO_PRICE_BRL = 89;
 // neutralizado com foto. Resetados a cada fatura paga.
 export const PRO_INCLUDED_CREDITS = 20;
 
+// Trial: quantas lojas uma conta nova pode clonar de graca antes de assinar.
+// A trava usa profiles.free_clone_store_id (1 loja), entao manter em 1.
+export const FREE_CLONE_LIMIT = 1;
+
 // Pacotes de recarga avulsos (one-time). amountCents em BRL (centavos).
 export interface CreditPack {
   id: string;

@@ -1,7 +1,17 @@
 "use client";
 
-import type { CSSProperties, ComponentType } from "react";
-import { useEffect, useState } from "react";
+import type {
+  CSSProperties,
+  ForwardRefExoticComponent,
+  RefAttributes,
+} from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -15,26 +25,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Boxes,
-  Camera,
-  ChevronDown,
-  CreditCard,
-  Download,
-  LayoutDashboard,
-  LogOut,
-  Settings,
-  ShoppingBag,
-  Sparkles,
-  Store,
-  MessageSquareText,
-  Workflow,
-} from "lucide-react";
+import { ChevronDown, LogOut, Store } from "lucide-react";
+import { LayoutPanelTopIcon } from "@/components/ui/layout-panel-top";
+import { DownloadIcon } from "@/components/ui/download";
+import { WorkflowIcon } from "@/components/ui/workflow";
+import { BoxesIcon } from "@/components/ui/boxes";
+import { BoxIcon } from "@/components/ui/box";
+import { SparklesIcon } from "@/components/ui/sparkles";
+import { MessageSquareMoreIcon } from "@/components/ui/message-square-more";
+import { InstagramIcon } from "@/components/ui/instagram";
+import { CreditCardIcon } from "@/components/ui/credit-card";
+import { SettingsGearIcon } from "@/components/ui/settings-gear";
+
+// Contrato comum dos icones animados (lucide-animated): handle imperativo
+// para disparar a animacao no hover da LINHA inteira do menu.
+type AnimatedIconHandle = { startAnimation: () => void; stopAnimation: () => void };
+type NavIconProps = { size?: number; className?: string; style?: CSSProperties };
+type NavIcon = ForwardRefExoticComponent<
+  NavIconProps & RefAttributes<AnimatedIconHandle>
+>;
+
+// Adapta o Store (lucide, estatico) ao mesmo contrato — sem animacao.
+const StoreIcon = forwardRef<AnimatedIconHandle, NavIconProps>(
+  function StoreIcon(props, ref) {
+    useImperativeHandle(ref, () => ({ startAnimation() {}, stopAnimation() {} }));
+    return <Store {...props} />;
+  }
+);
 
 interface NavItem {
   href: string;
   label: string;
-  icon: ComponentType<{ className?: string; style?: CSSProperties }>;
+  icon: NavIcon;
   badge?: string;
   disabled?: boolean;
   children?: { href: string; label: string }[];
@@ -49,11 +71,11 @@ const navSections: NavSection[] = [
   {
     label: "Operações",
     items: [
-      { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Visão geral", icon: LayoutPanelTopIcon },
       {
         href: "/clone/shopify",
         label: "Importar produtos",
-        icon: Download,
+        icon: DownloadIcon,
         children: [
           { href: "/clone/export", label: "Exportar catálogo" },
         ],
@@ -61,7 +83,7 @@ const navSections: NavSection[] = [
       {
         href: "/clone/routed-checkout",
         label: "Loja vitrine",
-        icon: Workflow,
+        icon: WorkflowIcon,
         children: [
           { href: "/clone/routed-checkout", label: "Conectar lojas" },
           { href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
@@ -72,29 +94,29 @@ const navSections: NavSection[] = [
   {
     label: "Shopify",
     items: [
-      { href: "/stores", label: "Lojas conectadas", icon: Store },
-      { href: "/products/catalog", label: "Catálogo de produtos", icon: Boxes },
-      { href: "/products", label: "Produtos", icon: ShoppingBag },
+      { href: "/stores", label: "Lojas conectadas", icon: StoreIcon },
+      { href: "/products/catalog", label: "Catálogo de produtos", icon: BoxesIcon },
+      { href: "/products", label: "Produtos", icon: BoxIcon },
     ],
   },
   {
     label: "Automações",
     items: [
-      { href: "/optimizer", label: "IA Optimizer", icon: Sparkles },
-      { href: "/reviews", label: "Reviews IA", icon: MessageSquareText },
+      { href: "/optimizer", label: "IA Optimizer", icon: SparklesIcon },
+      { href: "/reviews", label: "Reviews IA", icon: MessageSquareMoreIcon },
     ],
   },
   {
     label: "Canais",
     items: [
-      { href: "/instagram", label: "Instagram", icon: Camera },
+      { href: "/instagram", label: "Instagram", icon: InstagramIcon },
     ],
   },
   {
     label: "Conta",
     items: [
-      { href: "/billing", label: "Assinatura e créditos", icon: CreditCard },
-      { href: "/store-setup", label: "Configurações", icon: Settings },
+      { href: "/billing", label: "Assinatura e créditos", icon: CreditCardIcon },
+      { href: "/store-setup", label: "Configurações", icon: SettingsGearIcon },
     ],
   },
 ];
@@ -118,6 +140,9 @@ export function Sidebar() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  // Handles dos icones animados, por item — a animacao dispara no hover da
+  // linha inteira do menu (nao so do icone).
+  const iconRefs = useRef(new Map<string, AnimatedIconHandle | null>());
 
   useEffect(() => {
     let active = true;
@@ -185,11 +210,18 @@ export function Sidebar() {
                     isHrefActive(child.href, true)
                   );
                   const highlighted = isActive;
+                  const itemKey = `${section.label}-${item.label}`;
                   return (
-                    <div key={`${section.label}-${item.label}`} className="space-y-1">
+                    <div key={itemKey} className="space-y-1">
                       <Link
                         href={item.disabled ? "#" : item.href}
                         aria-disabled={item.disabled}
+                        onMouseEnter={() =>
+                          iconRefs.current.get(itemKey)?.startAnimation()
+                        }
+                        onMouseLeave={() =>
+                          iconRefs.current.get(itemKey)?.stopAnimation()
+                        }
                         className={cn(
                           "group relative flex min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition-all",
                           item.disabled && "pointer-events-none opacity-50",
@@ -201,8 +233,12 @@ export function Sidebar() {
                         )}
                       >
                         <item.icon
+                          ref={(handle) => {
+                            iconRefs.current.set(itemKey, handle);
+                          }}
+                          size={18}
                           className={cn(
-                            "h-[18px] w-[18px] shrink-0 transition-colors",
+                            "inline-flex shrink-0 transition-colors",
                             highlighted
                               ? "text-white"
                               : hasActiveChild
@@ -301,7 +337,7 @@ export function Sidebar() {
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon className="h-5 w-5" />
+              <item.icon size={20} className="inline-flex" />
               <span className="text-[10px] font-semibold">{item.label}</span>
             </Link>
           );
