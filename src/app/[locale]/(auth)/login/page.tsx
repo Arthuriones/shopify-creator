@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { useRouter } from "next/navigation";
 type Mode = "login" | "signup" | "recovery";
 
 export default function LoginPage() {
+  const t = useTranslations("auth");
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,7 +74,7 @@ export default function LoginPage() {
         setSent(true);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Ocorreu um erro. Tente novamente.";
+      const message = error instanceof Error ? error.message : t("genericError");
       const normalizedMessage = message.toLowerCase();
       if (
         normalizedMessage.includes("429") ||
@@ -83,9 +85,9 @@ export default function LoginPage() {
         const secondsMatch = message.match(/(\d+)\s*seconds?/i);
         const waitSeconds = secondsMatch ? Number(secondsMatch[1]) : 60;
         setCooldownUntil(Date.now() + waitSeconds * 1000);
-        setErrorMessage(`Muitas tentativas. Aguarde ${waitSeconds}s e tente novamente.`);
+        setErrorMessage(t("tooManyAttempts", { seconds: waitSeconds }));
       } else if (normalizedMessage.includes("invalid login credentials")) {
-        setErrorMessage("Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'.");
+        setErrorMessage(t("invalidCredentials"));
       } else {
         setErrorMessage(message);
       }
@@ -120,7 +122,7 @@ export default function LoginPage() {
             className="text-sm text-muted-foreground"
             style={{ letterSpacing: "-0.01em" }}
           >
-            Automatize sua loja com IA
+            {t("tagline")}
           </p>
         </div>
 
@@ -135,12 +137,12 @@ export default function LoginPage() {
                 style={{ color: "oklch(0.72 0.19 155)" }}
               />
             </div>
-            <p className="text-sm text-foreground font-medium">Link de recuperação enviado</p>
+            <p className="text-sm text-foreground font-medium">{t("recoverySent")}</p>
             <p className="mt-1.5 text-[13px] text-muted-foreground mb-4">
-              Verifique <strong className="text-foreground font-medium">{email}</strong>
+              {t("checkEmail")} <strong className="text-foreground font-medium">{email}</strong>
             </p>
             <Button variant="outline" className="w-full h-11" onClick={() => { setSent(false); setMode("login"); }}>
-              Voltar ao Login
+              {t("backToLogin")}
             </Button>
           </div>
         ) : (
@@ -150,13 +152,13 @@ export default function LoginPage() {
                 className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "login" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={() => setMode("login")}
               >
-                Entrar
+                {t("login")}
               </button>
               <button
                 className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "signup" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={() => setMode("signup")}
               >
-                Criar Conta
+                {t("signup")}
               </button>
             </div>
 
@@ -167,7 +169,7 @@ export default function LoginPage() {
                     htmlFor="email"
                     className="text-[13px] font-medium text-muted-foreground"
                   >
-                    Email
+                    {t("email")}
                   </Label>
                   <Input
                     id="email"
@@ -187,15 +189,15 @@ export default function LoginPage() {
                         htmlFor="password"
                         className="text-[13px] font-medium text-muted-foreground"
                       >
-                        Senha
+                        {t("password")}
                       </Label>
                       {mode === "login" && (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => setMode("recovery")}
                           className="text-xs text-primary/80 hover:text-primary transition-colors"
                         >
-                          Esqueci a senha
+                          {t("forgotPassword")}
                         </button>
                       )}
                     </div>
@@ -230,13 +232,13 @@ export default function LoginPage() {
                     </span>
                   </span>
                 ) : secondsRemaining > 0 ? (
-                  `Aguarde ${secondsRemaining}s`
+                  t("wait", { seconds: secondsRemaining })
                 ) : mode === "login" ? (
-                  "Entrar"
+                  t("login")
                 ) : mode === "signup" ? (
-                  "Criar Conta"
+                  t("signup")
                 ) : (
-                  "Enviar link de acesso"
+                  t("sendAccessLink")
                 )}
               </Button>
               {errorMessage ? (
@@ -245,7 +247,7 @@ export default function LoginPage() {
 
               {mode === "recovery" && (
                  <Button type="button" variant="ghost" className="w-full h-11 text-xs text-muted-foreground" onClick={() => setMode("login")}>
-                   Voltar ao Login
+                   {t("backToLogin")}
                  </Button>
               )}
             </form>

@@ -28,6 +28,22 @@
     "subscribe": "Subscribe to Pro — $19/mo",
     "logout": "Log out"
   },
+  "auth": {
+    "tagline": "Automate your store with AI",
+    "login": "Sign in",
+    "signup": "Create account",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password",
+    "sendAccessLink": "Send access link",
+    "wait": "Wait {seconds}s",
+    "recoverySent": "Recovery link sent",
+    "checkEmail": "Check",
+    "backToLogin": "Back to sign in",
+    "genericError": "Something went wrong. Please try again.",
+    "tooManyAttempts": "Too many attempts. Wait {seconds}s and try again.",
+    "invalidCredentials": "Invalid credentials. If you used a magic link or didn't set a password, click 'Forgot password'."
+  },
   "language": {
     "label": "Language",
     "pt": "Português",

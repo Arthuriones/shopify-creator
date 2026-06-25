@@ -14,6 +14,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -67,56 +68,58 @@ interface NavSection {
   items: NavItem[];
 }
 
+// Os "label" guardam CHAVES de traducao (namespace nav.*), resolvidas no
+// render com useTranslations("nav").
 const navSections: NavSection[] = [
   {
-    label: "Operações",
+    label: "operations",
     items: [
-      { href: "/dashboard", label: "Visão geral", icon: LayoutPanelTopIcon },
+      { href: "/dashboard", label: "overview", icon: LayoutPanelTopIcon },
       {
         href: "/clone/shopify",
-        label: "Importar produtos",
+        label: "importProducts",
         icon: DownloadIcon,
         children: [
-          { href: "/clone/export", label: "Exportar catálogo" },
+          { href: "/clone/export", label: "exportCatalog" },
         ],
       },
       {
         href: "/clone/routed-checkout",
-        label: "Loja vitrine",
+        label: "showcaseStore",
         icon: WorkflowIcon,
         children: [
-          { href: "/clone/routed-checkout", label: "Conectar lojas" },
-          { href: "/clone/routed-checkout/active-routes", label: "Rotas e tokens" },
+          { href: "/clone/routed-checkout", label: "connectStores" },
+          { href: "/clone/routed-checkout/active-routes", label: "routesAndTokens" },
         ],
       },
     ],
   },
   {
-    label: "Shopify",
+    label: "shopify",
     items: [
-      { href: "/stores", label: "Lojas conectadas", icon: StoreIcon },
-      { href: "/products/catalog", label: "Catálogo de produtos", icon: BoxesIcon },
-      { href: "/products", label: "Produtos", icon: BoxIcon },
+      { href: "/stores", label: "connectedStores", icon: StoreIcon },
+      { href: "/products/catalog", label: "productCatalog", icon: BoxesIcon },
+      { href: "/products", label: "products", icon: BoxIcon },
     ],
   },
   {
-    label: "Automações",
+    label: "automations",
     items: [
-      { href: "/optimizer", label: "IA Optimizer", icon: SparklesIcon },
-      { href: "/reviews", label: "Reviews IA", icon: MessageSquareMoreIcon },
+      { href: "/optimizer", label: "aiOptimizer", icon: SparklesIcon },
+      { href: "/reviews", label: "aiReviews", icon: MessageSquareMoreIcon },
     ],
   },
   {
-    label: "Canais",
+    label: "channels",
     items: [
-      { href: "/instagram", label: "Instagram", icon: InstagramIcon },
+      { href: "/instagram", label: "instagram", icon: InstagramIcon },
     ],
   },
   {
-    label: "Conta",
+    label: "account",
     items: [
-      { href: "/billing", label: "Assinatura e créditos", icon: CreditCardIcon },
-      { href: "/store-setup", label: "Configurações", icon: SettingsGearIcon },
+      { href: "/billing", label: "billing", icon: CreditCardIcon },
+      { href: "/store-setup", label: "settings", icon: SettingsGearIcon },
     ],
   },
 ];
@@ -138,6 +141,7 @@ function splitHref(href: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useTranslations("nav");
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   // Handles dos icones animados, por item — a animacao dispara no hover da
@@ -164,7 +168,7 @@ export function Sidebar() {
     };
   }, []);
 
-  const displayName = userName || "Conta";
+  const displayName = userName || t("account");
   const userInitial = (userName || userEmail || "?").charAt(0).toUpperCase();
 
   async function handleLogout() {
@@ -201,7 +205,7 @@ export function Sidebar() {
             {navSections.map((section) => (
               <div key={section.label} className="space-y-1">
                 <div className="px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {section.label}
+                  {t(section.label)}
                 </div>
                 {section.items.map((item) => {
                   const isActive = isHrefActive(item.href, true);
@@ -246,7 +250,7 @@ export function Sidebar() {
                                 : "text-muted-foreground group-hover:text-foreground"
                           )}
                         />
-                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
                         {item.badge && (
                           <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                             {item.badge}
@@ -276,7 +280,7 @@ export function Sidebar() {
                                     : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                                 )}
                               >
-                                {child.label}
+                                {t(child.label)}
                               </Link>
                             );
                           })}
@@ -307,7 +311,7 @@ export function Sidebar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="w-[238px]">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Minha conta</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("myAccount")}</DropdownMenuLabel>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -315,7 +319,7 @@ export function Sidebar() {
                 className="text-red-400 focus:text-red-400"
               >
                 <LogOut className="h-4 w-4" />
-                Sair
+                {t("logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -338,7 +342,7 @@ export function Sidebar() {
               )}
             >
               <item.icon size={20} className="inline-flex" />
-              <span className="text-[10px] font-semibold">{item.label}</span>
+              <span className="text-[10px] font-semibold">{t(item.label)}</span>
             </Link>
           );
         })}

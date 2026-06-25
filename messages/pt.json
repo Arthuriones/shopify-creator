@@ -28,6 +28,22 @@
     "subscribe": "Assinar Pro — R$89/mês",
     "logout": "Sair"
   },
+  "auth": {
+    "tagline": "Automatize sua loja com IA",
+    "login": "Entrar",
+    "signup": "Criar Conta",
+    "email": "Email",
+    "password": "Senha",
+    "forgotPassword": "Esqueci a senha",
+    "sendAccessLink": "Enviar link de acesso",
+    "wait": "Aguarde {seconds}s",
+    "recoverySent": "Link de recuperação enviado",
+    "checkEmail": "Verifique",
+    "backToLogin": "Voltar ao Login",
+    "genericError": "Ocorreu um erro. Tente novamente.",
+    "tooManyAttempts": "Muitas tentativas. Aguarde {seconds}s e tente novamente.",
+    "invalidCredentials": "Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'."
+  },
   "language": {
     "label": "Idioma",
     "pt": "Português",
