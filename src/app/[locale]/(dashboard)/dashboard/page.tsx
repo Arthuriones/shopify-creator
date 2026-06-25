@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -18,32 +19,33 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
+// title/desc guardam chaves do namespace dashboard.*
 const quickActions = [
   {
     href: "/clone/shopify/individual",
-    title: "Importar produto",
-    desc: "Importe um produto via URL",
+    title: "actionImportTitle",
+    desc: "actionImportDesc",
     icon: Link2,
     tint: "text-sky-400 bg-sky-500/10",
   },
   {
     href: "/clone/shopify/bulk",
-    title: "Importação em massa",
-    desc: "Importe múltiplos produtos",
+    title: "actionBulkTitle",
+    desc: "actionBulkDesc",
     icon: UploadCloud,
     tint: "text-indigo-400 bg-indigo-500/10",
   },
   {
     href: "/clone/shopify",
-    title: "Clonar loja",
-    desc: "Clone uma loja completa",
+    title: "actionCloneTitle",
+    desc: "actionCloneDesc",
     icon: Store,
     tint: "text-emerald-400 bg-emerald-500/10",
   },
   {
     href: "/clone/routed-checkout",
-    title: "Loja vitrine",
-    desc: "Gerenciar roteamento",
+    title: "actionShowcaseTitle",
+    desc: "actionShowcaseDesc",
     icon: Workflow,
     tint: "text-orange-400 bg-orange-500/10",
   },
@@ -58,27 +60,17 @@ interface RecentProduct {
   created_at: string;
 }
 
+// label = chave do namespace status.*
 const STATUS_META: Record<
   ProductStatus,
-  { label: string; icon: typeof CircleDashed; tint: string }
+  { label: ProductStatus; icon: typeof CircleDashed; tint: string }
 > = {
-  pending: { label: "Importado", icon: CircleDashed, tint: "text-sky-400" },
-  optimized: { label: "Otimizado", icon: Sparkles, tint: "text-indigo-400" },
-  published: { label: "Publicado", icon: CheckCircle2, tint: "text-emerald-400" },
-  failed: { label: "Falhou", icon: XCircle, tint: "text-red-400" },
+  pending: { label: "pending", icon: CircleDashed, tint: "text-sky-400" },
+  optimized: { label: "optimized", icon: Sparkles, tint: "text-indigo-400" },
+  published: { label: "published", icon: CheckCircle2, tint: "text-emerald-400" },
+  failed: { label: "failed", icon: XCircle, tint: "text-red-400" },
 };
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `${min} min atrás`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours} h atrás`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} d atrás`;
-  return new Date(iso).toLocaleDateString("pt-BR");
-}
 
 function displayName(
   user: { user_metadata?: Record<string, unknown>; email?: string } | null
@@ -88,12 +80,26 @@ function displayName(
     (typeof meta.name === "string" && meta.name) ||
     (typeof meta.full_name === "string" && meta.full_name) ||
     (user?.email ? user.email.split("@")[0] : "");
-  if (!raw) return "você";
+  if (!raw) return "";
   const first = raw.trim().split(/\s+/)[0];
   return first.charAt(0).toUpperCase() + first.slice(1);
 }
 
 export default function DashboardPage() {
+  const t = useTranslations("dashboard");
+  const tStatus = useTranslations("status");
+  const tTime = useTranslations("time");
+  const fmtTime = (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return tTime("now");
+    if (min < 60) return tTime("minsAgo", { n: min });
+    const hours = Math.floor(min / 60);
+    if (hours < 24) return tTime("hoursAgo", { n: hours });
+    const days = Math.floor(hours / 24);
+    if (days < 30) return tTime("daysAgo", { n: days });
+    return new Date(iso).toLocaleDateString();
+  };
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [storeCount, setStoreCount] = useState(0);
@@ -139,9 +145,9 @@ export default function DashboardPage() {
   }, []);
 
   const stats = [
-    { label: "Lojas conectadas", value: storeCount, icon: Store, tint: "text-sky-400 bg-sky-500/10" },
-    { label: "Produtos importados", value: productCount, icon: Boxes, tint: "text-indigo-400 bg-indigo-500/10" },
-    { label: "Produtos publicados", value: publishedCount, icon: ShoppingBag, tint: "text-emerald-400 bg-emerald-500/10" },
+    { label: t("statConnectedStores"), value: storeCount, icon: Store, tint: "text-sky-400 bg-sky-500/10" },
+    { label: t("statImportedProducts"), value: productCount, icon: Boxes, tint: "text-indigo-400 bg-indigo-500/10" },
+    { label: t("statPublishedProducts"), value: publishedCount, icon: ShoppingBag, tint: "text-emerald-400 bg-emerald-500/10" },
   ];
 
   const noStores = !loading && storeCount === 0;
@@ -154,11 +160,11 @@ export default function DashboardPage() {
           {loading ? (
             <span className="skeleton inline-block h-9 w-64 rounded-lg align-middle" />
           ) : (
-            <>Olá, {name} 👋</>
+            <>{t("greeting", { name: name || tTime("you") })}</>
           )}
         </h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Tudo pronto para escalar suas operações hoje.
+          {t("subtitle")}
         </p>
       </div>
 
@@ -169,17 +175,16 @@ export default function DashboardPage() {
             <Rocket className="h-7 w-7" />
           </span>
           <h2 className="mt-5 text-xl font-heading font-bold tracking-tight text-foreground">
-            Conecte sua primeira loja
+            {t("connectFirstTitle")}
           </h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] text-muted-foreground">
-            Você ainda não conectou nenhuma loja Shopify. Conecte uma para começar
-            a importar e publicar produtos.
+            {t("connectFirstBody")}
           </p>
           <Link
             href="/stores"
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
-            <Store className="h-4 w-4" /> Conectar loja
+            <Store className="h-4 w-4" /> {t("connectStore")}
           </Link>
         </div>
       ) : (
@@ -202,7 +207,7 @@ export default function DashboardPage() {
                     <span className="skeleton h-7 w-16 rounded-md" />
                   ) : (
                     <span className="text-[1.75rem] font-heading font-bold leading-none text-foreground">
-                      {s.value.toLocaleString("pt-BR")}
+                      {s.value.toLocaleString()}
                     </span>
                   )}
                 </div>
@@ -214,7 +219,7 @@ export default function DashboardPage() {
           <section>
             <div className="mb-4">
               <h2 className="text-xl font-heading font-bold tracking-tight text-foreground">
-                Ações rápidas
+                {t("quickActions")}
               </h2>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -230,8 +235,8 @@ export default function DashboardPage() {
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </div>
-                  <h3 className="mt-4 font-semibold text-foreground">{a.title}</h3>
-                  <p className="mt-1 text-[13px] text-muted-foreground">{a.desc}</p>
+                  <h3 className="mt-4 font-semibold text-foreground">{t(a.title)}</h3>
+                  <p className="mt-1 text-[13px] text-muted-foreground">{t(a.desc)}</p>
                 </Link>
               ))}
             </div>
@@ -242,13 +247,13 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-border bg-card/70 p-6">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-lg font-heading font-bold tracking-tight text-foreground">
-                  Produtos recentes
+                  {t("recentProducts")}
                 </h2>
                 <Link
                   href="/products/catalog"
                   className="text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Ver catálogo
+                  {t("viewCatalog")}
                 </Link>
               </div>
 
@@ -267,13 +272,13 @@ export default function DashboardPage() {
               ) : recent.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="text-[14px] text-muted-foreground">
-                    Nenhum produto importado ainda.
+                    {t("noProducts")}
                   </p>
                   <Link
                     href="/clone/shopify/individual"
                     className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    <Link2 className="h-4 w-4" /> Importar primeiro produto
+                    <Link2 className="h-4 w-4" /> {t("importFirst")}
                   </Link>
                 </div>
               ) : (
@@ -290,10 +295,10 @@ export default function DashboardPage() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[13.5px] font-medium text-foreground">{item.title}</p>
-                          <p className="truncate text-[12px] text-muted-foreground">{meta.label}</p>
+                          <p className="truncate text-[12px] text-muted-foreground">{tStatus(meta.label)}</p>
                         </div>
                         <span className="shrink-0 text-[12px] text-muted-foreground">
-                          {relativeTime(item.created_at)}
+                          {fmtTime(item.created_at)}
                         </span>
                       </div>
                     );

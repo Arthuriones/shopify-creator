@@ -28,6 +28,42 @@
     "subscribe": "Subscribe to Pro — $19/mo",
     "logout": "Log out"
   },
+  "status": {
+    "pending": "Imported",
+    "optimized": "Optimized",
+    "published": "Published",
+    "failed": "Failed"
+  },
+  "time": {
+    "now": "now",
+    "minsAgo": "{n} min ago",
+    "hoursAgo": "{n} h ago",
+    "daysAgo": "{n} d ago",
+    "you": "you"
+  },
+  "dashboard": {
+    "greeting": "Hi, {name} 👋",
+    "subtitle": "Everything's ready to scale your operations today.",
+    "connectFirstTitle": "Connect your first store",
+    "connectFirstBody": "You haven't connected any Shopify store yet. Connect one to start importing and publishing products.",
+    "connectStore": "Connect store",
+    "quickActions": "Quick actions",
+    "recentProducts": "Recent products",
+    "viewCatalog": "View catalog",
+    "noProducts": "No products imported yet.",
+    "importFirst": "Import first product",
+    "statConnectedStores": "Connected stores",
+    "statImportedProducts": "Imported products",
+    "statPublishedProducts": "Published products",
+    "actionImportTitle": "Import product",
+    "actionImportDesc": "Import a product via URL",
+    "actionBulkTitle": "Bulk import",
+    "actionBulkDesc": "Import multiple products",
+    "actionCloneTitle": "Clone store",
+    "actionCloneDesc": "Clone an entire store",
+    "actionShowcaseTitle": "Showcase store",
+    "actionShowcaseDesc": "Manage routing"
+  },
   "auth": {
     "tagline": "Automate your store with AI",
     "login": "Sign in",

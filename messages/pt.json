@@ -28,6 +28,42 @@
     "subscribe": "Assinar Pro — R$89/mês",
     "logout": "Sair"
   },
+  "status": {
+    "pending": "Importado",
+    "optimized": "Otimizado",
+    "published": "Publicado",
+    "failed": "Falhou"
+  },
+  "time": {
+    "now": "agora",
+    "minsAgo": "{n} min atrás",
+    "hoursAgo": "{n} h atrás",
+    "daysAgo": "{n} d atrás",
+    "you": "você"
+  },
+  "dashboard": {
+    "greeting": "Olá, {name} 👋",
+    "subtitle": "Tudo pronto para escalar suas operações hoje.",
+    "connectFirstTitle": "Conecte sua primeira loja",
+    "connectFirstBody": "Você ainda não conectou nenhuma loja Shopify. Conecte uma para começar a importar e publicar produtos.",
+    "connectStore": "Conectar loja",
+    "quickActions": "Ações rápidas",
+    "recentProducts": "Produtos recentes",
+    "viewCatalog": "Ver catálogo",
+    "noProducts": "Nenhum produto importado ainda.",
+    "importFirst": "Importar primeiro produto",
+    "statConnectedStores": "Lojas conectadas",
+    "statImportedProducts": "Produtos importados",
+    "statPublishedProducts": "Produtos publicados",
+    "actionImportTitle": "Importar produto",
+    "actionImportDesc": "Importe um produto via URL",
+    "actionBulkTitle": "Importação em massa",
+    "actionBulkDesc": "Importe múltiplos produtos",
+    "actionCloneTitle": "Clonar loja",
+    "actionCloneDesc": "Clone uma loja completa",
+    "actionShowcaseTitle": "Loja vitrine",
+    "actionShowcaseDesc": "Gerenciar roteamento"
+  },
   "auth": {
     "tagline": "Automatize sua loja com IA",
     "login": "Entrar",
