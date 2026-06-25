@@ -54,7 +54,7 @@
 
     return Boolean(
       checkoutElement.getAttribute("name") === "checkout" ||
-        /checkout|finalizar|pagamento|fechar pedido|comprar agora|buy now/.test(text) ||
+        /checkout|finaliz|pagamento|pagar|fechar pedido|comprar agora|comprar ahora|comprar|buy now|ir a pagar|proceder|tramitar|realizar pedido/.test(text) ||
         (href && /checkout|checkouts/.test(href)) ||
         (action && /checkout|checkouts/.test(action)) ||
         checkoutElement.matches(
@@ -74,7 +74,7 @@
       (formAction && /\/cart(?!\/add)|\/checkout|\/checkouts/.test(formAction));
     var text = (button.textContent || button.value || "").toLowerCase();
     return Boolean(
-      /comprar agora|buy now/.test(text) ||
+      /comprar agora|comprar ahora|comprar|buy now|pagar ahora/.test(text) ||
         button.matches(".shopify-payment-button__button, [data-testid*='Checkout-button'], .dm-quick-purchase__buy") ||
         (button.matches(".js-transparent-checkout") && !insideCart)
     );
