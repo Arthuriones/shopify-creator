@@ -1,72 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import createMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-  const pathname = request.nextUrl.pathname;
-  const publicPaths = [
-    "/api/health",
-    "/api/checkout-routes/resolve",
-    "/api/jobs/bulk-import/process",
-    "/routed-checkout-loader.js",
-  ];
+const intlMiddleware = createMiddleware(routing);
 
-  // ----- Roteamento por host (3 dominios, 1 deploy) -----
-  // xcart.app           -> landing comercial (publica, sem login)
-  // user.xcart.app      -> o app (sistema de acesso)
-  // adm.xcart.app       -> painel admin
-  // localhost / *.vercel.app -> app completo (dev/preview)
-  const host = request.headers.get("host") || "";
-  const isLocal =
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.endsWith(".vercel.app");
-  const isAdminHost = host.startsWith("adm.");
-  const isAppHost = host.startsWith("user.");
-  const isMarketingHost = !isLocal && !isAdminHost && !isAppHost;
+const PUBLIC_PATHS = [
+  "/api/health",
+  "/api/checkout-routes/resolve",
+  "/api/jobs/bulk-import/process",
+  "/routed-checkout-loader.js",
+];
 
-  // Origem do app para mandar quem cair no host comercial em rota do sistema.
-  const appOrigin =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    `https://user.${host.replace(/^www\./, "")}`;
-
-  if (isMarketingHost) {
-    // APIs passam direto (o webhook do Stripe vive em xcart.app/api/...).
-    if (pathname.startsWith("/api")) {
-      return NextResponse.next({ request });
-    }
-    // Paginas publicas servidas no host comercial.
-    const marketingPaths = [
-      "/lp",
-      "/privacy",
-      "/terms",
-      "/data-deletion",
-      "/user-data-deletion",
-      "/routed-checkout-loader.js",
-    ];
-    if (
-      marketingPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
-    ) {
-      return NextResponse.next({ request });
-    }
-    if (pathname === "/") {
-      // Callback de install da Shopify pode bater na raiz: manda pro app.
-      if (/[?&](shop|code|hmac|host|state)=/.test(request.nextUrl.search)) {
-        return NextResponse.redirect(
-          new URL(`/${request.nextUrl.search}`, appOrigin)
-        );
-      }
-      const url = request.nextUrl.clone();
-      url.pathname = "/lp";
-      return NextResponse.rewrite(url);
-    }
-    // Qualquer rota do app no host comercial -> subdominio do app.
-    return NextResponse.redirect(
-      new URL(pathname + request.nextUrl.search, appOrigin)
-    );
-  }
-
-  const supabase = createServerClient(
+// Liga o Supabase ao par request/response sem recriar a response — assim a
+// resposta do next-intl (rewrite de locale) e preservada e os cookies de
+// sessao sao atualizados em cima dela.
+function attachSupabase(request: NextRequest, response: NextResponse) {
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -78,39 +28,84 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            response.cookies.set(name, value, options)
           );
         },
       },
     }
   );
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+function localeOf(pathname: string): "pt" | "en" {
+  return pathname === "/en" || pathname.startsWith("/en/") ? "en" : "pt";
+}
 
-  if (
-    !user &&
-    !pathname.startsWith("/login") &&
-    !pathname.startsWith("/callback") &&
-    !publicPaths.some((publicPath) => pathname.startsWith(publicPath))
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+function isPublic(pathname: string) {
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+}
+
+export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const host = request.headers.get("host") || "";
+  const isLocal =
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.endsWith(".vercel.app");
+  const isAdminHost = host.startsWith("adm.");
+  const isAppHost = host.startsWith("user.");
+  const isMarketingHost = !isLocal && !isAdminHost && !isAppHost;
+  const appOrigin =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    `https://user.${host.replace(/^www\./, "")}`;
+  const isApi = pathname.startsWith("/api");
+
+  // ===== HOST COMERCIAL (landing publica, com i18n) =====
+  if (isMarketingHost) {
+    if (isApi) return NextResponse.next({ request });
+    const locale = localeOf(pathname);
+    const bare =
+      locale === "en" ? pathname.replace(/^\/en/, "") || "/" : pathname;
+    const marketingBare = [
+      "/",
+      "/lp",
+      "/privacy",
+      "/terms",
+      "/data-deletion",
+      "/user-data-deletion",
+    ];
+    const isMarketingPath =
+      marketingBare.some((p) => bare === p || bare.startsWith(p + "/")) ||
+      bare.startsWith("/routed-checkout-loader.js");
+    if (!isMarketingPath) {
+      return NextResponse.redirect(
+        new URL(pathname + request.nextUrl.search, appOrigin)
+      );
+    }
+    return intlMiddleware(request);
   }
 
-  // Painel admin vive em adm.xcart.app. Em localhost/*.vercel.app a separacao
-  // fica off (admin acessivel pra testar).
+  // ===== HOST ADMIN (sem i18n) =====
   if (isAdminHost) {
-    // No subdominio admin so existe o painel: tudo que nao for admin/api/auth
-    // e redirecionado para /admin (nao mostra o app do cliente).
+    const response = NextResponse.next({ request });
+    const supabase = attachSupabase(request, response);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (
+      !user &&
+      !pathname.startsWith("/login") &&
+      !pathname.startsWith("/callback") &&
+      !isPublic(pathname)
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
     if (
       user &&
       !pathname.startsWith("/admin") &&
-      !pathname.startsWith("/api") &&
+      !isApi &&
       !pathname.startsWith("/login") &&
       !pathname.startsWith("/callback") &&
       !pathname.startsWith("/set-password")
@@ -119,27 +114,54 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/admin";
       return NextResponse.redirect(url);
     }
-  } else if (!isLocal && pathname.startsWith("/admin")) {
-    // No host do app (user.xcart.app), bloqueia /admin -> manda pro dashboard.
+    return response;
+  }
+
+  // ===== HOST DO APP (ou local) =====
+  // /admin so existe no subdominio adm.; no app manda pro dashboard.
+  if (!isLocal && pathname.startsWith("/admin")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
+  // /api e /admin (local) nao passam por i18n; api faz auth proprio (401).
+  if (isApi || pathname.startsWith("/admin")) {
+    const response = NextResponse.next({ request });
+    const supabase = attachSupabase(request, response);
+    await supabase.auth.getUser();
+    return response;
+  }
+
+  // ===== Paths localizados: i18n + auth =====
+  const response = intlMiddleware(request);
+  const supabase = attachSupabase(request, response);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const locale = localeOf(pathname);
+  const prefix = locale === "en" ? "/en" : "";
+  const isAuthPath =
+    pathname === `${prefix}/login` ||
+    pathname.startsWith(`${prefix}/login`) ||
+    pathname.startsWith(`${prefix}/callback`);
+
+  if (!user && !isAuthPath && !isPublic(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = `${prefix}/login`;
+    return NextResponse.redirect(url);
+  }
+
   if (user) {
     const hasPassword = user.user_metadata?.has_password === true;
-    if (
-      !hasPassword &&
-      !pathname.startsWith("/set-password") &&
-      !pathname.startsWith("/api/") &&
-      !pathname.startsWith("/callback") &&
-      !pathname.startsWith("/login")
-    ) {
+    const isSetPassword = pathname.startsWith(`${prefix}/set-password`);
+    if (!hasPassword && !isSetPassword && !isAuthPath) {
       const url = request.nextUrl.clone();
-      url.pathname = "/set-password";
+      url.pathname = `${prefix}/set-password`;
       return NextResponse.redirect(url);
     }
   }
 
-  return supabaseResponse;
+  return response;
 }
