@@ -1,0 +1,36 @@
+{
+  "nav": {
+    "operations": "Operações",
+    "overview": "Visão geral",
+    "importProducts": "Importar produtos",
+    "exportCatalog": "Exportar catálogo",
+    "showcaseStore": "Loja vitrine",
+    "connectStores": "Conectar lojas",
+    "routesAndTokens": "Rotas e tokens",
+    "shopify": "Shopify",
+    "connectedStores": "Lojas conectadas",
+    "productCatalog": "Catálogo de produtos",
+    "products": "Produtos",
+    "automations": "Automações",
+    "aiOptimizer": "IA Optimizer",
+    "aiReviews": "Reviews IA",
+    "channels": "Canais",
+    "instagram": "Instagram",
+    "account": "Conta",
+    "billing": "Assinatura e créditos",
+    "settings": "Configurações",
+    "myAccount": "Minha conta",
+    "logout": "Sair"
+  },
+  "noAccess": {
+    "title": "Sua avaliação gratuita terminou",
+    "body": "Você já usou sua clonagem gratuita. Assine o Pro para continuar clonando lojas, traduzindo e neutralizando produtos — ou fale com o suporte se já deveria ter acesso.",
+    "subscribe": "Assinar Pro — R$89/mês",
+    "logout": "Sair"
+  },
+  "language": {
+    "label": "Idioma",
+    "pt": "Português",
+    "en": "English"
+  }
+}

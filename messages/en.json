@@ -1,0 +1,36 @@
+{
+  "nav": {
+    "operations": "Operations",
+    "overview": "Overview",
+    "importProducts": "Import products",
+    "exportCatalog": "Export catalog",
+    "showcaseStore": "Showcase store",
+    "connectStores": "Connect stores",
+    "routesAndTokens": "Routes & tokens",
+    "shopify": "Shopify",
+    "connectedStores": "Connected stores",
+    "productCatalog": "Product catalog",
+    "products": "Products",
+    "automations": "Automations",
+    "aiOptimizer": "AI Optimizer",
+    "aiReviews": "AI Reviews",
+    "channels": "Channels",
+    "instagram": "Instagram",
+    "account": "Account",
+    "billing": "Subscription & credits",
+    "settings": "Settings",
+    "myAccount": "My account",
+    "logout": "Log out"
+  },
+  "noAccess": {
+    "title": "Your free trial has ended",
+    "body": "You've already used your free store clone. Subscribe to Pro to keep cloning stores, translating and neutralizing products — or contact support if you should already have access.",
+    "subscribe": "Subscribe to Pro — $19/mo",
+    "logout": "Log out"
+  },
+  "language": {
+    "label": "Language",
+    "pt": "Português",
+    "en": "English"
+  }
+}
