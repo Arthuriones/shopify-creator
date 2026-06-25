@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, Lock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 export default function NoAccessPage() {
+  const t = useTranslations("noAccess");
   const [busy, setBusy] = useState<string | null>(null);
 
   async function subscribe() {
@@ -35,26 +37,22 @@ export default function NoAccessPage() {
           <Lock className="h-6 w-6 text-primary" />
         </div>
         <h1 className="mt-4 text-xl font-semibold text-foreground">
-          Sua avaliação gratuita terminou
+          {t("title")}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Você já usou sua clonagem gratuita. Assine o Pro para continuar
-          clonando lojas, traduzindo e neutralizando produtos — ou fale com o
-          suporte se já deveria ter acesso.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("body")}</p>
         <Button className="mt-6 w-full" onClick={subscribe} disabled={busy === "checkout"}>
           {busy === "checkout" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          Assinar Pro — R$89/mês
+          {t("subscribe")}
         </Button>
         <button
           onClick={logout}
           className="mt-4 text-xs text-muted-foreground underline hover:text-foreground"
         >
-          Sair
+          {t("logout")}
         </button>
       </div>
     </div>
