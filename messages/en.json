@@ -25,7 +25,7 @@
   "noAccess": {
     "title": "Your free trial has ended",
     "body": "You've already used your free store clone. Subscribe to Pro to keep cloning stores, translating and neutralizing products — or contact support if you should already have access.",
-    "subscribe": "Subscribe to Pro — $19/mo",
+    "subscribe": "Subscribe to Pro — R$89/mo",
     "logout": "Log out"
   },
   "common": {
@@ -42,9 +42,9 @@
     "statusActive": "active",
     "statusNone": "no subscription",
     "proDesc": "Unlimited cloning, translation and neutralization credits.",
-    "freeDesc": "Subscribe to Pro to unlock everything ($19/mo).",
+    "freeDesc": "Subscribe to Pro to unlock everything (R$89/mo).",
     "manage": "Manage",
-    "subscribe": "Subscribe to Pro — $19/mo",
+    "subscribe": "Subscribe to Pro — R$89/mo",
     "aiCredits": "AI credits",
     "usedThisMonth": "Used this month",
     "estimatedCost": "Est. AI cost (month)",
@@ -89,6 +89,61 @@
     "actionCloneDesc": "Clone an entire store",
     "actionShowcaseTitle": "Showcase store",
     "actionShowcaseDesc": "Manage routing"
+  },
+  "landing": {
+    "metaTitle": "xcart — Clone any store to Shopify in minutes",
+    "metaDesc": "Import products from Shopify, WooCommerce, Shoplazza and AliExpress, translate, neutralize images with AI and publish straight to your Shopify. Routed checkout and full store setup.",
+    "navFeatures": "Features",
+    "navHow": "How it works",
+    "navPricing": "Pricing",
+    "signIn": "Sign in",
+    "start": "Get started",
+    "heroBadge": "Imports from Shopify, WooCommerce, Shoplazza and AliExpress",
+    "heroTitlePre": "Clone any store to ",
+    "heroTitleHighlight": "Shopify",
+    "heroTitlePost": " in minutes",
+    "heroSubtitle": "Import products, translate for your audience, neutralize images with AI and publish straight to your Shopify. All in one tool.",
+    "ctaStartNow": "Get started now",
+    "ctaSeePricing": "See pricing",
+    "heroNote": "Unlimited cloning · Automatic translation · {credits} images/mo included",
+    "featuresTitle": "Everything to build the store fast",
+    "featuresSubtitle": "From import to publish, no repetitive manual work.",
+    "features": [
+      { "title": "Import from any source", "desc": "Shopify, WooCommerce, Shoplazza and AliExpress. Paste the link and xcart detects the platform and pulls products, variants, prices and images." },
+      { "title": "Automatic translation", "desc": "Titles, descriptions and variants translated to Portuguese or Spanish with AI, in the right tone for your audience." },
+      { "title": "Image neutralization", "desc": "Removes brands and watermarks from photos with AI. Images upload ready to Shopify — you spend 1 credit per image." },
+      { "title": "Routed checkout", "desc": "Separate showcase and checkout stores. The cart is resolved by SKU at runtime, with per-market currency and domain." },
+      { "title": "Full store setup", "desc": "Policies, menus, pages (About, Contact, Tracking, FAQ) and footer generated and published in one click." },
+      { "title": "Unlimited cloning", "desc": "Clone as many stores and products as you want. No quantity limit — only neutralized images use credits." }
+    ],
+    "howTitle": "How it works",
+    "howSubtitle": "Four steps from link to live store.",
+    "steps": [
+      { "title": "Connect your Shopify", "desc": "Paste the domain and app credentials. Token refreshed automatically." },
+      { "title": "Paste the source store link", "desc": "xcart detects the platform and imports everything: products, variants and photos." },
+      { "title": "Translate and neutralize", "desc": "AI adapts the text to your audience and cleans brands off the images." },
+      { "title": "Publish", "desc": "Products live on your Shopify, with routed checkout if you want." }
+    ],
+    "pricingTitle": "Simple pricing",
+    "pricingSubtitle": "One plan with everything unlocked. Pay only for extra neutralized images.",
+    "popular": "Most popular",
+    "perMonth": "/mo",
+    "proFeatures": [
+      "Unlimited cloning of stores and products",
+      "Import from Shopify, WooCommerce, Shoplazza and AliExpress",
+      "Automatic translation to PT-BR and ES",
+      "{credits} neutralized images per month included",
+      "Routed checkout by SKU",
+      "Full store setup (policies, menus, pages)"
+    ],
+    "subscribePro": "Subscribe to Pro",
+    "creditsExtra": "Extra credits",
+    "creditsExtraDesc": "1 credit = 1 neutralized image. Top up when you need, without changing plans.",
+    "buyInApp": "Buy inside the app, on the billing tab.",
+    "finalTitle": "Start cloning today",
+    "finalSubtitle": "Create your account and publish your first store in minutes.",
+    "privacy": "Privacy",
+    "terms": "Terms"
   },
   "auth": {
     "tagline": "Automate your store with AI",
