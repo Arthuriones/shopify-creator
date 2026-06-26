@@ -28,6 +28,32 @@
     "subscribe": "Subscribe to Pro — $19/mo",
     "logout": "Log out"
   },
+  "common": {
+    "loading": "Loading…",
+    "fail": "Something went wrong."
+  },
+  "billing": {
+    "title": "Subscription & credits",
+    "subtitle": "Manage your plan and top up AI credits.",
+    "subscribed": "Subscription activated!",
+    "creditsAdded": "Credits added!",
+    "paymentCanceled": "Payment canceled.",
+    "planTitle": "{name} plan",
+    "statusActive": "active",
+    "statusNone": "no subscription",
+    "proDesc": "Unlimited cloning, translation and neutralization credits.",
+    "freeDesc": "Subscribe to Pro to unlock everything ($19/mo).",
+    "manage": "Manage",
+    "subscribe": "Subscribe to Pro — $19/mo",
+    "aiCredits": "AI credits",
+    "usedThisMonth": "Used this month",
+    "estimatedCost": "Est. AI cost (month)",
+    "renewsOn": "Renews on {date}.",
+    "rechargeTitle": "Top up credits",
+    "rechargeDesc": "1 credit = 1 product neutralized with photo. One-time purchase, never expires.",
+    "creditsCount": "{n} credits",
+    "buy": "Buy"
+  },
   "status": {
     "pending": "Imported",
     "optimized": "Optimized",

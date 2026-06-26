@@ -28,6 +28,32 @@
     "subscribe": "Assinar Pro — R$89/mês",
     "logout": "Sair"
   },
+  "common": {
+    "loading": "Carregando…",
+    "fail": "Falha."
+  },
+  "billing": {
+    "title": "Assinatura e créditos",
+    "subtitle": "Gerencie seu plano e recarregue créditos de IA.",
+    "subscribed": "Assinatura ativada!",
+    "creditsAdded": "Créditos adicionados!",
+    "paymentCanceled": "Pagamento cancelado.",
+    "planTitle": "Plano {name}",
+    "statusActive": "ativo",
+    "statusNone": "sem assinatura",
+    "proDesc": "Clonagem ilimitada, tradução e créditos de neutralização.",
+    "freeDesc": "Assine o Pro para liberar tudo (R$89/mês).",
+    "manage": "Gerenciar",
+    "subscribe": "Assinar Pro — R$89/mês",
+    "aiCredits": "Créditos de IA",
+    "usedThisMonth": "Usados este mês",
+    "estimatedCost": "Custo IA estimado (mês)",
+    "renewsOn": "Renova em {date}.",
+    "rechargeTitle": "Recarregar créditos",
+    "rechargeDesc": "1 crédito = 1 produto neutralizado com foto. Compra avulsa, não expira.",
+    "creditsCount": "{n} créditos",
+    "buy": "Comprar"
+  },
   "status": {
     "pending": "Importado",
     "optimized": "Otimizado",

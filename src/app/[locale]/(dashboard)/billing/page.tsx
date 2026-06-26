@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { CreditCard, Loader2, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +33,8 @@ interface Pack {
 }
 
 function BillingInner() {
+  const t = useTranslations("billing");
+  const tc = useTranslations("common");
   const params = useSearchParams();
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -40,10 +43,10 @@ function BillingInner() {
 
   useEffect(() => {
     const status = params.get("status");
-    if (status === "success") toast.success("Assinatura ativada!");
-    if (status === "credits_success") toast.success("Créditos adicionados!");
-    if (status === "cancel") toast("Pagamento cancelado.");
-  }, [params]);
+    if (status === "success") toast.success(t("subscribed"));
+    if (status === "credits_success") toast.success(t("creditsAdded"));
+    if (status === "cancel") toast(t("paymentCanceled"));
+  }, [params, t]);
 
   async function load() {
     try {
@@ -73,10 +76,10 @@ function BillingInner() {
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error || "Falha.");
+      if (!res.ok || !data.url) throw new Error(data.error || tc("fail"));
       window.location.href = data.url;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha.");
+      toast.error(error instanceof Error ? error.message : tc("fail"));
       setBusy(null);
     }
   }
@@ -87,15 +90,15 @@ function BillingInner() {
   return (
     <div className="space-y-6 p-1">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Assinatura e créditos</h1>
+        <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Gerencie seu plano e recarregue créditos de IA.
+          {t("subtitle")}
         </p>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+          <Loader2 className="h-4 w-4 animate-spin" /> {tc("loading")}
         </div>
       ) : (
         <>
@@ -105,15 +108,13 @@ function BillingInner() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    Plano {isPro ? "Pro" : "Free"}
+                    {t("planTitle", { name: isPro ? "Pro" : "Free" })}
                     <Badge variant={isPro ? "default" : "secondary"} className="rounded-md">
-                      {isPro ? info?.subscriptionStatus || "ativo" : "sem assinatura"}
+                      {isPro ? info?.subscriptionStatus || t("statusActive") : t("statusNone")}
                     </Badge>
                   </CardTitle>
                   <CardDescription>
-                    {isPro
-                      ? "Clonagem ilimitada, tradução e créditos de neutralização."
-                      : "Assine o Pro para liberar tudo (R$89/mês)."}
+                    {isPro ? t("proDesc") : t("freeDesc")}
                   </CardDescription>
                 </div>
                 {isPro ? (
@@ -127,7 +128,7 @@ function BillingInner() {
                     ) : (
                       <CreditCard className="h-4 w-4" />
                     )}
-                    Gerenciar
+                    {t("manage")}
                   </Button>
                 ) : (
                   <Button
@@ -139,7 +140,7 @@ function BillingInner() {
                     ) : (
                       <Sparkles className="h-4 w-4" />
                     )}
-                    Assinar Pro — R$89/mês
+                    {t("subscribe")}
                   </Button>
                 )}
               </div>
@@ -148,20 +149,20 @@ function BillingInner() {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <div className="rounded-lg border border-border/60 bg-background/45 p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Zap className="h-3.5 w-3.5 text-primary" /> Créditos de IA
+                    <Zap className="h-3.5 w-3.5 text-primary" /> {t("aiCredits")}
                   </div>
                   <p className="mt-1 text-2xl font-semibold text-foreground">
                     {info?.aiCredits ?? 0}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="text-xs text-muted-foreground">Usados este mês</div>
+                  <div className="text-xs text-muted-foreground">{t("usedThisMonth")}</div>
                   <p className="mt-1 text-2xl font-semibold text-foreground">
                     {info?.usageThisMonth.creditsUsed ?? 0}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="text-xs text-muted-foreground">Custo IA estimado (mês)</div>
+                  <div className="text-xs text-muted-foreground">{t("estimatedCost")}</div>
                   <p className="mt-1 text-2xl font-semibold text-foreground">
                     US${info?.usageThisMonth.costUsd?.toFixed(2) ?? "0.00"}
                   </p>
@@ -169,7 +170,9 @@ function BillingInner() {
               </div>
               {info?.currentPeriodEnd && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Renova em {new Date(info.currentPeriodEnd).toLocaleDateString("pt-BR")}.
+                  {t("renewsOn", {
+                    date: new Date(info.currentPeriodEnd).toLocaleDateString(),
+                  })}
                 </p>
               )}
             </CardContent>
@@ -178,10 +181,8 @@ function BillingInner() {
           {/* Recarga de créditos */}
           <Card>
             <CardHeader>
-              <CardTitle>Recarregar créditos</CardTitle>
-              <CardDescription>
-                1 crédito = 1 produto neutralizado com foto. Compra avulsa, não expira.
-              </CardDescription>
+              <CardTitle>{t("rechargeTitle")}</CardTitle>
+              <CardDescription>{t("rechargeDesc")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -191,7 +192,7 @@ function BillingInner() {
                     className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/45 p-4"
                   >
                     <p className="text-lg font-semibold text-foreground">
-                      {pack.credits} créditos
+                      {t("creditsCount", { n: pack.credits })}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       R${reais(pack.amountCents)}
@@ -207,7 +208,7 @@ function BillingInner() {
                       {busy === pack.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
-                      Comprar
+                      {t("buy")}
                     </Button>
                   </div>
                 ))}
