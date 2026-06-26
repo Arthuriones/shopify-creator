@@ -3,7 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { LanguageSwitcher } from "./language-switcher";
 
 export function TopNav() {
