@@ -60,6 +60,13 @@ export async function updateSession(request: NextRequest) {
     `https://user.${host.replace(/^www\./, "")}`;
   const isApi = pathname.startsWith("/api");
 
+  // Arquivos estaticos (loaders .js, .html publicos, etc.) servem crus — NUNCA
+  // passam por i18n nem auth, senao o next-intl prefixa locale e quebra
+  // (ex.: /routed-checkout-loader.js, /reviews-widget-loader.js).
+  if (!isApi && /\.[a-zA-Z0-9]+$/.test(pathname)) {
+    return NextResponse.next({ request });
+  }
+
   // ===== HOST COMERCIAL (landing publica, com i18n) =====
   if (isMarketingHost) {
     if (isApi) return NextResponse.next({ request });
