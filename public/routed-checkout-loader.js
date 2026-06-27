@@ -1,5 +1,11 @@
 (function () {
-  if (!document.querySelector('meta[name="referrer"]')) {
+  // Forca no-referrer mesmo que o tema ja tenha uma meta/tag de referrer com
+  // outra politica: a dark store nunca pode saber que o trafego veio da
+  // vitrine, entao isso precisa ganhar de qualquer config existente.
+  var existingReferrerMeta = document.querySelector('meta[name="referrer"]');
+  if (existingReferrerMeta) {
+    existingReferrerMeta.setAttribute("content", "no-referrer");
+  } else {
     var noReferrerMeta = document.createElement("meta");
     noReferrerMeta.setAttribute("name", "referrer");
     noReferrerMeta.setAttribute("content", "no-referrer");
