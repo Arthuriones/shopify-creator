@@ -1,4 +1,11 @@
 (function () {
+  if (!document.querySelector('meta[name="referrer"]')) {
+    var noReferrerMeta = document.createElement("meta");
+    noReferrerMeta.setAttribute("name", "referrer");
+    noReferrerMeta.setAttribute("content", "no-referrer");
+    document.head.insertBefore(noReferrerMeta, document.head.firstChild);
+  }
+
   var scriptTag = document.currentScript;
   if (!scriptTag) return;
 
