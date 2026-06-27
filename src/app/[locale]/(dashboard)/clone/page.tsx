@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeftRight,
   ArrowRight,
   CheckCircle2,
@@ -594,6 +595,52 @@ export default function ClonePage() {
   const [editingRouteId, setEditingRouteId] = useState("");
   const [deletingRouteId, setDeletingRouteId] = useState("");
   const [invertingRouteId, setInvertingRouteId] = useState("");
+  const [checkingRouteId, setCheckingRouteId] = useState("");
+  const [routeHealth, setRouteHealth] = useState<
+    Record<
+      string,
+      {
+        ok: boolean;
+        totalSourceSkus: number;
+        missingCount: number;
+        missingSkus: string[];
+        wrongCount: number;
+        wrongSkus: { sku: string }[];
+        checkedAt: string;
+      } | { error: string }
+    >
+  >({});
+
+  async function handleCheckRouteHealth(config: CheckoutConfig) {
+    setCheckingRouteId(config.id);
+    try {
+      const res = await fetch("/api/checkout-routes/health", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: config.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRouteHealth((current) => ({ ...current, [config.id]: { error: data.error || "Falha ao verificar." } }));
+        return;
+      }
+      setRouteHealth((current) => ({ ...current, [config.id]: data }));
+      if (data.ok) {
+        toast.success("Rota 100% saudavel: todos os produtos roteando certo.");
+      } else {
+        toast.error(
+          `Rota com problemas: ${data.missingCount} sem mapa, ${data.wrongCount} apontando pro produto errado.`
+        );
+      }
+    } catch {
+      setRouteHealth((current) => ({
+        ...current,
+        [config.id]: { error: "Falha ao verificar a rota." },
+      }));
+    } finally {
+      setCheckingRouteId("");
+    }
+  }
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -2721,6 +2768,20 @@ export default function ClonePage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleCheckRouteHealth(config)}
+                          disabled={checkingRouteId === config.id}
+                          title="Confere se todo produto da vitrine tem checkout roteado pro produto certo na dark store."
+                        >
+                          {checkingRouteId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          )}
+                          Verificar rota
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDeleteRoute(config)}
                           disabled={deletingRouteId === config.id}
                         >
@@ -2732,6 +2793,52 @@ export default function ClonePage() {
                           Excluir
                         </Button>
                       </div>
+                      {(() => {
+                        const health = routeHealth[config.id];
+                        if (!health) return null;
+                        if ("error" in health) {
+                          return (
+                            <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                {health.error}
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (health.ok) {
+                          return (
+                            <div className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-700">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Rota 100% saudável — {health.totalSourceSkus} produtos verificados,
+                                todos roteando pro produto certo.
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="mt-3 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
+                            <div className="flex items-center gap-2 font-medium">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              {health.missingCount} produto(s) sem mapa e {health.wrongCount}{" "}
+                              apontando pro produto errado na dark store.
+                            </div>
+                            {health.missingSkus.length > 0 && (
+                              <p className="text-muted-foreground">
+                                Sem mapa: {health.missingSkus.slice(0, 8).join(", ")}
+                                {health.missingCount > 8 ? "..." : ""}
+                              </p>
+                            )}
+                            {health.wrongSkus.length > 0 && (
+                              <p className="text-muted-foreground">
+                                Errados: {health.wrongSkus.slice(0, 8).map((item) => item.sku).join(", ")}
+                                {health.wrongCount > 8 ? "..." : ""}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
