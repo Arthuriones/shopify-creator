@@ -427,6 +427,10 @@
   }
 
   function handleDocumentClick(event) {
+    // Ignora botao direito/do meio (abrir em nova aba, menu de contexto etc.).
+    // pointerdown reporta o botao; click de mouse so dispara no botao
+    // primario, entao essa checagem so importa pro listener de pointerdown.
+    if (typeof event.button === "number" && event.button !== 0) return;
     if (isCheckoutTarget(event.target)) {
       routeCheckout(event);
     }
@@ -475,6 +479,15 @@
     initialized = true;
     window.addEventListener("click", handleDocumentClick, true);
     document.addEventListener("click", handleDocumentClick, true);
+    // Rede de seguranca: pointerdown dispara antes do click (toque/clique
+    // inicial), entao da uma segunda chance de interceptar se algum outro
+    // script da pagina conseguir parar a propagacao do evento "click" antes
+    // de chegar no nosso listener. routeCheckout ja tem o guard de isRouting,
+    // entao nao executa em duplicidade com o handler de click.
+    if (window.PointerEvent) {
+      window.addEventListener("pointerdown", handleDocumentClick, true);
+      document.addEventListener("pointerdown", handleDocumentClick, true);
+    }
     document.addEventListener(
       "submit",
       function (event) {
