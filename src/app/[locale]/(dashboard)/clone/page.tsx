@@ -607,6 +607,8 @@ export default function ClonePage() {
         wrongCount: number;
         wrongSkus: { sku: string }[];
         checkedAt: string;
+        fallbackCount7d: number;
+        fallbackByReason: Record<string, number>;
       } | { error: string }
     >
   >({});
@@ -2806,14 +2808,25 @@ export default function ClonePage() {
                             </div>
                           );
                         }
+                        const fallbackNote = health.fallbackCount7d > 0 && (
+                          <p className="text-muted-foreground">
+                            {health.fallbackCount7d} checkout(s) caíram pro nativo da vitrine nos
+                            últimos 7 dias (
+                            {Object.entries(health.fallbackByReason)
+                              .map(([reason, count]) => `${reason}: ${count}`)
+                              .join(", ")}
+                            ).
+                          </p>
+                        );
                         if (health.ok) {
                           return (
-                            <div className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-700">
+                            <div className="mt-3 space-y-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-700">
                               <div className="flex items-center gap-2">
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 Rota 100% saudável — {health.totalSourceSkus} produtos verificados,
                                 todos roteando pro produto certo.
                               </div>
+                              {fallbackNote}
                             </div>
                           );
                         }
@@ -2836,6 +2849,7 @@ export default function ClonePage() {
                                 {health.wrongCount > 8 ? "..." : ""}
                               </p>
                             )}
+                            {fallbackNote}
                           </div>
                         );
                       })()}

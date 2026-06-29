@@ -183,6 +183,28 @@
     return resolveCheckoutLines(toRouteLines(cart));
   }
 
+  // Best-effort, nunca deve atrasar ou bloquear o redirect: so registra o
+  // motivo de ter caido pro checkout nativo (que nao tem como cobrar), pra
+  // dar visibilidade de onde a rota esta falhando.
+  function trackFallback(reason, error) {
+    try {
+      var payload = JSON.stringify({
+        token: token,
+        reason: reason,
+        detail: error ? String(error && error.message ? error.message : error).slice(0, 500) : "",
+        pageUrl: window.location.href,
+      });
+      var url = appUrl.replace(/\/$/, "") + "/api/checkout-routes/track-fallback";
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+      } else {
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
+      }
+    } catch (trackError) {
+      // nunca deixa o log de erro gerar outro erro
+    }
+  }
+
   async function routeCartCheckout(skipGuard) {
     if (isRouting && !skipGuard) return;
     isRouting = true;
@@ -197,6 +219,7 @@
       window.location.href = await resolveCheckout(cart);
     } catch (error) {
       console.warn("[RoutedCheckout] fallback para checkout nativo", error);
+      trackFallback("cart_checkout_error", error);
       window.location.href = rootPath() + "checkout";
     } finally {
       setTimeout(function () {
@@ -226,6 +249,7 @@
       await routeCartCheckout(true);
     } catch (error) {
       console.warn("[RoutedCheckout] fallback para checkout nativo", error);
+      trackFallback("direct_checkout_error", error);
       window.location.href = rootPath() + "checkout";
     } finally {
       setTimeout(function () {

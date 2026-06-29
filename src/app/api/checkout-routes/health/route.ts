@@ -122,6 +122,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Ultimos 7 dias de fallback pro checkout nativo (vitrine sem como
+    // cobrar): da visibilidade de quanto e por que a rota esta falhando no
+    // momento do clique, em vez de so o mapa estar correto em si.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: fallbacks } = await supabase
+      .from("routed_checkout_fallbacks")
+      .select("reason, detail, created_at")
+      .eq("route_config_id", config.id)
+      .gte("created_at", sevenDaysAgo)
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    const fallbackByReason: Record<string, number> = {};
+    for (const item of fallbacks || []) {
+      fallbackByReason[item.reason] = (fallbackByReason[item.reason] || 0) + 1;
+    }
+
     const ok = missingSkus.length === 0 && wrongSkus.length === 0;
 
     return NextResponse.json({
@@ -133,6 +150,9 @@ export async function POST(request: NextRequest) {
       missingSkus: missingSkus.slice(0, 50),
       wrongCount: wrongSkus.length,
       wrongSkus: wrongSkus.slice(0, 50),
+      fallbackCount7d: fallbacks?.length || 0,
+      fallbackByReason,
+      recentFallbacks: (fallbacks || []).slice(0, 10),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao verificar a rota.";
