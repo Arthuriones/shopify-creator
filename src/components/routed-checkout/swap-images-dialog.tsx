@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ImageIcon, Loader2, Sparkles, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,14 @@ export function SwapImagesDialog({
   const [progress, setProgress] = useState<ImageQueueProgress | null>(null);
   const [canceling, setCanceling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t = useTranslations("clone.swapImages");
+  const tCredit = useTranslations("clone.imageNeutralize");
+  const [estimate, setEstimate] = useState<{
+    estimatedCredits: number;
+    billingEnforced: boolean;
+    creditBalance: number | null;
+  } | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   function stopPoll() {
     if (pollRef.current) {
@@ -58,12 +67,31 @@ export function SwapImagesDialog({
       setStarted(false);
       setStarting(false);
       setProgress(null);
+      setEstimate(null);
       return;
     }
     // Ao abrir, ja consulta se ha uma fila em andamento para esta loja.
     void poll();
+    // ...e quantos creditos esse disparo vai custar, antes do clique.
+    setEstimating(true);
+    fetch("/api/jobs/neutralize-store-images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeId, dryRun: true }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setEstimate({
+          estimatedCredits: data.estimatedCredits ?? 0,
+          billingEnforced: data.billingEnforced === true,
+          creditBalance: typeof data.creditBalance === "number" ? data.creditBalance : null,
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => setEstimating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, storeId]);
 
   useEffect(() => () => stopPoll(), []);
 
@@ -161,9 +189,8 @@ export function SwapImagesDialog({
             Trocar imagens da dark store
           </DialogTitle>
           <DialogDescription>
-            Recria a foto principal de cada produto de{" "}
-            <span className="font-medium text-foreground">{storeLabel}</span> sem
-            marca, em background. ~US$0,04 por imagem.
+            {t("description", { cost: "0.04" })} (
+            <span className="font-medium text-foreground">{storeLabel}</span>)
           </DialogDescription>
         </DialogHeader>
 
@@ -221,6 +248,34 @@ export function SwapImagesDialog({
               className="bg-background/70 text-xs"
             />
           </div>
+
+          {!progress?.total && (
+            <p
+              className={`rounded-md border px-2 py-1.5 text-xs ${
+                estimate &&
+                estimate.billingEnforced &&
+                estimate.creditBalance !== null &&
+                estimate.estimatedCredits > estimate.creditBalance
+                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                  : "border-border/60 bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              {estimating || !estimate
+                ? tCredit("estimateLoading")
+                : !estimate.billingEnforced
+                  ? tCredit("estimateUnlimited")
+                  : estimate.creditBalance !== null &&
+                      estimate.estimatedCredits > estimate.creditBalance
+                    ? tCredit("estimateLowBalance", {
+                        count: estimate.estimatedCredits,
+                        balance: estimate.creditBalance,
+                      })
+                    : tCredit("estimate", {
+                        count: estimate.estimatedCredits,
+                        balance: estimate.creditBalance ?? 0,
+                      })}
+            </p>
+          )}
 
           {progress && progress.total > 0 && (
             <div className="space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-3">

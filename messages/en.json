@@ -165,5 +165,20 @@
     "label": "Language",
     "pt": "Português",
     "en": "English"
+  },
+  "clone": {
+    "imageNeutralize": {
+      "queueTitle": "Recreate image without brand (in background)",
+      "queueDesc": "1 image/product, swapped gradually (~US$ {cost} each). Can take a while and sometimes fails on large stores.",
+      "noneTitle": "Don't generate image (faster)",
+      "noneDesc": "Links everything to the original image and only neutralizes the text. Recreate the images later with a Shopify app.",
+      "estimateLoading": "Calculating credit estimate...",
+      "estimate": "Estimate: {count, plural, one {# credit} other {# credits}} (1 per image) — you have {balance, plural, one {# credit} other {# credits}} available.",
+      "estimateLowBalance": "Not enough credits: this needs {count} credits and you have {balance}. Top up before continuing.",
+      "estimateUnlimited": "Credit billing isn't enforced yet — this is free for now."
+    },
+    "swapImages": {
+      "description": "Recreates each product's image without branding, in the background. ~US$ {cost} per image."
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { PRO_INCLUDED_CREDITS } from "@/lib/billing/plans";
+import { billingEnforced } from "@/lib/billing/credits";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,7 @@ export async function GET() {
     subscriptionStatus: profile?.subscription_status || null,
     aiCredits: profile?.ai_credits ?? 0,
     includedCredits: PRO_INCLUDED_CREDITS,
+    billingEnforced: billingEnforced(),
     currentPeriodEnd: profile?.current_period_end || null,
     usageThisMonth: {
       costUsd: Number(summary.costUsd.toFixed(4)),

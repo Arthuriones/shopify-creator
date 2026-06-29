@@ -165,5 +165,20 @@
     "label": "Idioma",
     "pt": "Português",
     "en": "English"
+  },
+  "clone": {
+    "imageNeutralize": {
+      "queueTitle": "Recriar imagem sem marca (em background)",
+      "queueDesc": "1 imagem/produto, troca aos poucos (~US$ {cost} cada). Pode demorar e às vezes falha em lojas grandes.",
+      "noneTitle": "Não gerar imagem (mais rápido)",
+      "noneDesc": "Linka tudo com a imagem original e neutraliza só o texto. Recrie as imagens depois num app da Shopify.",
+      "estimateLoading": "Calculando estimativa de créditos...",
+      "estimate": "Estimativa: {count, plural, one {# crédito} other {# créditos}} (1 por imagem) — você tem {balance, plural, one {# crédito} other {# créditos}} disponível.",
+      "estimateLowBalance": "Saldo insuficiente: precisa de {count} créditos e você tem {balance}. Recarregue antes de continuar.",
+      "estimateUnlimited": "Cobrança de créditos ainda não está ativa — esse processo é gratuito por enquanto."
+    },
+    "swapImages": {
+      "description": "Recria a imagem de cada produto sem marca, em background. ~US$ {cost} por imagem."
+    }
   }
 }

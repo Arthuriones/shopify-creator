@@ -94,6 +94,9 @@ export async function POST(request: NextRequest) {
       ? body.customInstructions.trim().slice(0, 1200)
       : "";
   const includeProcessed = body.includeProcessed === true;
+  // dryRun: so calcula quantas imagens seriam trocadas (pra UI mostrar a
+  // estimativa de creditos antes do clique), sem enfileirar nada.
+  const dryRun = body.dryRun === true;
 
   if (!storeId) {
     return NextResponse.json({ error: "Selecione a loja." }, { status: 400 });
@@ -148,10 +151,25 @@ export async function POST(request: NextRequest) {
         queued: 0,
         totalProducts,
         alreadyClean,
+        estimatedCredits: 0,
         message:
           alreadyClean > 0
             ? "Todas as imagens ja foram trocadas."
             : "Nenhum produto com imagem encontrado.",
+      });
+    }
+
+    const enforced = billingEnforced();
+    const balance = enforced ? await getCreditBalance(user.id) : null;
+
+    if (dryRun) {
+      return NextResponse.json({
+        dryRun: true,
+        totalProducts,
+        alreadyClean,
+        estimatedCredits: items.length,
+        billingEnforced: enforced,
+        creditBalance: balance,
       });
     }
 
@@ -160,12 +178,9 @@ export async function POST(request: NextRequest) {
     // falhariam por falta de credito; informa quantos ficaram de fora.
     let creditsShort = 0;
     let queueItems = items;
-    if (billingEnforced()) {
-      const balance = await getCreditBalance(user.id);
-      if (items.length > balance) {
-        creditsShort = items.length - balance;
-        queueItems = items.slice(0, Math.max(0, balance));
-      }
+    if (enforced && balance !== null && items.length > balance) {
+      creditsShort = items.length - balance;
+      queueItems = items.slice(0, Math.max(0, balance));
     }
 
     if (queueItems.length === 0) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowRight,
   CheckCircle2,
@@ -80,6 +81,7 @@ export function ConnectStoresWizard({
   appOrigin,
   onRouteCreated,
 }: ConnectStoresWizardProps) {
+  const t = useTranslations("clone.imageNeutralize");
   const [step, setStep] = useState(1);
 
   // "generate" = neutraliza da vitrine. "reuse" = copia uma dark store ja
@@ -106,6 +108,16 @@ export function ConnectStoresWizard({
   const [inventoryQuantity, setInventoryQuantity] = useState("100");
 
   const [outputLanguage, setOutputLanguage] = useState("pt-BR");
+
+  // Estimativa de creditos pra "Recriar imagem em background": 1 credito por
+  // produto (1 imagem cada). Busca a contagem da vitrine + saldo atual do
+  // usuario pra avisar antes de comecar, nao depois de gastar.
+  const [sourceProductCount, setSourceProductCount] = useState<number | null>(
+    null
+  );
+  const [countingProducts, setCountingProducts] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [billingEnforced, setBillingEnforced] = useState(false);
 
   // Passo 2
   const [creatingDestination, setCreatingDestination] = useState(false);
@@ -141,6 +153,57 @@ export function ConnectStoresWizard({
       imagePollRef.current = null;
     }
   }
+
+  // Saldo de creditos: carrega 1x quando o wizard abre.
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/billing/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setCreditBalance(typeof data.aiCredits === "number" ? data.aiCredits : null);
+        setBillingEnforced(data.billingEnforced === true);
+      })
+      .catch(() => undefined);
+  }, [open]);
+
+  // Estimativa de produtos da vitrine (1 credito = 1 imagem = 1 produto), pra
+  // avisar o custo ANTES de clicar em criar destino, nao depois.
+  useEffect(() => {
+    if (
+      !open ||
+      wizardMode !== "generate" ||
+      imageMode !== "queue" ||
+      !sourceStoreId ||
+      !targetStoreId
+    ) {
+      setSourceProductCount(null);
+      return;
+    }
+    let cancelled = false;
+    setCountingProducts(true);
+    fetch("/api/checkout-routes/create-destination", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceStoreId, targetStoreId, countOnly: true }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setSourceProductCount(
+          typeof data?.totalCount === "number" ? data.totalCount : null
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSourceProductCount(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCountingProducts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, wizardMode, imageMode, sourceStoreId, targetStoreId]);
 
   // Reseta tudo ao abrir e pre-seleciona vitrine/dark store.
   useEffect(() => {
@@ -778,11 +841,10 @@ export function ConnectStoresWizard({
                       />
                       <span>
                         <span className="block text-foreground">
-                          Recriar imagem sem marca (em background)
+                          {t("queueTitle")}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          1 imagem/produto, troca aos poucos (~US$0,04 cada).
-                          Pode demorar e às vezes falha em lojas grandes.
+                          {t("queueDesc", { cost: "0.04" })}
                         </span>
                       </span>
                     </label>
@@ -796,14 +858,43 @@ export function ConnectStoresWizard({
                       />
                       <span>
                         <span className="block text-foreground">
-                          Não gerar imagem (mais rápido)
+                          {t("noneTitle")}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          Linka tudo com a imagem original e neutraliza só o
-                          texto. Recrie as imagens depois num app da Shopify.
+                          {t("noneDesc")}
                         </span>
                       </span>
                     </label>
+                    {imageMode === "queue" && (
+                      <p
+                        className={cn(
+                          "ml-6 rounded-md border px-2 py-1.5 text-xs",
+                          billingEnforced &&
+                            sourceProductCount !== null &&
+                            creditBalance !== null &&
+                            sourceProductCount > creditBalance
+                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                            : "border-border/60 bg-muted/40 text-muted-foreground"
+                        )}
+                      >
+                        {countingProducts || sourceProductCount === null ? (
+                          t("estimateLoading")
+                        ) : !billingEnforced ? (
+                          t("estimateUnlimited")
+                        ) : creditBalance !== null &&
+                          sourceProductCount > creditBalance ? (
+                          t("estimateLowBalance", {
+                            count: sourceProductCount,
+                            balance: creditBalance,
+                          })
+                        ) : (
+                          t("estimate", {
+                            count: sourceProductCount,
+                            balance: creditBalance ?? 0,
+                          })
+                        )}
+                      </p>
+                    )}
                   </div>
                   <label className="flex items-start gap-2 border-t border-border/60 pt-2 text-sm">
                     <input
