@@ -661,7 +661,9 @@ export default function CatalogPage() {
               <Label className="text-[13px] text-muted-foreground">Loja</Label>
               <Select value={selectedStore} onValueChange={(value) => setSelectedStore(value ?? "")}>
                 <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                  <SelectValue placeholder={loadingStores ? "Carregando lojas..." : "Selecione a loja"} />
+                  <SelectValue placeholder={loadingStores ? "Carregando lojas..." : "Selecione a loja"}>
+                    {(value: string) => stores.find((store) => store.id === value)?.name ?? value}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (

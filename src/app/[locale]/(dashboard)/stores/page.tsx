@@ -967,7 +967,9 @@ export default function StoresPage() {
                 </Label>
                 <Select value={materialsStoreId} onValueChange={(value) => setMaterialsStoreId(value ?? "")}>
                   <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                    <SelectValue placeholder="Selecione a loja" />
+                    <SelectValue placeholder="Selecione a loja">
+                      {(value: string) => stores.find((store) => store.id === value)?.name ?? value}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {stores.map((store) => (

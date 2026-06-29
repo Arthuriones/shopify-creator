@@ -738,7 +738,12 @@ export function ConnectStoresWizard({
                   onValueChange={(value) => setSourceStoreId(value || "")}
                 >
                   <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Escolha" />
+                    <SelectValue placeholder="Escolha">
+                      {(value: string) => {
+                        const selected = stores.find((store) => store.id === value);
+                        return selected ? storeLabel(selected) : value;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     {stores.map((store) => (
@@ -761,7 +766,12 @@ export function ConnectStoresWizard({
                   onValueChange={(value) => setTargetStoreId(value || "")}
                 >
                   <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Escolha" />
+                    <SelectValue placeholder="Escolha">
+                      {(value: string) => {
+                        const selected = stores.find((store) => store.id === value);
+                        return selected ? storeLabel(selected) : value;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     {stores.map((store) => (
@@ -788,7 +798,12 @@ export function ConnectStoresWizard({
                   onValueChange={(value) => setReuseFromStoreId(value || "")}
                 >
                   <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Escolha" />
+                    <SelectValue placeholder="Escolha">
+                      {(value: string) => {
+                        const selected = stores.find((store) => store.id === value);
+                        return selected ? storeLabel(selected) : value;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     {stores.map((store) => (

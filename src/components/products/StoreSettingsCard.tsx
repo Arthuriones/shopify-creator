@@ -55,7 +55,9 @@ export function StoreSettingsCard({
             onValueChange={(val) => setSelectedStore(val || "")}
           >
             <SelectTrigger className="w-full bg-background/50 border-border/50">
-              <SelectValue placeholder="Selecione uma loja..." />
+              <SelectValue placeholder="Selecione uma loja...">
+                {(value: string) => stores.find((store) => store.id === value)?.name ?? value}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {stores.map((store) => (

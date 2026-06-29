@@ -198,7 +198,12 @@ export default function StoreSetupPage() {
                   onValueChange={(v) => setSelectedStore(v ?? "")}
                 >
                   <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                    <SelectValue placeholder="Selecione a loja" />
+                    <SelectValue placeholder="Selecione a loja">
+                      {(value: string) => {
+                        const selected = stores.find((s) => s.id === value);
+                        return selected ? `${selected.name} (${selected.shop_domain})` : value;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {stores.map((s) => (

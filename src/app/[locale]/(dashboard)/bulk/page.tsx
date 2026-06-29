@@ -230,7 +230,12 @@ export default function BulkImportPage() {
             <div className="space-y-2">
               <Select value={selectedStore} onValueChange={(value) => setSelectedStore(value || "")}>
                 <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Selecione a loja de destino..." />
+                  <SelectValue placeholder="Selecione a loja de destino...">
+                    {(value: string) => {
+                      const selected = stores.find((store) => store.id === value);
+                      return selected ? `${selected.name} (${selected.shop_domain})` : value;
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (
