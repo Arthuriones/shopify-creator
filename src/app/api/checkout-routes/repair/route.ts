@@ -212,31 +212,43 @@ export async function POST(request: NextRequest) {
         let seoTitle = product.title.slice(0, 70);
         let seoDescription = "";
 
+        // Neutralizacao de texto: best-effort. Se falhar (quota/timeout),
+        // usa o titulo original da vitrine e continua -- o produto vai ser
+        // criado sem neutralizacao de texto pra nao bloquear o roteamento.
+        // A fila de imagens ja vai remover a marca visual.
         if (process.env.GEMINI_API_KEY) {
-          const neutralized = await neutralizeProductForDestination({
-            userId: user.id,
-            title: product.title,
-            descriptionHtml: product.descriptionHtml,
-            tags: product.tags,
-            seo: { title: product.title, description: "" },
-            images: [],
-            maxImages: 0,
-            targetLanguage: targetStore.target_language || "pt-BR",
-            genericizeText: true,
-            storageClient: createAdminClient(),
-          });
-          title = neutralized.title;
-          descriptionHtml = neutralized.descriptionHtml;
-          tags = neutralized.tags;
-          seoTitle = neutralized.seo.title;
-          seoDescription = neutralized.seo.description;
-          await logAiUsage({
-            userId: user.id,
-            storeId: targetStore.id,
-            action: "neutralize_text",
-            costUsd: AI_COST.text,
-            metadata: { handle, repair: true },
-          });
+          try {
+            const neutralized = await neutralizeProductForDestination({
+              userId: user.id,
+              title: product.title,
+              descriptionHtml: product.descriptionHtml,
+              tags: product.tags,
+              seo: { title: product.title, description: "" },
+              images: [],
+              maxImages: 0,
+              targetLanguage: targetStore.target_language || "pt-BR",
+              genericizeText: true,
+              storageClient: createAdminClient(),
+            });
+            title = neutralized.title;
+            descriptionHtml = neutralized.descriptionHtml;
+            tags = neutralized.tags;
+            seoTitle = neutralized.seo.title;
+            seoDescription = neutralized.seo.description;
+            await logAiUsage({
+              userId: user.id,
+              storeId: targetStore.id,
+              action: "neutralize_text",
+              costUsd: AI_COST.text,
+              metadata: { handle, repair: true },
+            });
+          } catch (neutralizeError) {
+            warnings.push(
+              `${handle}: neutralizacao de texto falhou (${
+                neutralizeError instanceof Error ? neutralizeError.message : "erro desconhecido"
+              }), criando com titulo original.`
+            );
+          }
         }
 
         const baseInput = toShopifyCreateProductInput(product);
