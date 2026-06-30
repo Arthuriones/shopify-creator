@@ -715,9 +715,9 @@ export function ConnectStoresWizard({
             )}
             {wizardMode === "reuse" && (
               <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
-                Copia uma dark store já neutralizada para a nova (sem gerar
-                imagem de novo) e conecta a vitrine por SKU. Importe os produtos
-                na vitrine antes de conectar.
+                Copia os produtos já neutralizados de uma dark store existente
+                para uma nova, sem rodar IA. Depois conecta a vitrine à nova
+                dark store por SKU automaticamente.
               </p>
             )}
             {wizardMode === "connect" && (
@@ -728,6 +728,108 @@ export function ConnectStoresWizard({
               </p>
             )}
 
+            {/* No modo "reaproveitar" o layout e diferente: origem → destino → vitrine */}
+            {wizardMode === "reuse" ? (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5">
+                      <PackageCheck className="h-3.5 w-3.5 text-primary" /> Dark store existente
+                    </Label>
+                    <Select
+                      value={reuseFromStoreId}
+                      onValueChange={(value) => setReuseFromStoreId(value || "")}
+                    >
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue placeholder="Escolha">
+                          {(value: string) => {
+                            const selected = stores.find((store) => store.id === value);
+                            return selected ? storeLabel(selected) : value;
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {storeLabel(store)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Tem os produtos já prontos (ex.: Northmere). Será copiada.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5">
+                      <PackageCheck className="h-3.5 w-3.5" /> Nova dark store
+                    </Label>
+                    <Select
+                      value={targetStoreId}
+                      onValueChange={(value) => setTargetStoreId(value || "")}
+                    >
+                      <SelectTrigger className="w-full min-w-0">
+                        <SelectValue placeholder="Escolha">
+                          {(value: string) => {
+                            const selected = stores.find((store) => store.id === value);
+                            return selected ? storeLabel(selected) : value;
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {storeLabel(store)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Vazia, vai receber os produtos copiados e o checkout.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Store className="h-3.5 w-3.5" /> Vitrine
+                  </Label>
+                  <Select
+                    value={sourceStoreId}
+                    onValueChange={(value) => setSourceStoreId(value || "")}
+                  >
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue placeholder="Escolha">
+                        {(value: string) => {
+                          const selected = stores.find((store) => store.id === value);
+                          return selected ? storeLabel(selected) : value;
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.id}>
+                          {storeLabel(store)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Onde o cliente compra. Será conectada à nova dark store por SKU.
+                  </p>
+                </div>
+                {reuseFromStoreId && targetStoreId && sourceStoreId && (
+                  <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{storeLabel(stores.find((s) => s.id === reuseFromStoreId))}</span>
+                    {" → copiar produtos → "}
+                    <span className="font-medium text-foreground">{storeLabel(stores.find((s) => s.id === targetStoreId))}</span>
+                    {" · checkout roteado de "}
+                    <span className="font-medium text-foreground">{storeLabel(stores.find((s) => s.id === sourceStoreId))}</span>
+                    {" → "}
+                    <span className="font-medium text-foreground">{storeLabel(stores.find((s) => s.id === targetStoreId))}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
@@ -786,39 +888,8 @@ export function ConnectStoresWizard({
                 </p>
               </div>
             </div>
-
-            {wizardMode === "reuse" && (
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <PackageCheck className="h-3.5 w-3.5" /> Copiar produtos de
-                  (dark store já neutralizada)
-                </Label>
-                <Select
-                  value={reuseFromStoreId}
-                  onValueChange={(value) => setReuseFromStoreId(value || "")}
-                >
-                  <SelectTrigger className="w-full min-w-0">
-                    <SelectValue placeholder="Escolha">
-                      {(value: string) => {
-                        const selected = stores.find((store) => store.id === value);
-                        return selected ? storeLabel(selected) : value;
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {storeLabel(store)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  A nova dark store recebe uma cópia dela (texto + imagens), sem
-                  rodar IA.
-                </p>
-              </div>
             )}
+
 
             {wizardMode === "generate" && (
             <div className="space-y-2 rounded-lg border border-border/60 p-3">
