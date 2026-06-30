@@ -340,22 +340,27 @@ async function findExistingProduct(
   creds: ShopifyCredentials,
   sourceProduct: ConnectedProduct
 ) {
-  const queries = [`handle:${sourceProduct.handle}`, sourceProduct.title]
-    .map((query) => query.trim())
-    .filter(Boolean);
-
-  for (const query of queries) {
-    const result = await getProducts(creds, { first: 10, query });
-    const nodes = (result?.products?.nodes || []) as ConnectedProduct[];
-    const exact = nodes.find(
-      (product) =>
-        product.handle === sourceProduct.handle ||
-        product.title === sourceProduct.title
-    );
-    if (exact) return exact;
+  // Primeiro tenta casar por SKU: e o sinal mais confiavel de que o mesmo
+  // produto ja existe no destino, evitando falso positivo por titulo generico
+  // igual (ex.: varios produtos com "Zapatilla Urbana Unisex Negro").
+  const sourceSkus = (sourceProduct.variants?.nodes || [])
+    .map((variant) => variant.sku?.trim())
+    .filter(Boolean) as string[];
+  if (sourceSkus.length > 0) {
+    const skuQuery = `sku:${sourceSkus[0]}`;
+    const skuResult = await getProducts(creds, { first: 5, query: skuQuery });
+    const bySkuMatch = (skuResult?.products?.nodes || []) as ConnectedProduct[];
+    if (bySkuMatch.length > 0) return bySkuMatch[0];
   }
 
-  return null;
+  // Fallback: busca por handle exato (mais seguro que titulo).
+  // Nao usa titulo como critério para evitar colisao entre produtos com
+  // nomes genéricos identicos.
+  const handleQuery = `handle:${sourceProduct.handle}`;
+  const handleResult = await getProducts(creds, { first: 5, query: handleQuery });
+  const byHandle = (handleResult?.products?.nodes || []) as ConnectedProduct[];
+  const exact = byHandle.find((product) => product.handle === sourceProduct.handle);
+  return exact || null;
 }
 
 export async function POST(request: NextRequest) {
