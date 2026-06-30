@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Image as ImageIcon, Languages, Loader2, PlayCircle, RefreshCw, Sparkles, Store } from "lucide-react";
 import { toast } from "sonner";

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,7 @@ function SectionSkeleton({ lines = 4 }: { lines?: number }) {
 }
 
 export default function StoreSetupPage() {
+  const t = useTranslations("store_setup");
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
 
@@ -167,10 +169,10 @@ export default function StoreSetupPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="border-b border-border/60 pb-5">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Setup da Loja
+          {t("title")}
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Gere politicas, menus, paginas e rodape com um clique
+          {t("subtitle")}
         </p>
       </header>
 
@@ -180,16 +182,16 @@ export default function StoreSetupPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Loja destino
+                {t("target_store")}
               </Label>
               {stores.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhuma loja conectada.{" "}
+                  {t("no_stores")}{" "}
                   <Link
                     href="/stores"
                     className="underline hover:text-foreground transition-colors duration-200"
                   >
-                    Conectar loja
+                    {t("connect_store")}
                   </Link>
                 </p>
               ) : (
@@ -217,7 +219,7 @@ export default function StoreSetupPage() {
             </div>
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Perfil da loja
+                {t("store_profile")}
               </Label>
               {selectedStore ? (
                 (() => {
@@ -238,9 +240,9 @@ export default function StoreSetupPage() {
                   ) : (
                     <div className="flex items-center h-10 px-3 rounded-md border border-border/50 bg-background/50">
                       <p className="text-sm text-muted-foreground">
-                        Perfil incompleto.{" "}
+                        {t("profile_incomplete")}{" "}
                         <Link href="/stores" className="underline hover:text-foreground transition-colors">
-                          Configurar
+                          {t("configure")}
                         </Link>
                       </p>
                     </div>
@@ -248,7 +250,7 @@ export default function StoreSetupPage() {
                 })()
               ) : (
                 <div className="h-10 flex items-center px-3 rounded-md border border-border/50 bg-background/50">
-                  <p className="text-sm text-muted-foreground/50">Selecione uma loja</p>
+                  <p className="text-sm text-muted-foreground/50">{t("select_store")}</p>
                 </div>
               )}
             </div>
@@ -283,12 +285,12 @@ export default function StoreSetupPage() {
                       style={{ animationDelay: "300ms" }}
                     />
                   </span>
-                  Gerando setup completo
+                  {t("generating")}
                 </span>
               ) : (
                 <>
                   <Sparkles className="mr-2 h-3.5 w-3.5" />
-                  Gerar Setup Completo
+                  {t("generate_btn")}
                 </>
               )}
             </Button>
@@ -316,14 +318,14 @@ export default function StoreSetupPage() {
                         style={{ animationDelay: "300ms" }}
                       />
                     </span>
-                    Publicando
+                    {t("publishing")}
                   </span>
                 ) : (
                   <>
                     <Upload className="mr-2 h-3.5 w-3.5" />
                     {!selectedStore
-                      ? "Selecione uma loja"
-                      : `Publicar na ${selectedStoreDomain}`}
+                      ? t("select_store_first")
+                      : t("publish_btn", { domain: selectedStoreDomain })}
                   </>
                 )}
               </Button>
@@ -339,7 +341,7 @@ export default function StoreSetupPage() {
                 }}
               >
                 <Check className="mr-1.5 h-3.5 w-3.5" />
-                Publicado
+                {t("published_badge")}
               </Badge>
             )}
           </div>
@@ -372,19 +374,19 @@ export default function StoreSetupPage() {
           <TabsList className="bg-card border border-border/50">
             <TabsTrigger value="overview" className="text-[13px]">
               <Globe className="mr-2 h-3.5 w-3.5" />
-              Visao Geral
+              {t("tab_overview")}
             </TabsTrigger>
             <TabsTrigger value="policies" className="text-[13px]">
               <FileText className="mr-2 h-3.5 w-3.5" />
-              Politicas
+              {t("tab_policies")}
             </TabsTrigger>
             <TabsTrigger value="menus" className="text-[13px]">
               <Menu className="mr-2 h-3.5 w-3.5" />
-              Menus
+              {t("tab_menus")}
             </TabsTrigger>
             <TabsTrigger value="pages" className="text-[13px]">
               <FileText className="mr-2 h-3.5 w-3.5" />
-              Paginas
+              {t("tab_pages")}
             </TabsTrigger>
           </TabsList>
 
@@ -397,7 +399,7 @@ export default function StoreSetupPage() {
                     className="text-[13px] font-medium uppercase text-muted-foreground"
                     style={{ letterSpacing: "0.05em" }}
                   >
-                    Politicas
+                    {t("overview_policies")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -427,7 +429,7 @@ export default function StoreSetupPage() {
                     className="text-[13px] font-medium uppercase text-muted-foreground"
                     style={{ letterSpacing: "0.05em" }}
                   >
-                    Menu Principal
+                    {t("overview_main_menu")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

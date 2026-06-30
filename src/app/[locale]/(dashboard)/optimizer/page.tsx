@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ function PolicySkeleton() {
 }
 
 export default function OptimizerPage() {
+  const t = useTranslations("optimizer");
   const [currentTheme, setCurrentTheme] = useState("");
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStore, setSelectedStore] = useState("");
@@ -273,17 +275,17 @@ export default function OptimizerPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="border-b border-border/60 pb-5">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Otimizador de Loja
+          {t("title")}
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Otimize produtos, politicas e orientacoes de tema usando o idioma configurado em cada loja
+          {t("subtitle")}
         </p>
       </header>
 
       {stores.length > 0 && (
         <div className="w-72 space-y-2">
           <Label className="text-[13px] text-muted-foreground">
-            Loja destino
+            {t("target_store")}
           </Label>
           <Select
             value={selectedStore}
@@ -313,19 +315,19 @@ export default function OptimizerPage() {
           <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">
-                Loja em uso: {selectedStoreData.name}
+                {t("store_in_use", { name: selectedStoreData.name })}
               </p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Tudo que a IA gerar nesta tela sai no idioma{" "}
+                {t("store_language_note")}{" "}
                 <span className="font-semibold text-foreground">
                   {selectedStoreData.target_language || "pt-BR"}
                 </span>
-                . Para trocar, edite o perfil da loja em Lojas conectadas.
+                . {t("store_language_change")}
               </p>
             </div>
             <Link href="/stores">
               <Button variant="outline" size="sm">
-                Editar perfil
+                {t("edit_profile")}
               </Button>
             </Link>
           </CardContent>
@@ -338,16 +340,16 @@ export default function OptimizerPage() {
             className="text-[13px] font-medium uppercase text-muted-foreground"
             style={{ letterSpacing: "0.05em" }}
           >
-            Configuracao
+            {t("config_title")}
           </CardTitle>
           <CardDescription className="text-xs">
-            Informe os dados da loja para gerar conteudo otimizado
+            {t("config_desc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label className="text-[13px] text-muted-foreground">
-              Perfil da loja
+              {t("store_profile")}
             </Label>
             {selectedStore ? (
               (() => {
@@ -361,9 +363,9 @@ export default function OptimizerPage() {
                 ) : (
                     <div className="flex items-center h-10 px-3 rounded-md border border-border/50 bg-background/50">
                       <p className="text-sm text-muted-foreground">
-                        Perfil incompleto.{" "}
+                        {t("profile_incomplete")}{" "}
                         <Link href="/stores" className="underline hover:text-foreground transition-colors">
-                          Configurar
+                          {t("configure")}
                         </Link>
                       </p>
                     </div>
@@ -371,13 +373,13 @@ export default function OptimizerPage() {
               })()
             ) : (
               <div className="h-10 flex items-center px-3 rounded-md border border-border/50 bg-background/50">
-                <p className="text-sm text-muted-foreground/50">Selecione uma loja acima</p>
+                <p className="text-sm text-muted-foreground/50">{t("select_store_above")}</p>
               </div>
             )}
           </div>
           <div className="space-y-2">
             <Label className="text-[13px] text-muted-foreground">
-              Tema Atual (para analise)
+              {t("current_theme")}
             </Label>
             <Input
               placeholder="Dawn, Sense, Vessel..."
@@ -393,15 +395,15 @@ export default function OptimizerPage() {
         <TabsList className="bg-card border border-border/50">
           <TabsTrigger value="product" className="text-[13px]">
             <PackageSearch className="mr-2 h-3.5 w-3.5" />
-            Produto
+            {t("tab_product")}
           </TabsTrigger>
           <TabsTrigger value="policies" className="text-[13px]">
             <FileText className="mr-2 h-3.5 w-3.5" />
-            Politicas
+            {t("tab_policies")}
           </TabsTrigger>
           <TabsTrigger value="theme" className="text-[13px]">
             <Palette className="mr-2 h-3.5 w-3.5" />
-            Tema
+            {t("tab_theme")}
           </TabsTrigger>
         </TabsList>
 
@@ -411,34 +413,33 @@ export default function OptimizerPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  Otimizar produto
+                  {t("optimize_product_title")}
                 </CardTitle>
                 <CardDescription>
-                  Cole um produto bruto ou rascunho. A IA devolve titulo, descricao,
-                  tags e SEO no idioma da loja selecionada.
+                  {t("optimize_product_desc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Titulo original</Label>
+                  <Label>{t("original_title")}</Label>
                   <Input
                     value={productTitle}
                     onChange={(event) => setProductTitle(event.target.value)}
-                    placeholder="Ex: Nike running shirt dry fit"
+                    placeholder={t("original_title_placeholder")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Descricao ou informacoes do fornecedor</Label>
+                  <Label>{t("description_label")}</Label>
                   <Textarea
                     value={productDescription}
                     onChange={(event) => setProductDescription(event.target.value)}
                     rows={6}
-                    placeholder="Cole descricao, beneficios, materiais, medidas..."
+                    placeholder={t("description_placeholder")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Preco base</Label>
+                    <Label>{t("base_price")}</Label>
                     <Input
                       value={productPrice}
                       onChange={(event) => setProductPrice(event.target.value)}
@@ -447,12 +448,12 @@ export default function OptimizerPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Especificacoes</Label>
+                    <Label>{t("specs")}</Label>
                     <Textarea
                       value={productSpecs}
                       onChange={(event) => setProductSpecs(event.target.value)}
                       rows={3}
-                      placeholder={"Material: algodao\nCor: preto\nTamanho: P-M-G"}
+                      placeholder={t("specs_placeholder")}
                     />
                   </div>
                 </div>
@@ -465,29 +466,29 @@ export default function OptimizerPage() {
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-                  Otimizar no idioma da loja
+                  {t("optimize_btn")}
                 </Button>
               </CardContent>
             </Card>
 
             <Card className="border-border/50">
               <CardHeader>
-                <CardTitle className="text-lg">Resultado pronto</CardTitle>
+                <CardTitle className="text-lg">{t("result_title")}</CardTitle>
                 <CardDescription>
-                  Use este conteudo para cadastro manual, catalogo ou revisao antes de publicar.
+                  {t("result_desc")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {optimizedProduct ? (
                   <div className="space-y-4">
                     <div>
-                      <Label>Titulo</Label>
+                      <Label>{t("result_title_label")}</Label>
                       <div className="mt-2 rounded-lg border border-border/60 bg-background/55 p-3 text-sm font-semibold">
                         {optimizedProduct.title}
                       </div>
                     </div>
                     <div>
-                      <Label>Descricao HTML</Label>
+                      <Label>{t("result_description_label")}</Label>
                       <div
                         className="mt-2 max-h-64 overflow-auto rounded-lg border border-border/60 bg-background/55 p-3 text-sm leading-6"
                         dangerouslySetInnerHTML={{ __html: optimizedProduct.description }}
@@ -495,7 +496,7 @@ export default function OptimizerPage() {
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
-                        <Label>Tags</Label>
+                        <Label>{t("result_tags_label")}</Label>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {optimizedProduct.tags.map((tag) => (
                             <span
@@ -525,7 +526,7 @@ export default function OptimizerPage() {
                   </div>
                 ) : (
                   <div className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
-                    O resultado aparece aqui depois da otimizacao.
+                    {t("result_placeholder")}
                   </div>
                 )}
               </CardContent>
@@ -553,12 +554,12 @@ export default function OptimizerPage() {
                     <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
                     <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
                   </span>
-                  Gerando
+                  {t("generating")}
                 </span>
               ) : (
                 <>
                   <FileText className="mr-2 h-3.5 w-3.5" />
-                  Gerar Politicas
+                  {t("generate_policies_btn")}
                 </>
               )}
             </Button>
@@ -577,14 +578,14 @@ export default function OptimizerPage() {
                       <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
                       <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
                     </span>
-                    Publicando
+                    {t("publishing")}
                   </span>
                 ) : (
                   <>
                     <Upload className="mr-2 h-3.5 w-3.5" />
                     {!selectedStore
-                      ? "Selecione uma loja"
-                      : "Publicar na Shopify"}
+                      ? t("select_store_first")
+                      : t("publish_shopify_btn")}
                   </>
                 )}
               </Button>
@@ -643,12 +644,12 @@ export default function OptimizerPage() {
                   <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
                 </span>
-                Analisando
+                {t("analyzing")}
               </span>
             ) : (
               <>
                 <Palette className="mr-2 h-3.5 w-3.5" />
-                Analisar Tema
+                {t("analyze_theme_btn")}
               </>
             )}
           </Button>

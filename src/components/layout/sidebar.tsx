@@ -111,7 +111,7 @@ const navSections: NavSection[] = [
   {
     label: "channels",
     items: [
-      { href: "/instagram", label: "instagram", icon: InstagramIcon },
+      { href: "/instagram", label: "instagram", icon: InstagramIcon, badge: "beta" },
     ],
   },
   {
