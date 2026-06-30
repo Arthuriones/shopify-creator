@@ -643,6 +643,40 @@ export default function ClonePage() {
       setCheckingRouteId("");
     }
   }
+
+  const [repairingRouteId, setRepairingRouteId] = useState("");
+
+  async function handleRepairRoute(config: CheckoutConfig) {
+    setRepairingRouteId(config.id);
+    try {
+      const res = await fetch("/api/checkout-routes/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: config.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Falha ao corrigir a rota.");
+        return;
+      }
+      toast.success(
+        `Corrigido: ${data.fixedWrongCount} mapas errados, ${data.extendedCount} variantes adicionadas, ${data.createdProductCount} produto(s) criado(s).`
+      );
+      if (data.warnings?.length) {
+        toast.warning(`${data.warnings.length} aviso(s) durante a correção — veja o console.`);
+        console.warn("[repair route] warnings", data.warnings);
+      }
+      if (data.imageQueueCount > 0) {
+        toast(`${data.imageQueueCount} imagem(ns) na fila pra trocar sem marca, em background.`);
+      }
+      await handleCheckRouteHealth(config);
+    } catch {
+      toast.error("Falha ao corrigir a rota.");
+    } finally {
+      setRepairingRouteId("");
+    }
+  }
+
   const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
   const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
   const [routeProductsLoading, setRouteProductsLoading] = useState(false);
@@ -2781,6 +2815,26 @@ export default function ClonePage() {
                           )}
                           Verificar rota
                         </Button>
+                        {(() => {
+                          const health = routeHealth[config.id];
+                          if (!health || "error" in health || health.ok) return null;
+                          return (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRepairRoute(config)}
+                              disabled={repairingRouteId === config.id}
+                              title="Recalcula o mapa por SKU exato e cria/completa os produtos que faltam na dark store."
+                            >
+                              {repairingRouteId === config.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <WandSparkles className="h-3.5 w-3.5" />
+                              )}
+                              Corrigir rota
+                            </Button>
+                          );
+                        })()}
                         <Button
                           variant="outline"
                           size="sm"

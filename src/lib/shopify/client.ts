@@ -216,7 +216,7 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
   return accessToken;
 }
 
-async function shopifyGraphQL(
+export async function shopifyGraphQL(
   creds: ShopifyCredentials,
   query: string,
   variables?: Record<string, unknown>
@@ -1091,6 +1091,51 @@ export async function createProduct(
     storefrontPublication,
     inventoryWarnings,
   };
+}
+
+// Adiciona variantes a um produto JA EXISTENTE (ex.: faltam alguns tamanhos
+// de um produto que ja foi clonado pro destino). Usado pelo reparo de rota:
+// quando so algumas variantes de um produto da vitrine nao tem par na dark
+// store, mas o produto em si ja existe la.
+export async function addProductVariants(
+  creds: ShopifyCredentials,
+  productId: string,
+  optionNames: string[],
+  variants: {
+    price: string | number;
+    sku?: string;
+    optionValues: string[];
+  }[]
+) {
+  const mutation = `
+    mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkCreate(productId: $productId, variants: $variants) {
+        productVariants { id sku }
+        userErrors { field message }
+      }
+    }
+  `;
+  const input = variants.map((variant) => ({
+    price: typeof variant.price === "number" ? variant.price.toFixed(2) : variant.price,
+    ...(variant.sku?.trim() ? { inventoryItem: { sku: variant.sku.trim() } } : {}),
+    optionValues: variant.optionValues
+      .map((value, index) => (value ? { optionName: optionNames[index], name: value } : null))
+      .filter((value): value is { optionName: string; name: string } => Boolean(value)),
+  }));
+
+  const data = await shopifyGraphQL(creds, mutation, { productId, variants: input });
+  const errors = data?.productVariantsBulkCreate?.userErrors as
+    | { field?: string[]; message: string }[]
+    | undefined;
+  if (errors?.length) {
+    throw new Error(
+      `Falha ao adicionar variantes: ${errors.map((error) => error.message).join(" | ")}`
+    );
+  }
+  return (data?.productVariantsBulkCreate?.productVariants || []) as {
+    id: string;
+    sku: string | null;
+  }[];
 }
 
 const POLICY_TYPE_MAP: Record<string, string> = {
