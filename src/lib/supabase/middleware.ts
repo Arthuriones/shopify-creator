@@ -168,6 +168,11 @@ export async function updateSession(request: NextRequest) {
       url.pathname = `${prefix}/set-password`;
       return NextResponse.redirect(url);
     }
+    if (isAuthPath && !isSetPassword) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${prefix}/dashboard`;
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;
