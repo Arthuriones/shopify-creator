@@ -45,6 +45,7 @@ const MARKETS: Record<string, { label: string; locale: string }> = {
   MX: { label: "México (peso mexicano)", locale: "es-MX" },
   AR: { label: "Argentina (peso argentino)", locale: "es-AR" },
   CO: { label: "Colômbia (peso colombiano)", locale: "es-CO" },
+  ES: { label: "España (euro)", locale: "es-ES" },
   BR: { label: "Brasil (real)", locale: "pt-BR" },
   US: { label: "Estados Unidos (dólar)", locale: "en-US" },
 };

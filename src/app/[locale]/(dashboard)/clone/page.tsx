@@ -609,6 +609,7 @@ export default function ClonePage() {
         checkedAt: string;
         fallbackCount7d: number;
         fallbackByReason: Record<string, number>;
+        recentFallbacks: { reason: string; detail: string | null; created_at: string }[];
       } | { error: string }
     >
   >({});
@@ -645,6 +646,8 @@ export default function ClonePage() {
   }
 
   const [repairingRouteId, setRepairingRouteId] = useState("");
+  const [updatingThemeId, setUpdatingThemeId] = useState("");
+  const [copyingScriptId, setCopyingScriptId] = useState("");
 
   async function handleRepairRoute(config: CheckoutConfig) {
     setRepairingRouteId(config.id);
@@ -674,6 +677,48 @@ export default function ClonePage() {
       toast.error("Falha ao corrigir a rota.");
     } finally {
       setRepairingRouteId("");
+    }
+  }
+
+  async function handleCopyFullScript(config: CheckoutConfig) {
+    setCopyingScriptId(config.id);
+    try {
+      const res = await fetch(`/api/checkout-routes/${config.id}/embed-config`);
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Falha ao buscar configuração.");
+        return;
+      }
+      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config='${JSON.stringify(data)}'\n  async>\n</script>`;
+      await navigator.clipboard.writeText(script);
+      toast.success("Script copiado! Cole antes de </head> no theme.liquid da vitrine.");
+    } catch {
+      toast.error("Falha ao copiar script.");
+    } finally {
+      setCopyingScriptId("");
+    }
+  }
+
+  async function handleUpdateTheme(config: CheckoutConfig) {
+    setUpdatingThemeId(config.id);
+    try {
+      const res = await fetch(`/api/checkout-routes/${config.id}/update-theme`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Falha ao atualizar o tema.");
+        return;
+      }
+      if (data.updated) {
+        toast.success(`Tema atualizado: ${data.skuCount} SKUs + ${data.variantCount} variantes embutidos.`);
+      } else {
+        toast(`${data.message}`);
+      }
+    } catch {
+      toast.error("Falha ao atualizar o tema.");
+    } finally {
+      setUpdatingThemeId("");
     }
   }
 
@@ -822,11 +867,7 @@ export default function ClonePage() {
     selectedRouteConfig || configs.find((config) => config.enabled) || configs[0] || null;
   const installToken = scriptConfig?.public_token || "";
   function buildRoutedInstallSnippet(token: string) {
-    return `<script
-  src="${appOrigin}/routed-checkout-loader.js"
-  data-token="${token}"
-  async>
-</script>`;
+    return `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>\n<!-- Use "Atualizar tema" para embutir o mapa de SKUs automaticamente via API -->`;
   }
 
   const installSnippet = buildRoutedInstallSnippet(
@@ -2815,6 +2856,34 @@ export default function ClonePage() {
                           )}
                           Verificar rota
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUpdateTheme(config)}
+                          disabled={updatingThemeId === config.id}
+                          title="Emite o mapa de SKUs direto no tema da vitrine via Shopify API. O loader resolve o checkout sem chamar a API do xcart."
+                        >
+                          {updatingThemeId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <PackageCheck className="h-3.5 w-3.5" />
+                          )}
+                          Atualizar tema
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCopyFullScript(config)}
+                          disabled={copyingScriptId === config.id}
+                          title="Copia o script com o mapa de SKUs embutido. Cole manualmente antes de </head> no theme.liquid da vitrine."
+                        >
+                          {copyingScriptId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                          Copiar script
+                        </Button>
                         {(() => {
                           const health = routeHealth[config.id];
                           if (!health || "error" in health || health.ok) return null;
@@ -2863,14 +2932,21 @@ export default function ClonePage() {
                           );
                         }
                         const fallbackNote = health.fallbackCount7d > 0 && (
-                          <p className="text-muted-foreground">
-                            {health.fallbackCount7d} checkout(s) caíram pro nativo da vitrine nos
-                            últimos 7 dias (
-                            {Object.entries(health.fallbackByReason)
-                              .map(([reason, count]) => `${reason}: ${count}`)
-                              .join(", ")}
-                            ).
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-muted-foreground">
+                              {health.fallbackCount7d} checkout(s) caíram pro nativo da vitrine nos
+                              últimos 7 dias (
+                              {Object.entries(health.fallbackByReason)
+                                .map(([reason, count]) => `${reason}: ${count}`)
+                                .join(", ")}
+                              ).
+                            </p>
+                            {health.recentFallbacks?.slice(0, 3).map((fb, i) => (
+                              <p key={i} className="text-muted-foreground/80 truncate">
+                                {new Date(fb.created_at).toLocaleDateString()} — {fb.reason}{fb.detail ? `: ${fb.detail}` : ""}
+                              </p>
+                            ))}
+                          </div>
                         );
                         if (health.ok) {
                           return (

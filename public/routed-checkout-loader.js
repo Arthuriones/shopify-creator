@@ -23,6 +23,16 @@
     return;
   }
 
+  // Configuracao inline embutida no script tag — permite resolucao sem API call.
+  // Estrutura: { domain, skuMap, variantMap, country, locale }
+  var inlineConfig = null;
+  try {
+    var configAttr = scriptTag.dataset.config || scriptTag.getAttribute("data-config");
+    if (configAttr) inlineConfig = JSON.parse(configAttr);
+  } catch (e) {
+    console.warn("[RoutedCheckout] data-config invalido, usando API.", e);
+  }
+
   var isRouting = false;
   var isAddingToCart = false;
   var yampiPatchTimer = null;
@@ -158,7 +168,40 @@
     };
   }
 
+  // Resolucao inline: usa o mapa embutido no script tag, sem chamada de API.
+  // Resolve por variantMap (sourceVariantId) primeiro, depois skuMap.
+  function resolveInlineUrl(lines) {
+    if (!inlineConfig || !inlineConfig.domain) return null;
+    var resolvedLines = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var srcVariant = String(line.sourceVariantId || "");
+      var sku = String(line.sku || "").trim().toLowerCase();
+      var targetId = null;
+      if (srcVariant && inlineConfig.variantMap) {
+        targetId = inlineConfig.variantMap[srcVariant] || null;
+      }
+      if (!targetId && sku && inlineConfig.skuMap) {
+        targetId = inlineConfig.skuMap[sku] || null;
+      }
+      if (targetId) {
+        resolvedLines.push({ variantId: String(targetId), quantity: Math.max(1, Number(line.quantity) || 1) });
+      }
+    }
+    if (resolvedLines.length === 0) return null;
+    var cartPath = resolvedLines.map(function (l) { return l.variantId + ":" + l.quantity; }).join(",");
+    var url = new URL("https://" + inlineConfig.domain + "/cart/" + cartPath);
+    if (inlineConfig.country) url.searchParams.set("country", inlineConfig.country);
+    if (inlineConfig.locale) url.searchParams.set("locale", inlineConfig.locale);
+    return url.toString();
+  }
+
   async function resolveCheckoutLines(lines) {
+    // 1. Tenta resolucao inline (instantaneo, sem API, funciona offline)
+    var inlineUrl = resolveInlineUrl(lines);
+    if (inlineUrl) return inlineUrl;
+
+    // 2. Fallback para API (cobre SKUs novos ainda nao embutidos no script)
     var response = await fetch(appUrl.replace(/\/$/, "") + "/api/checkout-routes/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -205,6 +248,19 @@
     }
   }
 
+  function showRoutingError() {
+    try {
+      var existing = document.getElementById("routed-checkout-error");
+      if (existing) existing.remove();
+      var el = document.createElement("div");
+      el.id = "routed-checkout-error";
+      el.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-family:sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);max-width:90vw;text-align:center";
+      el.textContent = "Erro ao carregar checkout. Tente novamente.";
+      document.body.appendChild(el);
+      setTimeout(function () { el.remove(); }, 4000);
+    } catch (e) {}
+  }
+
   async function routeCartCheckout(skipGuard) {
     if (isRouting && !skipGuard) return;
     isRouting = true;
@@ -218,13 +274,15 @@
 
       window.location.href = await resolveCheckout(cart);
     } catch (error) {
-      console.warn("[RoutedCheckout] fallback para checkout nativo", error);
+      console.warn("[RoutedCheckout] erro ao rotear checkout", error);
       trackFallback("cart_checkout_error", error);
-      window.location.href = rootPath() + "checkout";
+      // Nao redireciona para checkout da vitrine — mostra erro e deixa cliente tentar de novo.
+      showRoutingError();
+      isRouting = false;
     } finally {
-      setTimeout(function () {
-        isRouting = false;
-      }, 1500);
+      if (isRouting) {
+        setTimeout(function () { isRouting = false; }, 1500);
+      }
     }
   }
 
@@ -248,13 +306,14 @@
 
       await routeCartCheckout(true);
     } catch (error) {
-      console.warn("[RoutedCheckout] fallback para checkout nativo", error);
+      console.warn("[RoutedCheckout] erro ao rotear checkout", error);
       trackFallback("direct_checkout_error", error);
-      window.location.href = rootPath() + "checkout";
+      showRoutingError();
+      isRouting = false;
     } finally {
-      setTimeout(function () {
-        isRouting = false;
-      }, 1500);
+      if (isRouting) {
+        setTimeout(function () { isRouting = false; }, 1500);
+      }
     }
   }
 
