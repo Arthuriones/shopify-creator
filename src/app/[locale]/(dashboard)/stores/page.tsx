@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useEffect, useRef } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,6 +167,7 @@ function normalizeStorePricingDefaults(
 }
 
 export default function StoresPage() {
+  const t = useTranslations("stores");
   const [stores, setStores] = useState<ConnectedStore[]>([]);
   const [loadingStores, setLoadingStores] = useState(true);
   const [shopDomain, setShopDomain] = useState("");
@@ -192,6 +194,7 @@ export default function StoresPage() {
   const [profileAutoConvertPrices, setProfileAutoConvertPrices] = useState(false);
   const [profileCurrencyRate, setProfileCurrencyRate] = useState("1");
   const [profilePriceMarkupPercent, setProfilePriceMarkupPercent] = useState("0");
+  const [profileName, setProfileName] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -362,6 +365,7 @@ export default function StoresPage() {
 
   async function openProfileEditor(store: ConnectedStore) {
     setEditingStore(store);
+    setProfileName(store.name || "");
     setProfileNiche(store.niche || "");
     setProfileAudience(store.target_audience || "");
     const isPreset = BRAND_VOICE_OPTIONS.some((o) => o.value === store.brand_voice);
@@ -706,6 +710,7 @@ export default function StoresPage() {
       const brandVoice = profileVoice === "custom" ? profileCustomVoice : profileVoice;
 
       const profilePayload = {
+        name: profileName.trim() || editingStore.name,
         niche: profileNiche.trim(),
         target_audience: profileAudience.trim() || null,
         brand_voice: brandVoice || null,
@@ -772,8 +777,8 @@ export default function StoresPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Lojas"
-        description="Conecte e configure suas lojas Shopify"
+        title={t("title")}
+        description={t("description")}
       >
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
@@ -783,7 +788,7 @@ export default function StoresPage() {
             )}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
-            Conectar Loja
+            {t("connect_btn")}
           </DialogTrigger>
           <DialogContent className="border-border/50 bg-card max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -791,7 +796,7 @@ export default function StoresPage() {
                 className="text-lg font-semibold"
                 style={{ letterSpacing: "-0.02em" }}
               >
-                Conectar Loja Shopify
+                {t("connect_dialog_title")}
               </DialogTitle>
             </DialogHeader>
 
@@ -868,10 +873,10 @@ export default function StoresPage() {
             <form onSubmit={handleConnect} className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Dominio da Loja (ex: loja.myshopify.com ou loja.com)
+                  {t("domain_label")}
                 </Label>
                 <Input
-                  placeholder="loja.myshopify.com ou loja.com"
+                  placeholder={t("domain_placeholder")}
                   value={shopDomain}
                   onChange={(e) => setShopDomain(e.target.value)}
                   autoCapitalize="none"
@@ -892,7 +897,7 @@ export default function StoresPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Client ID
+                  {t("client_id_label")}
                 </Label>
                 <Input
                   placeholder="ID do cliente do app"
@@ -904,7 +909,7 @@ export default function StoresPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Client Secret
+                  {t("client_secret_label")}
                 </Label>
                 <Input
                   type="password"
@@ -941,7 +946,7 @@ export default function StoresPage() {
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Conectar"
+                  t("connect_submit")
                 )}
               </Button>
             </form>
@@ -956,7 +961,7 @@ export default function StoresPage() {
               className="text-[13px] font-medium uppercase text-muted-foreground"
               style={{ letterSpacing: "0.05em" }}
             >
-              Sessao de Materiais da Marca
+              {t("brand_materials_title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1094,10 +1099,10 @@ export default function StoresPage() {
             className="text-base font-medium text-foreground"
             style={{ letterSpacing: "-0.01em" }}
           >
-            Conecte sua primeira loja
+            {t("no_stores_title")}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Importe produtos e publique com IA
+            {t("no_stores_body")}
           </p>
           <Button
             onClick={() => setOpen(true)}
@@ -1108,7 +1113,7 @@ export default function StoresPage() {
             }}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
-            Conectar Loja
+            {t("connect_btn")}
           </Button>
         </div>
       ) : (
@@ -1155,7 +1160,7 @@ export default function StoresPage() {
                             border: "none",
                           }}
                         >
-                          Configurada
+                          {t("store_badge_configured")}
                         </Badge>
                       ) : (
                         <Badge
@@ -1167,7 +1172,7 @@ export default function StoresPage() {
                           }}
                         >
                           <AlertCircle className="mr-1 h-3 w-3" />
-                          Perfil incompleto
+                          {t("store_badge_incomplete")}
                         </Badge>
                       )}
                     </div>
@@ -1218,7 +1223,7 @@ export default function StoresPage() {
                   className="h-8 text-[12px] border-border/50 hover:border-border"
                 >
                   <Pencil className="mr-1.5 h-3 w-3" />
-                  {isProfileComplete(store) ? "Editar Perfil" : "Configurar Perfil"}
+                  {isProfileComplete(store) ? t("edit_profile_btn") : t("configure_profile_btn")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -1246,6 +1251,19 @@ export default function StoresPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
+            {/* Store Name */}
+            <div className="space-y-2">
+              <Label className="text-[13px] text-muted-foreground">
+                Store Name
+              </Label>
+              <Input
+                placeholder="My Store"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="h-10 bg-background/50 border-border/50 text-sm"
+              />
+            </div>
+
             {/* Logo upload */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
