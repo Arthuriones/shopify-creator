@@ -586,10 +586,7 @@ export default function StoresPage() {
 
   async function handleSaveProfile() {
     if (!editingStore) return;
-    if (!profileNiche.trim()) {
-      toast.error("Nicho é obrigatório");
-      return;
-    }
+
     const parsedCurrencyRate = Number(profileCurrencyRate.replace(",", "."));
     if (!Number.isFinite(parsedCurrencyRate) || parsedCurrencyRate <= 0) {
       toast.error("Taxa de conversao deve ser maior que zero.");
@@ -1457,7 +1454,7 @@ export default function StoresPage() {
             {/* Nicho */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Nicho da Loja <span className="text-destructive">*</span>
+                Nicho da Loja
               </Label>
               <Input
                 placeholder="ex: Fitness feminino, Pet, Tecnologia, Casa e Decoração"
@@ -1628,10 +1625,10 @@ export default function StoresPage() {
 
             <Button
               onClick={handleSaveProfile}
-              disabled={profileSaving || !profileNiche.trim()}
+              disabled={profileSaving}
               className="w-full h-10 text-sm font-medium transition-all duration-200"
               style={{
-                background: profileSaving || !profileNiche.trim()
+                background: profileSaving
                   ? "oklch(0.72 0.19 155 / 30%)"
                   : "oklch(0.72 0.19 155)",
                 color: "oklch(0.13 0.02 155)",
