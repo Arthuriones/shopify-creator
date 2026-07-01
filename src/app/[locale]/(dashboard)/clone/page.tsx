@@ -683,13 +683,7 @@ export default function ClonePage() {
   async function handleCopyFullScript(config: CheckoutConfig) {
     setCopyingScriptId(config.id);
     try {
-      const res = await fetch(`/api/checkout-routes/${config.id}/embed-config`);
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Falha ao buscar configuração.");
-        return;
-      }
-      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config='${JSON.stringify(data)}'\n  async>\n</script>`;
+      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  async>\n</script>`;
       await navigator.clipboard.writeText(script);
       toast.success("Script copiado! Cole antes de </head> no theme.liquid da vitrine.");
     } catch {

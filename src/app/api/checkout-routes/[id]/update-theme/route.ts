@@ -118,13 +118,10 @@ export async function POST(
     if (k) variantMap[k] = String(v);
   }
 
-  const inlineConfig = { domain, skuMap, variantMap, country, locale };
+  const configPayload = JSON.stringify({ domain, skuMap, variantMap, country, locale });
   const appOrigin = getPublicAppUrl(
     process.env.NEXT_PUBLIC_APP_URL || "https://xcart.app"
   );
-
-  const newScriptTag =
-    `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config='${JSON.stringify(inlineConfig)}'\n  async>\n</script>`;
 
   try {
     const accessToken = await getAccessToken(sourceStore);
@@ -138,6 +135,14 @@ export async function POST(
       return NextResponse.json({ error: "Tema ativo não encontrado na vitrine." }, { status: 404 });
     }
 
+    // Upload xcart-config.json as a theme asset (no 256KB limit, served from Shopify CDN)
+    const assetKey = "assets/xcart-config.json";
+    const uploadRes = await shopifyRest(vitrineDomain, accessToken, `/themes/${mainTheme.id}/assets.json`, {
+      method: "PUT",
+      body: JSON.stringify({ asset: { key: assetKey, value: configPayload } }),
+    });
+    const configCdnUrl: string = uploadRes.asset?.public_url || "";
+
     // Get theme.liquid
     const assetData = await shopifyRest(
       vitrineDomain,
@@ -150,6 +155,9 @@ export async function POST(
       return NextResponse.json({ error: "theme.liquid não encontrado ou vazio." }, { status: 404 });
     }
 
+    // Build minimal script tag with data-config-url (small — just a URL, no inline JSON)
+    const newScriptTag = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config-url="${configCdnUrl}"\n  async>\n</script>`;
+
     // Replace existing xcart script tag (identified by data-token)
     const scriptRegex = /<script\b[^>]*data-token=["'][^"']*["'][^>]*>[\s\S]*?<\/script>/g;
     const hasExisting = scriptRegex.test(currentContent);
@@ -161,34 +169,25 @@ export async function POST(
         newScriptTag
       );
     } else {
-      // Insert before </head> if no existing script found
       newContent = currentContent.replace("</head>", `${newScriptTag}\n</head>`);
     }
 
-    if (newContent === currentContent) {
-      return NextResponse.json({
-        ok: true,
-        updated: false,
-        message: "Conteúdo já estava atualizado — nenhuma alteração feita.",
+    if (newContent !== currentContent) {
+      await shopifyRest(vitrineDomain, accessToken, `/themes/${mainTheme.id}/assets.json`, {
+        method: "PUT",
+        body: JSON.stringify({ asset: { key: "layout/theme.liquid", value: newContent } }),
       });
     }
-
-    // Write back
-    await shopifyRest(vitrineDomain, accessToken, `/themes/${mainTheme.id}/assets.json`, {
-      method: "PUT",
-      body: JSON.stringify({
-        asset: { key: "layout/theme.liquid", value: newContent },
-      }),
-    });
 
     return NextResponse.json({
       ok: true,
       updated: true,
       message: hasExisting
-        ? "Script atualizado no tema da vitrine com sucesso."
-        : "Script inserido no tema da vitrine com sucesso.",
+        ? `Script atualizado + xcart-config.json enviado (${Object.keys(skuMap).length} SKUs, ${Object.keys(variantMap).length} variantes).`
+        : `Script inserido + xcart-config.json enviado (${Object.keys(skuMap).length} SKUs, ${Object.keys(variantMap).length} variantes).`,
       skuCount: Object.keys(skuMap).length,
       variantCount: Object.keys(variantMap).length,
+      configUrl: configCdnUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao atualizar tema.";

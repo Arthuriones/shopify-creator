@@ -23,14 +23,24 @@
     return;
   }
 
-  // Configuracao inline embutida no script tag — permite resolucao sem API call.
+  // Configuracao inline: pode vir embutida no script tag (data-config)
+  // ou como asset externo na CDN Shopify (data-config-url).
   // Estrutura: { domain, skuMap, variantMap, country, locale }
   var inlineConfig = null;
   try {
     var configAttr = scriptTag.dataset.config || scriptTag.getAttribute("data-config");
     if (configAttr) inlineConfig = JSON.parse(configAttr);
   } catch (e) {
-    console.warn("[RoutedCheckout] data-config invalido, usando API.", e);
+    console.warn("[RoutedCheckout] data-config invalido, ignorando.", e);
+  }
+
+  // Busca config do asset JSON na CDN Shopify (preferencial — sem limite de tamanho)
+  var configUrl = scriptTag.dataset.configUrl || scriptTag.getAttribute("data-config-url");
+  if (configUrl && !inlineConfig) {
+    fetch(configUrl)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (cfg) { if (cfg && cfg.domain) inlineConfig = cfg; })
+      .catch(function () {});
   }
 
   var isRouting = false;
