@@ -325,7 +325,7 @@ export default function StoreSetupPage() {
                     <Upload className="mr-2 h-3.5 w-3.5" />
                     {!selectedStore
                       ? t("select_store_first")
-                      : t("publish_btn", { domain: selectedStoreDomain })}
+                      : t("publish_btn", { domain: selectedStoreDomain ?? "" })}
                   </>
                 )}
               </Button>
@@ -459,7 +459,7 @@ export default function StoreSetupPage() {
                     className="text-[13px] font-medium uppercase text-muted-foreground"
                     style={{ letterSpacing: "0.05em" }}
                   >
-                    Menu Footer
+                    {t("overview_footer_menu")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -489,7 +489,7 @@ export default function StoreSetupPage() {
                     className="text-[13px] font-medium uppercase text-muted-foreground"
                     style={{ letterSpacing: "0.05em" }}
                   >
-                    Paginas
+                    {t("overview_pages")}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -519,7 +519,7 @@ export default function StoreSetupPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px] text-muted-foreground">
-                      Copyright
+                      {t("copyright_label")}
                     </p>
                     <p className="mt-1 text-sm text-foreground">
                       {setup.copyright}
