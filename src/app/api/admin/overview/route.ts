@@ -95,13 +95,17 @@ export async function GET() {
 
   const proUsers = users.filter((u) => u.plan === "pro").length;
   const withAccess = users.filter((u) => u.hasAccess).length;
+  const newUsersThisMonth = users.filter(
+    (u) => u.createdAt && new Date(u.createdAt) >= startOfMonth
+  ).length;
 
   return NextResponse.json({
     summary: {
       totalUsers: users.length,
       proUsers,
       withAccess,
-      mrrBrl: proUsers * PRO_PRICE_USD,
+      newUsersThisMonth,
+      mrrUsd: proUsers * PRO_PRICE_USD,
       aiCostThisMonthUsd: Number(totalCostUsd.toFixed(2)),
       totalStores: stores?.length || 0,
     },

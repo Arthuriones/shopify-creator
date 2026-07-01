@@ -13,18 +13,19 @@ import {
 interface Analytics {
   byAction: { action: string; costUsd: number; count: number; credits: number }[];
   byDay: { date: string; costUsd: number }[];
-  revenue: { mrrBrl: number; creditSalesBrl: number; revenueThisMonthBrl: number };
-  cost: { thisMonthUsd: number; thisMonthBrl: number };
-  marginBrl: number;
+  byMonth: { month: string; revenueUsd: number; newUsers: number }[];
+  revenue: { mrrUsd: number; creditSalesThisMonthUsd: number; revenueThisMonthUsd: number };
+  cost: { thisMonthUsd: number };
+  marginUsd: number;
 }
 
 const ACTION_LABEL: Record<string, string> = {
-  neutralize_image: "Imagem (neutralizar)",
-  neutralize_text: "Texto (neutralizar)",
-  translate: "Tradução",
-  clone: "Clonagem",
-  optimize: "Otimização",
-  other: "Outros",
+  neutralize_image: "Image neutralization",
+  neutralize_text: "Text neutralization",
+  translate: "Translation",
+  clone: "Cloning",
+  optimize: "Optimization",
+  other: "Other",
 };
 
 export default function AdminUsagePage() {
@@ -46,7 +47,7 @@ export default function AdminUsagePage() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
       </div>
     );
   }
@@ -59,75 +60,94 @@ export default function AdminUsagePage() {
   }
 
   const maxDay = Math.max(...(data?.byDay.map((d) => d.costUsd) || [0]), 0.0001);
-  const maxAction = Math.max(
-    ...(data?.byAction.map((a) => a.costUsd) || [0]),
-    0.0001
-  );
-  const margin = data?.marginBrl ?? 0;
+  const maxAction = Math.max(...(data?.byAction.map((a) => a.costUsd) || [0]), 0.0001);
+  const maxMonthRevenue = Math.max(...(data?.byMonth.map((m) => m.revenueUsd) || [0]), 0.0001);
+  const margin = data?.marginUsd ?? 0;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Uso & Custos</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Usage & Costs</h1>
         <p className="text-sm text-muted-foreground">
-          Custo de IA dos últimos 30 dias e receita do mês.
+          AI cost (last 30 days) and monthly revenue.
         </p>
       </div>
 
-      {/* Receita vs custo */}
+      {/* Revenue vs cost */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Receita (mês)</p>
+            <p className="text-xs text-muted-foreground">Revenue (month)</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
-              R${data?.revenue.revenueThisMonthBrl.toFixed(2)}
+              ${data?.revenue.revenueThisMonthUsd.toFixed(2)}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              MRR R${data?.revenue.mrrBrl} + recargas R$
-              {data?.revenue.creditSalesBrl.toFixed(2)}
+              MRR ${data?.revenue.mrrUsd} + credits ${data?.revenue.creditSalesThisMonthUsd.toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Custo IA (mês)</p>
+            <p className="text-xs text-muted-foreground">AI cost (month)</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
-              R${data?.cost.thisMonthBrl.toFixed(2)}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              US${data?.cost.thisMonthUsd.toFixed(2)}
+              ${data?.cost.thisMonthUsd.toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Margem (mês)</p>
-            <p
-              className={
-                "mt-1 text-2xl font-semibold " +
-                (margin >= 0 ? "text-primary" : "text-destructive")
-              }
-            >
-              R${margin.toFixed(2)}
+            <p className="text-xs text-muted-foreground">Margin (month)</p>
+            <p className={`mt-1 text-2xl font-semibold ${margin >= 0 ? "text-primary" : "text-destructive"}`}>
+              ${margin.toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Imagens neutralizadas</p>
+            <p className="text-xs text-muted-foreground">Images neutralized</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
               {data?.byAction.find((a) => a.action === "neutralize_image")?.count ?? 0}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">últimos 30 dias</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">last 30 days</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Custo por dia */}
+      {/* Monthly revenue + signups (last 6 months) */}
       <Card>
         <CardHeader>
-          <CardTitle>Custo de IA por dia (US$)</CardTitle>
-          <CardDescription>Últimos 30 dias</CardDescription>
+          <CardTitle>Revenue by month (USD)</CardTitle>
+          <CardDescription>Last 6 months — MRR + credit top-ups + new signups</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-40 items-end gap-2">
+            {data?.byMonth.map((m) => (
+              <div key={m.month} className="group relative flex flex-1 flex-col items-center gap-1">
+                <div className="w-full flex-1 flex items-end">
+                  <div
+                    className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary"
+                    style={{ height: `${Math.max(4, (m.revenueUsd / maxMonthRevenue) * 130)}px` }}
+                    title={`${m.month}: $${m.revenueUsd}`}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground">{m.month.slice(5)}</span>
+                {m.newUsers > 0 && (
+                  <span className="text-[9px] text-primary font-medium">+{m.newUsers}</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+            <span>bar height = revenue · green number = new users</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI cost per day */}
+      <Card>
+        <CardHeader>
+          <CardTitle>AI cost per day (USD)</CardTitle>
+          <CardDescription>Last 30 days</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex h-40 items-end gap-1">
@@ -135,7 +155,7 @@ export default function AdminUsagePage() {
               <div
                 key={d.date}
                 className="group relative flex-1"
-                title={`${d.date}: US$${d.costUsd.toFixed(3)}`}
+                title={`${d.date}: $${d.costUsd.toFixed(3)}`}
               >
                 <div
                   className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary"
@@ -151,15 +171,15 @@ export default function AdminUsagePage() {
         </CardContent>
       </Card>
 
-      {/* Custo por tipo de ação */}
+      {/* Cost by action type */}
       <Card>
         <CardHeader>
-          <CardTitle>Custo por tipo de ação (US$)</CardTitle>
-          <CardDescription>Últimos 30 dias</CardDescription>
+          <CardTitle>Cost by action type (USD)</CardTitle>
+          <CardDescription>Last 30 days</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {(data?.byAction.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem uso registrado.</p>
+            <p className="text-sm text-muted-foreground">No usage recorded.</p>
           ) : (
             data?.byAction.map((a) => (
               <div key={a.action} className="space-y-1">
@@ -168,7 +188,7 @@ export default function AdminUsagePage() {
                     {ACTION_LABEL[a.action] || a.action}
                   </span>
                   <span className="text-muted-foreground">
-                    {a.count}× · US${a.costUsd.toFixed(2)}
+                    {a.count}× · ${a.costUsd.toFixed(2)}
                   </span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">

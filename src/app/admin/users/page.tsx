@@ -33,8 +33,14 @@ interface AdminUser {
   accessGranted: boolean;
   isAdmin: boolean;
   hasAccess: boolean;
+  createdAt: string | null;
   stores: { domain: string; name: string }[];
   usageThisMonth: { costUsd: number; credits: number };
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function AdminUsersPage() {
@@ -134,7 +140,8 @@ export default function AdminUsersPage() {
                   <th className="py-2.5 pr-3">Plano</th>
                   <th className="py-2.5 pr-3">Créditos</th>
                   <th className="py-2.5 pr-3">Lojas</th>
-                  <th className="py-2.5 pr-3">Custo IA (mês)</th>
+                  <th className="py-2.5 pr-3">AI cost (mo)</th>
+                  <th className="py-2.5 pr-3">Signed up</th>
                   <th className="py-2.5 pr-4"></th>
                 </tr>
               </thead>
@@ -198,7 +205,10 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="py-2.5 pr-3 text-foreground">
-                      US${u.usageThisMonth.costUsd.toFixed(2)}
+                      ${u.usageThisMonth.costUsd.toFixed(2)}
+                    </td>
+                    <td className="py-2.5 pr-3 text-muted-foreground text-xs">
+                      {fmtDate(u.createdAt)}
                     </td>
                     <td className="py-2.5 pr-4">
                       <div className="flex justify-end gap-2">

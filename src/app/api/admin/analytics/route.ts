@@ -5,9 +5,6 @@ import { PRO_PRICE_USD } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
-// Cambio aproximado para estimar margem (custo IA em USD vs receita em BRL).
-const USD_TO_BRL = 5.4;
-
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -33,7 +30,12 @@ export async function GET() {
   startOfMonth.setUTCDate(1);
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
-  const [{ data: usage30 }, { data: purchases }, { data: profiles }] =
+  const since6m = new Date(now);
+  since6m.setUTCMonth(since6m.getUTCMonth() - 5);
+  since6m.setUTCDate(1);
+  since6m.setUTCHours(0, 0, 0, 0);
+
+  const [{ data: usage30 }, { data: purchases }, { data: profiles }, { data: newProfiles }] =
     await Promise.all([
       admin
         .from("ai_usage_log")
@@ -42,8 +44,9 @@ export async function GET() {
       admin
         .from("credit_purchases")
         .select("amount_cents, created_at")
-        .gte("created_at", startOfMonth.toISOString()),
+        .gte("created_at", since6m.toISOString()),
       admin.from("profiles").select("plan"),
+      admin.from("profiles").select("created_at").gte("created_at", since6m.toISOString()),
     ]);
 
   // Por acao (30 dias)
@@ -85,25 +88,55 @@ export async function GET() {
     .sort((a, b) => b.costUsd - a.costUsd);
 
   const proUsers = (profiles || []).filter((p) => p.plan === "pro").length;
-  const mrrBrl = proUsers * PRO_PRICE_USD;
-  const creditSalesBrl =
-    (purchases || []).reduce((s, p) => s + Number(p.amount_cents || 0), 0) / 100;
-  const revenueThisMonthBrl = mrrBrl + creditSalesBrl;
-  const costThisMonthBrl = costThisMonthUsd * USD_TO_BRL;
-  const marginBrl = revenueThisMonthBrl - costThisMonthBrl;
+  const mrrUsd = proUsers * PRO_PRICE_USD;
+
+  // Credit sales + new signups grouped by month (last 6 months)
+  const monthlyMap = new Map<string, { revenueUsd: number; newUsers: number }>();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now);
+    d.setUTCMonth(d.getUTCMonth() - (5 - i));
+    d.setUTCDate(1);
+    monthlyMap.set(d.toISOString().slice(0, 7), { revenueUsd: 0, newUsers: 0 });
+  }
+  for (const p of purchases || []) {
+    const month = String(p.created_at).slice(0, 7);
+    const entry = monthlyMap.get(month);
+    if (entry) entry.revenueUsd += Number(p.amount_cents || 0) / 100;
+  }
+  for (const p of newProfiles || []) {
+    const month = String(p.created_at).slice(0, 7);
+    const entry = monthlyMap.get(month);
+    if (entry) entry.newUsers += 1;
+  }
+  // Add MRR to current month
+  const currentMonth = now.toISOString().slice(0, 7);
+  const currentEntry = monthlyMap.get(currentMonth);
+  if (currentEntry) currentEntry.revenueUsd += mrrUsd;
+
+  const byMonth = [...monthlyMap.entries()].map(([month, v]) => ({
+    month,
+    revenueUsd: Number(v.revenueUsd.toFixed(2)),
+    newUsers: v.newUsers,
+  }));
+
+  const creditSalesThisMonthUsd =
+    (purchases || [])
+      .filter((p) => String(p.created_at).slice(0, 7) === currentMonth)
+      .reduce((s, p) => s + Number(p.amount_cents || 0), 0) / 100;
+
+  const revenueThisMonthUsd = mrrUsd + creditSalesThisMonthUsd;
+  const marginUsd = revenueThisMonthUsd - costThisMonthUsd;
 
   return NextResponse.json({
     byAction,
     byDay,
+    byMonth,
     revenue: {
-      mrrBrl,
-      creditSalesBrl: Number(creditSalesBrl.toFixed(2)),
-      revenueThisMonthBrl: Number(revenueThisMonthBrl.toFixed(2)),
+      mrrUsd,
+      creditSalesThisMonthUsd: Number(creditSalesThisMonthUsd.toFixed(2)),
+      revenueThisMonthUsd: Number(revenueThisMonthUsd.toFixed(2)),
     },
-    cost: {
-      thisMonthUsd: Number(costThisMonthUsd.toFixed(2)),
-      thisMonthBrl: Number(costThisMonthBrl.toFixed(2)),
-    },
-    marginBrl: Number(marginBrl.toFixed(2)),
+    cost: { thisMonthUsd: Number(costThisMonthUsd.toFixed(2)) },
+    marginUsd: Number(marginUsd.toFixed(2)),
   });
 }
