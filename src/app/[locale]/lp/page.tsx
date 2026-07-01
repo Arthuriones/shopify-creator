@@ -193,7 +193,7 @@ export default function LandingPage() {
                 >
                   <span className="font-medium">{pack.label}</span>
                   <span className="text-muted-foreground">
-                    R${(pack.amountCents / 100).toFixed(0)}
+                    ${(pack.amountCents / 100).toFixed(0)}
                   </span>
                 </li>
               ))}

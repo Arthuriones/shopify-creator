@@ -85,7 +85,7 @@ function BillingInner() {
   }
 
   const isPro = info?.plan === "pro";
-  const reais = (cents: number) => (cents / 100).toFixed(0);
+  const usd = (cents: number) => (cents / 100).toFixed(0);
 
   return (
     <div className="space-y-6 p-1">
@@ -195,7 +195,7 @@ function BillingInner() {
                       {t("creditsCount", { n: pack.credits })}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      R${reais(pack.amountCents)}
+                      ${usd(pack.amountCents)}
                     </p>
                     <Button
                       variant="outline"
