@@ -25,7 +25,7 @@
   "noAccess": {
     "title": "Your free trial has ended",
     "body": "You've already used your free store clone. Subscribe to Pro to keep cloning stores, translating and neutralizing products — or contact support if you should already have access.",
-    "subscribe": "Subscribe to Pro — R$89/mo",
+    "subscribe": "Subscribe to Pro — $17/mo",
     "logout": "Log out"
   },
   "common": {
@@ -42,9 +42,9 @@
     "statusActive": "active",
     "statusNone": "no subscription",
     "proDesc": "Unlimited cloning, translation and neutralization credits.",
-    "freeDesc": "Subscribe to Pro to unlock everything (R$89/mo).",
+    "freeDesc": "Subscribe to Pro to unlock everything ($17/mo).",
     "manage": "Manage",
-    "subscribe": "Subscribe to Pro — R$89/mo",
+    "subscribe": "Subscribe to Pro — $17/mo",
     "aiCredits": "AI credits",
     "usedThisMonth": "Used this month",
     "estimatedCost": "Est. AI cost (month)",

@@ -25,7 +25,7 @@
   "noAccess": {
     "title": "Sua avaliação gratuita terminou",
     "body": "Você já usou sua clonagem gratuita. Assine o Pro para continuar clonando lojas, traduzindo e neutralizando produtos — ou fale com o suporte se já deveria ter acesso.",
-    "subscribe": "Assinar Pro — R$89/mês",
+    "subscribe": "Assinar Pro — $17/mês",
     "logout": "Sair"
   },
   "common": {
@@ -42,9 +42,9 @@
     "statusActive": "ativo",
     "statusNone": "sem assinatura",
     "proDesc": "Clonagem ilimitada, tradução e créditos de neutralização.",
-    "freeDesc": "Assine o Pro para liberar tudo (R$89/mês).",
+    "freeDesc": "Assine o Pro para liberar tudo ($17/mês).",
     "manage": "Gerenciar",
-    "subscribe": "Assinar Pro — R$89/mês",
+    "subscribe": "Assinar Pro — $17/mês",
     "aiCredits": "Créditos de IA",
     "usedThisMonth": "Usados este mês",
     "estimatedCost": "Custo IA estimado (mês)",

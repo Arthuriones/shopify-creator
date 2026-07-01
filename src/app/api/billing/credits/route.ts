@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         {
           quantity: 1,
           price_data: {
-            currency: "brl",
+            currency: "usd",
             unit_amount: pack.amountCents,
             product_data: {
               name: `Xcart — ${pack.label}`,
