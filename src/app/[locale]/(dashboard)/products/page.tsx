@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useTranslations } from "next-intl";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -287,6 +288,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 function ProductsPageContent() {
+  const t = useTranslations("products_page");
   const searchParams = useSearchParams();
   const editId = searchParams.get("editId");
   const storeIdParam = searchParams.get("storeId");
@@ -2030,7 +2032,7 @@ function ProductsPageContent() {
                     {product.description && (
                       <div>
                         <Label className="text-[13px] text-muted-foreground">
-                          Descricao original
+                          {t("original_description")}
                         </Label>
                         <p className="mt-1 text-sm text-muted-foreground/80 line-clamp-6 leading-relaxed">
                           {product.description}
@@ -2041,7 +2043,7 @@ function ProductsPageContent() {
                     {Object.keys(product.specs).length > 0 && (
                       <div>
                         <Label className="text-[13px] text-muted-foreground">
-                          Especificacoes
+                          {t("original_specs")}
                         </Label>
                         <div className="mt-1 space-y-1">
                           {Object.entries(product.specs)
@@ -2332,7 +2334,7 @@ function ProductsPageContent() {
 
                 {Object.keys(product.specs).length > 0 && (
                   <div className="rounded-lg border border-border/30 p-4 space-y-3">
-                    <h4 className="text-sm font-medium text-foreground">Especificacoes</h4>
+                    <h4 className="text-sm font-medium text-foreground">{t("original_specs")}</h4>
                     <div className="grid gap-2 md:grid-cols-2">
                       {Object.entries(product.specs)
                         .slice(0, 8)

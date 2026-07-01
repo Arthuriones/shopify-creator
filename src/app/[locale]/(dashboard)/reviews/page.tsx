@@ -429,7 +429,7 @@ export default function ReviewsPage() {
               <Label>Loja</Label>
               <Select value={storeId} onValueChange={(value) => setStoreId(value || "")}>
                 <SelectTrigger className="w-full min-w-0">
-                  <SelectValue placeholder="Selecione uma loja">
+                  <SelectValue placeholder="Select a store">
                     {formatStoreLabel(selectedStore)}
                   </SelectValue>
                 </SelectTrigger>
@@ -519,7 +519,7 @@ export default function ReviewsPage() {
                       {primarySelectedProduct.title}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {primarySelectedProduct.status || "sem status"} ·{" "}
+                      {primarySelectedProduct.status || "no status"} ·{" "}
                       {primarySelectedProduct.variants?.nodes?.length || 0} variante(s)
                     </p>
                     <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
@@ -639,7 +639,7 @@ export default function ReviewsPage() {
                             {product.title}
                           </span>
                           <span className="mt-1 block truncate text-xs text-muted-foreground">
-                            {product.status || "sem status"} · {product.variants?.nodes?.length || 0} variante(s)
+                            {product.status || "no status"} · {product.variants?.nodes?.length || 0} variante(s)
                           </span>
                         </span>
                       </label>
@@ -949,7 +949,7 @@ export default function ReviewsPage() {
                           </p>
                         </div>
                         <Badge variant="outline" className="rounded-md">
-                          {review.disclosure || "Conteudo gerado por IA / simulacao"}
+                          {review.disclosure || "AI-generated content / simulation"}
                         </Badge>
                         {review.imageUrl ? (
                           <button

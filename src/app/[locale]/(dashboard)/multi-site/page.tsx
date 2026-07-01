@@ -256,7 +256,7 @@ export default function MultiSiteImportPage() {
           <div className="grid gap-4 lg:grid-cols-[1fr_190px]">
             <Select value={selectedStore} onValueChange={(value) => setSelectedStore(value || "")}>
               <SelectTrigger className="h-10">
-                <SelectValue placeholder="Selecione a loja de destino...">
+                <SelectValue placeholder="Select destination store...">
                   {(value: string) => {
                     const selected = stores.find((store) => store.id === value);
                     return selected ? `${selected.name} (${selected.shop_domain})` : value;
@@ -280,10 +280,10 @@ export default function MultiSiteImportPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">1 produto/origem</SelectItem>
-                <SelectItem value="5">5 produtos/origem</SelectItem>
-                <SelectItem value="20">20 produtos/origem</SelectItem>
-                <SelectItem value="50">50 produtos/origem</SelectItem>
+                <SelectItem value="1">1 product/source</SelectItem>
+                <SelectItem value="5">5 products/source</SelectItem>
+                <SelectItem value="20">20 products/source</SelectItem>
+                <SelectItem value="50">50 products/source</SelectItem>
               </SelectContent>
             </Select>
           </div>

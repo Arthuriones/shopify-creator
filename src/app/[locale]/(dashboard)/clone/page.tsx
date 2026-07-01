@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -478,29 +479,27 @@ function ServiceIntro({
 }
 
 function ServiceOverview() {
+  const t = useTranslations("clone_page");
   const services = [
     {
       href: "/clone/shopify",
       icon: Copy,
-      title: "Clonar loja Shopify",
-      description:
-        "Importe produtos de uma vitrine pública via /products.json, veja a prévia e aplique em uma loja conectada.",
+      title: t("service_clone_title"),
+      description: t("service_clone_desc"),
       bullets: ["Origem pública", "Prévia antes de gravar", "Aplicação em loja conectada"],
     },
     {
       href: "/clone/export",
       icon: FileOutput,
-      title: "Exportar catálogo",
-      description:
-        "Gere arquivos JSON ou CSV da origem informada para backup, revisão em planilha ou importação manual.",
+      title: t("service_export_title"),
+      description: t("service_export_desc"),
       bullets: ["JSON completo", "CSV operacional", "Histórico de execuções"],
     },
     {
       href: "/clone/routed-checkout",
       icon: GitBranch,
-      title: "Loja vitrine",
-      description:
-        "Faça uma vitrine vender enquanto o checkout final é montado na dark store com variantes mapeadas.",
+      title: t("service_showcase_title"),
+      description: t("service_showcase_desc"),
       bullets: ["SKU map", "Variant map", "Script no tema"],
     },
   ];
@@ -539,6 +538,7 @@ function ServiceOverview() {
 }
 
 export default function ClonePage() {
+  const t = useTranslations("clone_page");
   const pathname = usePathname();
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
@@ -1624,7 +1624,7 @@ export default function ClonePage() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                Individual
+                {t("mode_individual")}
               </button>
               <button
                 type="button"
@@ -1639,7 +1639,7 @@ export default function ClonePage() {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                Em massa
+                {t("mode_bulk")}
               </button>
             </div>
 
@@ -1647,15 +1647,15 @@ export default function ClonePage() {
             <div className="flex items-center gap-1.5">
               {(importMode === "bulk"
                 ? [
-                    [1, "Origem"],
-                    [2, "Produtos"],
-                    [3, "Opções"],
-                    [4, "Revisar"],
+                    [1, t("step_origin")],
+                    [2, t("step_products")],
+                    [3, t("step_options")],
+                    [4, t("step_review")],
                   ]
                 : [
-                    [1, "Origem"],
-                    [3, "Opções"],
-                    [4, "Revisar"],
+                    [1, t("step_origin")],
+                    [3, t("step_options")],
+                    [4, t("step_review")],
                   ]
               ).map(([n, label]) => {
                 const active = importStep === n;
@@ -1697,8 +1697,8 @@ export default function ClonePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="wiz-source">
                       {importMode === "single"
-                        ? "URL do produto"
-                        : "Loja de origem"}
+                        ? t("source_url_label")
+                        : t("source_store_label")}
                     </Label>
                     <Input
                       id="wiz-source"
@@ -1718,7 +1718,7 @@ export default function ClonePage() {
                   </div>
                   {importMode === "bulk" && (
                     <div className="space-y-1.5">
-                      <Label htmlFor="wiz-limit">Limite</Label>
+                      <Label htmlFor="wiz-limit">{t("limit_label")}</Label>
                       <Input
                         id="wiz-limit"
                         value={limit}
@@ -1734,7 +1734,7 @@ export default function ClonePage() {
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label>Loja de destino</Label>
+                    <Label>{t("target_store_label")}</Label>
                     <Select
                       value={targetStoreId}
                       onValueChange={(value) => setTargetStoreId(value || "")}
@@ -1754,7 +1754,7 @@ export default function ClonePage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Produtos duplicados</Label>
+                    <Label>{t("duplicates_label")}</Label>
                     <Select
                       value={duplicatePolicy}
                       onValueChange={(value) =>
@@ -1765,8 +1765,8 @@ export default function ClonePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align="start">
-                        <SelectItem value="skip">Pular existentes</SelectItem>
-                        <SelectItem value="create">Criar mesmo assim</SelectItem>
+                        <SelectItem value="skip">{t("skip_existing")}</SelectItem>
+                        <SelectItem value="create">{t("create_anyway")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1795,7 +1795,7 @@ export default function ClonePage() {
                           : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      Loja inteira
+                      {t("scope_all")}
                     </button>
                     <button
                       type="button"
@@ -1814,7 +1814,7 @@ export default function ClonePage() {
                           : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      Por coleção
+                      {t("scope_collection")}
                     </button>
                   </div>
 
@@ -1910,8 +1910,8 @@ export default function ClonePage() {
                       <WandSparkles className="h-4 w-4" />
                     )}
                     {importScope === "collection"
-                      ? "Analisar coleção"
-                      : "Analisar origem"}
+                      ? t("analyze_collection_btn")
+                      : t("analyze_origin_btn")}
                   </Button>
                   {preview.length > 0 && (
                     <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1925,7 +1925,7 @@ export default function ClonePage() {
                         }
                         className="h-4 w-4 accent-primary"
                       />
-                      Selecionar todos
+                      {t("select_all")}
                     </label>
                   )}
                 </div>
@@ -1937,7 +1937,7 @@ export default function ClonePage() {
                 <div className="max-h-72 overflow-auto rounded-lg border border-border/60">
                   {preview.length === 0 ? (
                     <div className="p-8 text-center text-sm text-muted-foreground">
-                      Nenhum produto carregado ainda.
+                      {t("no_products_loaded")}
                     </div>
                   ) : (
                     preview.map((product) => (

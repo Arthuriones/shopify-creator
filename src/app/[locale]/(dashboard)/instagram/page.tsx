@@ -316,7 +316,7 @@ export default function InstagramPage() {
                     : "Instagram não conectado"}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {status?.connection?.page_name || status?.error || "Conta profissional via Meta."}
+                {status?.connection?.page_name || status?.error || "Professional account via Meta."}
               </p>
             </div>
             {status?.connected ? (
@@ -350,7 +350,7 @@ export default function InstagramPage() {
               <Label>Loja</Label>
               <Select value={storeId} onValueChange={(value) => setStoreId(value || "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a loja">
+                  <SelectValue placeholder="Select a store">
                     {formatStoreLabel(selectedStore)}
                   </SelectValue>
                 </SelectTrigger>
@@ -424,13 +424,10 @@ export default function InstagramPage() {
 
             <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/25 p-3 text-xs leading-5 text-muted-foreground">
               <p>
-                Com 1 imagem, o app publica um post simples. Com 2 a 10 imagens,
-                cria um carrossel. Se voce selecionar apenas 1 produto, todas as
-                imagens dele entram no carrossel.
+                With 1 image, the app publishes a simple post. With 2 to 10 images, it creates a carousel. If you select only 1 product, all its images go into the carousel.
               </p>
               <p>
-                A conta precisa ser profissional e o app Meta precisa ter permissão
-                para publicar conteúdo.
+                The account must be a professional account and the Meta app must have permission to publish content.
               </p>
             </div>
 
@@ -444,7 +441,7 @@ export default function InstagramPage() {
             </Button>
             {lastResult ? (
               <p className="rounded-lg border border-primary/25 bg-primary/8 p-3 text-xs text-muted-foreground">
-                Publicado. Media ID: <span className="font-mono">{lastResult}</span>
+                Published. Media ID: <span className="font-mono">{lastResult}</span>
               </p>
             ) : null}
           </CardContent>
@@ -521,7 +518,7 @@ export default function InstagramPage() {
                             {product.title}
                           </p>
                           <p className="mt-1 truncate text-xs text-muted-foreground">
-                            {product.variants?.nodes?.[0]?.price || "sem preço"}
+                            {product.variants?.nodes?.[0]?.price || "no price"}
                           </p>
                           <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
                             /products/{product.handle}

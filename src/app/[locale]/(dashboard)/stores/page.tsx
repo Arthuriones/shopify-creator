@@ -805,7 +805,7 @@ export default function StoresPage() {
               >
                 <span className="flex items-center gap-2">
                   <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                  Como criar e instalar o app no Shopify (passo a passo)
+                  {t("tutorial_toggle")}
                 </span>
                 <ChevronDown
                   className={cn(
@@ -965,7 +965,7 @@ export default function StoresPage() {
             <div className="grid gap-4 md:grid-cols-[1fr_auto]">
               <div className="space-y-2">
                 <Label className="text-[13px] text-muted-foreground">
-                  Loja
+                  {t("store_label")}
                 </Label>
                 <Select value={materialsStoreId} onValueChange={(value) => setMaterialsStoreId(value ?? "")}>
                   <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
@@ -991,7 +991,7 @@ export default function StoresPage() {
                   onClick={() => quickAssetsInputRef.current?.click()}
                 >
                   <Upload className="mr-2 h-3.5 w-3.5" />
-                  Adicionar materiais
+                  {t("add_materials_btn")}
                 </Button>
                 <Button
                   type="button"
@@ -1008,10 +1008,10 @@ export default function StoresPage() {
                   {quickAssetsSaving ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Salvando...
+                      {t("saving")}
                     </span>
                   ) : (
-                    "Salvar materiais"
+                    t("save_materials_btn")
                   )}
                 </Button>
                 <input
@@ -1028,7 +1028,7 @@ export default function StoresPage() {
             {quickAssetFiles.length > 0 && (
               <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
                 <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
-                  Prontos para salvar ({quickAssetFiles.length})
+                  {t("ready_to_save", { count: quickAssetFiles.length })}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {quickAssetFiles.map((file, index) => (
@@ -1067,7 +1067,7 @@ export default function StoresPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Sem materiais cadastrados para esta loja ainda.
+                  {t("no_materials")}
                 </p>
               )
             )}
@@ -1206,7 +1206,7 @@ export default function StoresPage() {
                           border: "none",
                         }}
                       >
-                        Conversao auto
+                        {t("auto_conversion")}
                       </Badge>
                     )}
                   </div>
@@ -1244,7 +1244,7 @@ export default function StoresPage() {
               className="text-lg font-semibold"
               style={{ letterSpacing: "-0.02em" }}
             >
-              Perfil da Loja — {editingStore?.name}
+              {t("profile_dialog_title", { name: editingStore?.name ?? "" })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
@@ -1264,7 +1264,7 @@ export default function StoresPage() {
             {/* Logo upload */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Logo da Loja
+                {t("logo_label")}
               </Label>
               <div className="flex items-center gap-4">
                 <div
@@ -1294,7 +1294,7 @@ export default function StoresPage() {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Upload className="mr-1.5 h-3 w-3" />
-                    {logoPreview ? "Trocar logo" : "Enviar logo"}
+                    {logoPreview ? t("change_logo") : t("upload_logo")}
                   </Button>
                   <p className="text-[11px] text-muted-foreground/50">
                     PNG, SVG, WEBP ou JPG. Max 2MB.
@@ -1313,10 +1313,10 @@ export default function StoresPage() {
             {/* Logos adicionais */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Logos Adicionais
+                {t("additional_logos_label")}
               </Label>
               <p className="text-[11px] text-muted-foreground/50">
-                Envie versoes alternativas da logo para usar em diferentes imagens.
+                {t("additional_logos_hint")}
               </p>
 
               {/* Existing additional logos from store_assets */}
@@ -1363,7 +1363,7 @@ export default function StoresPage() {
                 onClick={() => additionalLogoInputRef.current?.click()}
               >
                 <Upload className="mr-1.5 h-3 w-3" />
-                Adicionar logo
+                {t("add_logo_btn")}
               </Button>
               <input
                 ref={additionalLogoInputRef}
@@ -1378,7 +1378,7 @@ export default function StoresPage() {
             {/* Materiais da marca */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Materiais da Marca (banners e referencias visuais)
+                {t("brand_materials_label")}
               </Label>
 
               <div className="flex items-center gap-2">
@@ -1390,10 +1390,10 @@ export default function StoresPage() {
                   onClick={() => assetsInputRef.current?.click()}
                 >
                   <Upload className="mr-1.5 h-3 w-3" />
-                  Adicionar materiais
+                  {t("add_materials_btn")}
                 </Button>
                 <span className="text-[11px] text-muted-foreground/60">
-                  Ate 12 imagens (PNG, JPG, WEBP)
+                  Up to 12 images (PNG, JPG, WEBP)
                 </span>
                 <input
                   ref={assetsInputRef}
@@ -1408,7 +1408,7 @@ export default function StoresPage() {
               {assetFiles.length > 0 && (
                 <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
                   <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
-                    Novos arquivos ({assetFiles.length})
+                    {`New files (${assetFiles.length})`}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {assetFiles.map((file, index) => (
@@ -1446,7 +1446,7 @@ export default function StoresPage() {
                 </div>
               ) : (
                 <p className="text-[11px] text-muted-foreground/50">
-                  Sem materiais extras ainda. Esses arquivos serao usados como referencia para recriar as imagens dos produtos.
+                  No extra materials yet. These files will be used as visual references for image recreation.
                 </p>
               )}
             </div>
@@ -1454,26 +1454,26 @@ export default function StoresPage() {
             {/* Nicho */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Nicho da Loja
+                {t("niche_label")}
               </Label>
               <Input
-                placeholder="ex: Fitness feminino, Pet, Tecnologia, Casa e Decoração"
+                placeholder={t("niche_placeholder")}
                 value={profileNiche}
                 onChange={(e) => setProfileNiche(e.target.value)}
                 className="h-10 bg-background/50 border-border/50 text-sm"
               />
               <p className="text-[11px] text-muted-foreground/50">
-                Define o contexto para toda a IA: otimização de produtos, políticas, SEO
+                {t("niche_hint")}
               </p>
             </div>
 
             {/* Público-alvo */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Público-alvo
+                {t("audience_label")}
               </Label>
               <Textarea
-                placeholder="ex: Mulheres 25-40 que praticam yoga e pilates, buscam qualidade e praticidade"
+                placeholder="e.g. Women 25-40 who practice yoga and pilates, looking for quality and convenience"
                 value={profileAudience}
                 onChange={(e) => setProfileAudience(e.target.value)}
                 rows={2}
@@ -1484,11 +1484,11 @@ export default function StoresPage() {
             {/* Voz da marca */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Voz da Marca
+                {t("brand_voice_label")}
               </Label>
               <Select value={profileVoice} onValueChange={(v) => setProfileVoice(v ?? "")}>
                 <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                  <SelectValue placeholder="Como sua marca se comunica?" />
+                  <SelectValue placeholder="How does your brand communicate?" />
                 </SelectTrigger>
                 <SelectContent>
                   {BRAND_VOICE_OPTIONS.map((opt) => (
@@ -1500,7 +1500,7 @@ export default function StoresPage() {
               </Select>
               {profileVoice === "custom" && (
                 <Input
-                  placeholder="Descreva a voz da sua marca..."
+                  placeholder="Describe your brand voice..."
                   value={profileCustomVoice}
                   onChange={(e) => setProfileCustomVoice(e.target.value)}
                   className="h-10 bg-background/50 border-border/50 text-sm"
@@ -1511,30 +1511,30 @@ export default function StoresPage() {
             {/* Descrição da loja */}
             <div className="space-y-2">
               <Label className="text-[13px] text-muted-foreground">
-                Descrição da Loja
+                {t("store_description_label")}
               </Label>
               <Textarea
-                placeholder="ex: Vendemos acessórios fitness premium para mulheres que treinam em casa. Foco em praticidade, conforto e design bonito."
+                placeholder="e.g. We sell premium fitness accessories for women who train at home. Focus on practicality, comfort and beautiful design."
                 value={profileDescription}
                 onChange={(e) => setProfileDescription(e.target.value)}
                 rows={3}
                 className="bg-background/50 border-border/50 text-sm"
               />
               <p className="text-[11px] text-muted-foreground/50">
-                Quanto mais contexto, melhor a IA gera textos e descrições
+                {t("store_description_hint")}
               </p>
             </div>
 
             <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
               <Label className="text-[13px] text-muted-foreground">
-                Idioma principal da loja
+                {t("language_label")}
               </Label>
               <Select
                 value={profileTargetLanguage}
                 onValueChange={(value) => setProfileTargetLanguage(value ?? "pt-BR")}
               >
                 <SelectTrigger className="h-10 bg-background/60 border-border/50 text-sm">
-                  <SelectValue placeholder="Selecione o idioma" />
+                  <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent>
                   {LANGUAGE_OPTIONS.map((language) => (
@@ -1545,26 +1545,25 @@ export default function StoresPage() {
                 </SelectContent>
               </Select>
               <p className="text-[11px] leading-5 text-muted-foreground/80">
-                Produtos otimizados, descrições, SEO, políticas, páginas e menus
-                serão gerados nesse idioma para esta loja.
+                {t("language_hint")}
               </p>
             </div>
 
             <div className="space-y-3 rounded-lg border border-border/40 bg-background/40 p-3.5">
               <p className="text-[12px] font-medium uppercase text-muted-foreground" style={{ letterSpacing: "0.05em" }}>
-                Preco e moeda padrao
+                {t("price_currency_title")}
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-[12px] text-muted-foreground">
-                    Moeda padrao
+                    {t("currency_label")}
                   </Label>
                   <Select
                     value={profileCurrencyCode}
                     onValueChange={(value) => setProfileCurrencyCode(value ?? "USD")}
                   >
                     <SelectTrigger className="h-10 bg-background/60 border-border/50 text-sm">
-                      <SelectValue placeholder="Selecione a moeda" />
+                      <SelectValue placeholder="Select currency" />
                     </SelectTrigger>
                     <SelectContent>
                       {CURRENCY_OPTIONS.map((currency) => (
@@ -1578,7 +1577,7 @@ export default function StoresPage() {
 
                 <div className="space-y-1.5">
                   <Label className="text-[12px] text-muted-foreground">
-                    Taxa sobre USD
+                    {t("rate_label")}
                   </Label>
                   <Input
                     value={profileCurrencyRate}
@@ -1593,7 +1592,7 @@ export default function StoresPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-[12px] text-muted-foreground">
-                    Markup padrao (%)
+                    {t("markup_label")}
                   </Label>
                   <Input
                     value={profilePriceMarkupPercent}
@@ -1613,11 +1612,11 @@ export default function StoresPage() {
                       className="h-4 w-4 rounded border-border/70 bg-background"
                     />
                     <span className="text-foreground/90">
-                      Converter preco automaticamente
+                      {t("auto_convert_label")}
                     </span>
                   </label>
                   <p className="text-[11px] text-muted-foreground/80">
-                    Quando ativo, produtos importados ja chegam com a moeda da loja e o markup aplicado.
+                    {t("auto_convert_hint")}
                   </p>
                 </div>
               </div>
@@ -1638,13 +1637,13 @@ export default function StoresPage() {
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {logoUploading
-                    ? "Enviando logo..."
+                    ? t("uploading_logo")
                     : assetUploading
-                      ? "Enviando materiais..."
-                      : "Salvando..."}
+                      ? t("uploading_materials")
+                      : t("saving")}
                 </span>
               ) : (
-                "Salvar Perfil"
+                t("save_profile_btn")
               )}
             </Button>
           </div>
