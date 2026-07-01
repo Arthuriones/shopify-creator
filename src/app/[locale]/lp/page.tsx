@@ -14,7 +14,7 @@ import {
   Store,
   Zap,
 } from "lucide-react";
-import { PRO_PRICE_BRL, PRO_INCLUDED_CREDITS, CREDIT_PACKS } from "@/lib/billing/plans";
+import { PRO_PRICE_USD, PRO_INCLUDED_CREDITS, CREDIT_PACKS } from "@/lib/billing/plans";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://user.xcart.app";
 
@@ -159,7 +159,7 @@ export default function LandingPage() {
             </div>
             <h3 className="text-lg font-semibold">Pro</h3>
             <div className="mt-3 flex items-end gap-1">
-              <span className="text-5xl font-bold">R${PRO_PRICE_BRL}</span>
+              <span className="text-5xl font-bold">${PRO_PRICE_USD}</span>
               <span className="mb-1.5 text-muted-foreground">{t("perMonth")}</span>
             </div>
             <ul className="mt-6 space-y-3 text-sm">

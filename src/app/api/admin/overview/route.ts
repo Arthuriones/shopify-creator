@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_PRICE_BRL } from "@/lib/billing/plans";
+import { PRO_PRICE_USD } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -101,7 +101,7 @@ export async function GET() {
       totalUsers: users.length,
       proUsers,
       withAccess,
-      mrrBrl: proUsers * PRO_PRICE_BRL,
+      mrrBrl: proUsers * PRO_PRICE_USD,
       aiCostThisMonthUsd: Number(totalCostUsd.toFixed(2)),
       totalStores: stores?.length || 0,
     },

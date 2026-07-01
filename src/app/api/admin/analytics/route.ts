@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_PRICE_BRL } from "@/lib/billing/plans";
+import { PRO_PRICE_USD } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -85,7 +85,7 @@ export async function GET() {
     .sort((a, b) => b.costUsd - a.costUsd);
 
   const proUsers = (profiles || []).filter((p) => p.plan === "pro").length;
-  const mrrBrl = proUsers * PRO_PRICE_BRL;
+  const mrrBrl = proUsers * PRO_PRICE_USD;
   const creditSalesBrl =
     (purchases || []).reduce((s, p) => s + Number(p.amount_cents || 0), 0) / 100;
   const revenueThisMonthBrl = mrrBrl + creditSalesBrl;
