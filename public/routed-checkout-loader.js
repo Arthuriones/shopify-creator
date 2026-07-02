@@ -195,7 +195,9 @@
         targetId = inlineConfig.skuMap[sku] || null;
       }
       if (targetId) {
-        resolvedLines.push({ variantId: String(targetId), quantity: Math.max(1, Number(line.quantity) || 1) });
+        var numericId = String(targetId);
+        if (numericId.indexOf("gid://") !== -1) numericId = numericId.split("/").pop() || numericId;
+        resolvedLines.push({ variantId: numericId, quantity: Math.max(1, Number(line.quantity) || 1) });
       }
     }
     if (resolvedLines.length === 0) return null;
