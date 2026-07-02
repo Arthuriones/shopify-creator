@@ -57,6 +57,7 @@ interface DestinationResult {
   imageQueueCount: number;
   skuMap: Record<string, string>;
   variantMap: Record<string, string>;
+  failedDetails?: { sourceHandle: string; error: string }[];
 }
 
 interface ConnectStoresWizardProps {
@@ -322,6 +323,7 @@ export function ConnectStoresWizard({
       imageQueueCount: 0,
       skuMap: {} as Record<string, string>,
       variantMap: {} as Record<string, string>,
+      failedDetails: [] as { sourceHandle: string; error: string }[],
     };
     let cursor: string | null = null;
     let total = 0;
@@ -367,6 +369,7 @@ export function ConnectStoresWizard({
         imageQueueCount?: number;
         skuMap?: Record<string, string>;
         variantMap?: Record<string, string>;
+        failed?: { sourceHandle: string; error: string }[];
         totalCount?: number | null;
         nextCursor?: string | null;
         hasMore?: boolean;
@@ -428,6 +431,7 @@ export function ConnectStoresWizard({
         agg.imageQueueCount += data.imageQueueCount || 0;
         Object.assign(agg.skuMap, data.skuMap || {});
         Object.assign(agg.variantMap, data.variantMap || {});
+        if (data.failed?.length) agg.failedDetails.push(...data.failed);
         if (first && typeof data.totalCount === "number") total = data.totalCount;
         first = false;
         if (data.imageQueueCount) enqueuedImages = true;
@@ -456,6 +460,7 @@ export function ConnectStoresWizard({
         imageQueueCount: agg.imageQueueCount,
         skuMap: agg.skuMap,
         variantMap: agg.variantMap,
+        failedDetails: agg.failedDetails,
       });
       if (enqueuedImages) refreshImageQueue(targetStoreId);
       if (canceled) {
@@ -480,6 +485,7 @@ export function ConnectStoresWizard({
           imageQueueCount: agg.imageQueueCount,
           skuMap: agg.skuMap,
           variantMap: agg.variantMap,
+          failedDetails: agg.failedDetails,
         });
         if (enqueuedImages) refreshImageQueue(targetStoreId);
         toast("Cancelado. Os produtos já criados foram mantidos.");
@@ -498,6 +504,7 @@ export function ConnectStoresWizard({
             imageQueueCount: agg.imageQueueCount,
             skuMap: agg.skuMap,
             variantMap: agg.variantMap,
+            failedDetails: agg.failedDetails,
           });
           if (enqueuedImages) refreshImageQueue(targetStoreId);
         }
@@ -616,7 +623,7 @@ export function ConnectStoresWizard({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-lg" showCloseButton={!busy}>
+      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-lg" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RouteIcon className="h-4 w-4 text-primary" />
@@ -1119,7 +1126,7 @@ export function ConnectStoresWizard({
 
         {/* Passo 2 — Criar destino / progresso */}
         {step === 2 && (
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto"><div className="space-y-4">
             {creatingDestination && (
               <div className="space-y-3 rounded-lg border border-border/60 bg-background/45 p-4">
                 <div className="flex items-center gap-3">
@@ -1250,9 +1257,26 @@ export function ConnectStoresWizard({
                 </div>
 
                 {destinationResult.failedCount > 0 && (
-                  <p className="text-xs text-destructive">
-                    {destinationResult.failedCount} produto(s) falharam.
-                  </p>
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                    <p className="text-xs font-medium text-destructive">
+                      {destinationResult.failedCount} produto(s) falharam — clique em &quot;Tentar de novo&quot; para reprocessar.
+                    </p>
+                    {destinationResult.failedDetails && destinationResult.failedDetails.length > 0 && (
+                      <div className="space-y-1 max-h-28 overflow-y-auto">
+                        {destinationResult.failedDetails.slice(0, 5).map((f, i) => (
+                          <p key={i} className="text-[11px] text-destructive/80 font-mono">
+                            {f.sourceHandle}: {f.error}
+                          </p>
+                        ))}
+                        {destinationResult.failedDetails.length > 5 && (
+                          <p className="text-[11px] text-muted-foreground">+ {destinationResult.failedDetails.length - 5} outros</p>
+                        )}
+                      </div>
+                    )}
+                    <Button size="sm" variant="outline" className="w-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleCreateDestination}>
+                      Tentar de novo (só os que falharam)
+                    </Button>
+                  </div>
                 )}
 
                 {imageProgress && imageProgress.total > 0 && (
@@ -1294,7 +1318,7 @@ export function ConnectStoresWizard({
                 </div>
               </>
             )}
-          </div>
+          </div></div>
         )}
 
         {/* Passo 3 — Ativar rota e script */}
