@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Fallback: linhas que o mapa nao cobriu mas tem SKU sao resolvidas por SKU
-    // direto no products.json publico da dark store. Conserta variantes nao
+    // direto no products.json publico da loja checkout. Conserta variantes nao
     // mapeadas e permite rota so com o dominio (sem conectar a loja).
     const unresolvedSkus = detailed
       .filter((line) => !line.variantId && line.sku)

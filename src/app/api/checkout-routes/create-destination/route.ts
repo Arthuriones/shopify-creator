@@ -174,7 +174,7 @@ function toCreateProductInput(product: ConnectedProduct): DestinationProductInpu
           compareAtPrice: variant.compareAtPrice
             ? String(variant.compareAtPrice)
             : undefined,
-          // Copia o SKU da vitrine para a dark store: assim a conexao das
+          // Copia o SKU da vitrine para a loja checkout: assim a conexao das
           // variantes acontece automaticamente por SKU (sku_map), mesmo apos
           // neutralizar/traduzir, sem precisar linkar produto por produto.
           sku: variant.sku?.trim() || undefined,
@@ -238,7 +238,7 @@ async function toDestinationProductInput({
   genericizeText: boolean;
   // Quando true, neutraliza so o texto aqui; a imagem vira job de background.
   deferImages?: boolean;
-  // Quando true, mantem apenas a imagem principal (dark store usa 1 imagem).
+  // Quando true, mantem apenas a imagem principal (loja checkout usa 1 imagem).
   heroOnly?: boolean;
 }) {
   const base = translateVariantOptions
@@ -392,7 +392,7 @@ export async function POST(request: NextRequest) {
   // deferImages = neutraliza so o texto aqui (maxImages 0) e mantem a imagem
   // original no produto. Vale tanto para "queue" (troca depois) quanto "none".
   const deferImages = queueImages || skipImages;
-  // Dark store usa 1 imagem por produto; modo fila/none forca hero unico.
+  // loja checkout usa 1 imagem por produto; modo fila/none forca hero unico.
   const heroOnly = body.heroOnly === true || deferImages;
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;
@@ -432,14 +432,14 @@ export async function POST(request: NextRequest) {
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
-      { error: "Selecione vitrine e dark store." },
+      { error: "Selecione vitrine e loja checkout." },
       { status: 400 }
     );
   }
 
   if (sourceStoreId === targetStoreId) {
     return NextResponse.json(
-      { error: "A dark store precisa ser diferente da vitrine." },
+      { error: "A loja checkout precisa ser diferente da vitrine." },
       { status: 400 }
     );
   }
@@ -561,7 +561,7 @@ export async function POST(request: NextRequest) {
         const maps = buildVariantMaps(product, existing);
         Object.assign(skuMap, maps.skuMap);
         Object.assign(variantMap, maps.variantMap);
-        // Carimba os SKUs da vitrine nas variantes ja existentes da dark store,
+        // Carimba os SKUs da vitrine nas variantes ja existentes da loja checkout,
         // pra que a conexao por SKU passe a funcionar sem recriar o produto.
         const skuUpdates = Object.entries(maps.skuMap).map(([sku, variantId]) => ({
           variantId,

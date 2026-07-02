@@ -85,7 +85,7 @@ export function ConnectStoresWizard({
   const t = useTranslations("clone.imageNeutralize");
   const [step, setStep] = useState(1);
 
-  // "generate" = neutraliza da vitrine. "reuse" = copia uma dark store ja
+  // "generate" = neutraliza da vitrine. "reuse" = copia uma loja checkout ja
   // neutralizada e conecta por SKU. "connect" = as duas lojas ja tem os
   // produtos (importados), so casa por SKU e gera o script.
   const [wizardMode, setWizardMode] = useState<"generate" | "reuse" | "connect">(
@@ -206,7 +206,7 @@ export function ConnectStoresWizard({
     };
   }, [open, wizardMode, imageMode, sourceStoreId, targetStoreId]);
 
-  // Reseta tudo ao abrir e pre-seleciona vitrine/dark store.
+  // Reseta tudo ao abrir e pre-seleciona vitrine/loja checkout.
   useEffect(() => {
     if (!open) {
       stopImagePoll();
@@ -261,23 +261,23 @@ export function ConnectStoresWizard({
 
   async function handleCreateDestination() {
     if (!sourceStoreId || !targetStoreId) {
-      toast.error("Escolha a vitrine e a dark store.");
+      toast.error("Escolha a vitrine e a loja checkout.");
       return;
     }
     if (sourceStoreId === targetStoreId) {
-      toast.error("A dark store precisa ser diferente da vitrine.");
+      toast.error("A loja checkout precisa ser diferente da vitrine.");
       return;
     }
     if (wizardMode === "reuse") {
       if (!reuseFromStoreId) {
-        toast.error("Escolha a dark store que será copiada.");
+        toast.error("Escolha a loja checkout que será copiada.");
         return;
       }
       if (
         reuseFromStoreId === targetStoreId ||
         reuseFromStoreId === sourceStoreId
       ) {
-        toast.error("A dark store de origem precisa ser diferente das outras.");
+        toast.error("A loja checkout de origem precisa ser diferente das outras.");
         return;
       }
     }
@@ -289,7 +289,7 @@ export function ConnectStoresWizard({
     setStep(2);
     setBatchProgress({ processed: 0, total: 0, created: 0, skipped: 0, failed: 0 });
 
-    // Base do payload por modo. Reuse copia a dark store ja neutralizada (sem IA).
+    // Base do payload por modo. Reuse copia a loja checkout ja neutralizada (sem IA).
     const basePayload =
       wizardMode === "reuse"
         ? {
@@ -531,7 +531,7 @@ export function ConnectStoresWizard({
 
     try {
       if (wizardMode === "reuse" || wizardMode === "connect") {
-        // Vitrine e dark store ja populadas: casa por SKU e cria rota.
+        // Vitrine e loja checkout ja populadas: casa por SKU e cria rota.
         const res = await fetch("/api/checkout-routes/connect-by-sku", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -627,10 +627,10 @@ export function ConnectStoresWizard({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RouteIcon className="h-4 w-4 text-primary" />
-            Conectar vitrine à dark store
+            Conectar vitrine à loja checkout
           </DialogTitle>
           <DialogDescription>
-            Cria os produtos na dark store, conecta por SKU e gera o script de
+            Cria os produtos na loja checkout, conecta por SKU e gera o script de
             checkout roteado.
           </DialogDescription>
         </DialogHeader>
@@ -671,11 +671,11 @@ export function ConnectStoresWizard({
           <div className="space-y-4">
             {stores.length < 2 && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
-                Conecte pelo menos duas lojas (uma vitrine e uma dark store).
+                Conecte pelo menos duas lojas (uma vitrine e uma loja checkout).
               </div>
             )}
 
-            {/* Como montar a dark store */}
+            {/* Como montar a loja checkout */}
             <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted p-1 text-xs">
               <button
                 type="button"
@@ -716,22 +716,22 @@ export function ConnectStoresWizard({
             </div>
             {wizardMode === "generate" && (
               <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
-                Cria os produtos na dark store a partir da vitrine,
+                Cria os produtos na loja checkout a partir da vitrine,
                 neutralizando marca e (opcional) imagem.
               </p>
             )}
             {wizardMode === "reuse" && (
               <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
-                Copia os produtos já neutralizados de uma dark store existente
+                Copia os produtos já neutralizados de uma loja checkout existente
                 para uma nova, sem rodar IA. Depois conecta a vitrine à nova
-                dark store por SKU automaticamente.
+                loja checkout por SKU automaticamente.
               </p>
             )}
             {wizardMode === "connect" && (
               <p className="-mt-2 text-[11px] leading-4 text-muted-foreground">
                 As duas lojas já têm os produtos (você importou). Não cria nada:
                 só casa as variantes por SKU e gera o script. Use quando a
-                vitrine e a dark store já estão prontas.
+                vitrine e a loja checkout já estão prontas.
               </p>
             )}
 
@@ -741,7 +741,7 @@ export function ConnectStoresWizard({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
-                      <PackageCheck className="h-3.5 w-3.5 text-primary" /> Dark store existente
+                      <PackageCheck className="h-3.5 w-3.5 text-primary" /> loja checkout existente
                     </Label>
                     <Select
                       value={reuseFromStoreId}
@@ -769,7 +769,7 @@ export function ConnectStoresWizard({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5">
-                      <PackageCheck className="h-3.5 w-3.5" /> Nova dark store
+                      <PackageCheck className="h-3.5 w-3.5" /> Nova loja checkout
                     </Label>
                     <Select
                       value={targetStoreId}
@@ -821,7 +821,7 @@ export function ConnectStoresWizard({
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    Onde o cliente compra. Será conectada à nova dark store por SKU.
+                    Onde o cliente compra. Será conectada à nova loja checkout por SKU.
                   </p>
                 </div>
                 {reuseFromStoreId && targetStoreId && sourceStoreId && (
@@ -868,7 +868,7 @@ export function ConnectStoresWizard({
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
-                  <PackageCheck className="h-3.5 w-3.5" /> Dark store
+                  <PackageCheck className="h-3.5 w-3.5" /> loja checkout
                 </Label>
                 <Select
                   value={targetStoreId}
@@ -1021,7 +1021,7 @@ export function ConnectStoresWizard({
                   className="mt-0.5 h-4 w-4 accent-primary"
                 />
                 <span className="text-xs text-muted-foreground">
-                  Traduzir textos para o idioma da dark store
+                  Traduzir textos para o idioma da loja checkout
                 </span>
               </label>
               <label className="flex items-start gap-2 text-sm">
@@ -1117,8 +1117,8 @@ export function ConnectStoresWizard({
               {wizardMode === "connect"
                 ? "Conectar por SKU e gerar script"
                 : wizardMode === "reuse"
-                  ? "Copiar para a dark store"
-                  : "Criar destino na dark store"}
+                  ? "Copiar para a loja checkout"
+                  : "Criar destino na loja checkout"}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -1134,8 +1134,8 @@ export function ConnectStoresWizard({
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-foreground">
                       {wizardMode === "reuse"
-                        ? "Copiando produtos para a dark store…"
-                        : "Criando produtos na dark store…"}
+                        ? "Copiando produtos para a loja checkout…"
+                        : "Criando produtos na loja checkout…"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {batchProgress && batchProgress.total > 0

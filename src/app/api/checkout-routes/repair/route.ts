@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
   const sourceStore = stores?.find((store) => store.id === config.source_store_id);
   const targetStore = stores?.find((store) => store.id === config.target_store_id);
   if (!sourceStore || !targetStore) {
-    return NextResponse.json({ error: "Vitrine ou dark store nao encontrada." }, { status: 404 });
+    return NextResponse.json({ error: "Vitrine ou loja checkout nao encontrada." }, { status: 404 });
   }
 
   const targetCreds: ShopifyCredentials = {

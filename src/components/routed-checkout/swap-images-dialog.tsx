@@ -186,7 +186,7 @@ export function SwapImagesDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-primary" />
-            Trocar imagens da dark store
+            Trocar imagens da loja checkout
           </DialogTitle>
           <DialogDescription>
             {t("description", { cost: "0.04" })} (

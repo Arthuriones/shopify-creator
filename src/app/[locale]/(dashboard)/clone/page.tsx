@@ -553,7 +553,7 @@ export default function ClonePage() {
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
   // Desligado por padrao: o import em massa serve para CLONAR replicas (ex.:
-  // montar uma nova vitrine identica a outra). A neutralizacao da dark store
+  // montar uma nova vitrine identica a outra). A neutralizacao da loja checkout
   // acontece no fluxo de "Criar destino", nao aqui.
   const [neutralizeCloneProducts, setNeutralizeCloneProducts] = useState(false);
   const [
@@ -586,7 +586,7 @@ export default function ClonePage() {
   const [configs, setConfigs] = useState<CheckoutConfig[]>([]);
   const [cloneRuns, setCloneRuns] = useState<CloneRun[]>([]);
   const [configsLoading, setConfigsLoading] = useState(true);
-  const [routeName, setRouteName] = useState("Vitrine para dark store");
+  const [routeName, setRouteName] = useState("Vitrine para loja checkout");
   const [routeSourceStoreId, setRouteSourceStoreId] = useState("");
   const [routeTargetStoreId, setRouteTargetStoreId] = useState("");
   const [routeMode, setRouteMode] = useState("enterprise_static");
@@ -776,7 +776,7 @@ export default function ClonePage() {
     "routed-checkout": {
       title: "Loja vitrine",
       description:
-        "Roteie pedidos da vitrine para o checkout da dark store com mapas de SKU e variant.",
+        "Roteie pedidos da vitrine para o checkout da loja checkout com mapas de SKU e variant.",
     },
   }[activeView];
 
@@ -1004,7 +1004,7 @@ export default function ClonePage() {
     }
 
     if (routeSourceStoreId === routeTargetStoreId) {
-      setRouteProductsError("Escolha lojas diferentes: a vitrine e a dark store não podem ser a mesma loja.");
+      setRouteProductsError("Escolha lojas diferentes: a vitrine e a loja checkout não podem ser a mesma loja.");
       setSourceProducts([]);
       setTargetProducts([]);
       return;
@@ -1029,7 +1029,7 @@ export default function ClonePage() {
           throw new Error(sourceData.error || "Nao foi possivel carregar produtos da vitrine.");
         }
         if (!targetRes.ok) {
-          throw new Error(targetData.error || "Nao foi possivel carregar produtos da dark store.");
+          throw new Error(targetData.error || "Nao foi possivel carregar produtos da loja checkout.");
         }
 
         if (!cancelled) {
@@ -1482,7 +1482,7 @@ export default function ClonePage() {
 
   function resetRouteForm() {
     setEditingRouteId("");
-    setRouteName("Vitrine para dark store");
+    setRouteName("Vitrine para loja checkout");
     setRouteMode("enterprise_static");
     setSkuMap(DEFAULT_SKU_MAP);
     setVariantMap(DEFAULT_VARIANT_MAP);
@@ -1526,7 +1526,7 @@ export default function ClonePage() {
     }
 
     const confirmed = window.confirm(
-      `Inverter "${config.name}"?\n\nA vitrine (onde o cliente compra) e a dark store (onde fica o checkout) serao trocadas. O token instalado no tema continua o mesmo.`
+      `Inverter "${config.name}"?\n\nA vitrine (onde o cliente compra) e a loja checkout (onde fica o checkout) serao trocadas. O token instalado no tema continua o mesmo.`
     );
     if (!confirmed) return;
 
@@ -1552,7 +1552,7 @@ export default function ClonePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha ao inverter rota.");
-      toast.success("Vitrine e dark store invertidas. O token segue o mesmo.");
+      toast.success("Vitrine e loja checkout invertidas. O token segue o mesmo.");
       await loadConfigs();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao inverter rota.");
@@ -2687,7 +2687,7 @@ export default function ClonePage() {
                 id="routed-checkout"
                 className="text-lg font-semibold text-foreground"
               >
-                Loja vitrine para dark store
+                Loja vitrine para loja checkout
               </h2>
             </div>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
@@ -2709,7 +2709,7 @@ export default function ClonePage() {
 
         {stores.length < 2 && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
-            Conecte pelo menos duas lojas (uma vitrine e uma dark store) em{" "}
+            Conecte pelo menos duas lojas (uma vitrine e uma loja checkout) em{" "}
             <Link href="/stores" className="font-medium underline">
               Lojas conectadas
             </Link>
@@ -2813,7 +2813,7 @@ export default function ClonePage() {
                               ),
                             })
                           }
-                          title="Recria as fotos sem marca na dark store."
+                          title="Recria as fotos sem marca na loja checkout."
                         >
                           <ImageIcon className="h-3.5 w-3.5" />
                           Trocar imagens
@@ -2832,7 +2832,7 @@ export default function ClonePage() {
                           size="sm"
                           onClick={() => handleInvertRoute(config)}
                           disabled={invertingRouteId === config.id}
-                          title="Troca vitrine e dark store."
+                          title="Troca vitrine e loja checkout."
                         >
                           {invertingRouteId === config.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2846,7 +2846,7 @@ export default function ClonePage() {
                           size="sm"
                           onClick={() => handleCheckRouteHealth(config)}
                           disabled={checkingRouteId === config.id}
-                          title="Confere se todo produto da vitrine tem checkout roteado pro produto certo na dark store."
+                          title="Confere se todo produto da vitrine tem checkout roteado pro produto certo na loja checkout."
                         >
                           {checkingRouteId === config.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2878,7 +2878,7 @@ export default function ClonePage() {
                               size="sm"
                               onClick={() => handleRepairRoute(config)}
                               disabled={repairingRouteId === config.id}
-                              title="Recalcula o mapa por SKU exato e cria/completa os produtos que faltam na dark store."
+                              title="Recalcula o mapa por SKU exato e cria/completa os produtos que faltam na loja checkout."
                             >
                               {repairingRouteId === config.id ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2950,7 +2950,7 @@ export default function ClonePage() {
                             <div className="flex items-center gap-2 font-medium">
                               <AlertTriangle className="h-3.5 w-3.5" />
                               {health.missingCount} produto(s) sem mapa e {health.wrongCount}{" "}
-                              apontando pro produto errado na dark store.
+                              apontando pro produto errado na loja checkout.
                             </div>
                             {health.missingSkus.length > 0 && (
                               <p className="text-muted-foreground">

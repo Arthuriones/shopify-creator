@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 // Atualiza SO as settings de checkout de uma rota (dominio/pais/locale), sem
-// tocar nos mapas. Usado quando o dominio da dark store muda ou para forcar a
+// tocar nos mapas. Usado quando o dominio da loja checkout muda ou para forcar a
 // moeda do checkout (Shopify Markets).
 export async function POST(request: NextRequest) {
   const supabase = await createClient();

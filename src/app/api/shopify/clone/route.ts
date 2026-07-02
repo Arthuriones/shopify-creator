@@ -238,7 +238,7 @@ async function prepareCreateInputForImport(input: {
   applyLogoToImages: boolean;
   // Quando true, neutraliza apenas o TEXTO aqui; a imagem vira job de background.
   deferImageNeutralization?: boolean;
-  // Quando true, mantem apenas a imagem principal (dark store usa 1 imagem).
+  // Quando true, mantem apenas a imagem principal (loja checkout usa 1 imagem).
   heroOnly?: boolean;
 }) {
   let productInput = input.productInput;
@@ -472,7 +472,7 @@ export async function POST(request: NextRequest) {
   const deferImageNeutralization =
     (neutralizeProducts || removeExternalReferences) &&
     imageNeutralizeMode === "queue";
-  // Dark store usa 1 imagem por produto; o modo fila forca hero unico.
+  // loja checkout usa 1 imagem por produto; o modo fila forca hero unico.
   const heroOnly = body.heroOnly === true || deferImageNeutralization;
   const aiMediaLimit = clampAiMediaLimit(body.aiMediaLimit ?? body.maxImages, 1);
   const genericizeText = body.genericizeText !== false;

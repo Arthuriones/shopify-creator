@@ -110,7 +110,7 @@ export function CheckoutSettingsDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="checkout-domain" className="text-xs">
-              Domínio de checkout (dark store)
+              Domínio de checkout (loja checkout)
             </Label>
             <Input
               id="checkout-domain"
@@ -144,7 +144,7 @@ export function CheckoutSettingsDialog({
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              Força a moeda via Shopify Markets. A dark store precisa ter esse
+              Força a moeda via Shopify Markets. A loja checkout precisa ter esse
               mercado/moeda configurado.
             </p>
           </div>

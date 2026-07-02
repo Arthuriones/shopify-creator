@@ -97,13 +97,13 @@ export async function POST(request: NextRequest) {
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
-      { error: "Selecione a vitrine e a dark store." },
+      { error: "Selecione a vitrine e a loja checkout." },
       { status: 400 }
     );
   }
   if (sourceStoreId === targetStoreId) {
     return NextResponse.json(
-      { error: "A vitrine e a dark store precisam ser lojas diferentes." },
+      { error: "A vitrine e a loja checkout precisam ser lojas diferentes." },
       { status: 400 }
     );
   }

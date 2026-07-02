@@ -14,7 +14,7 @@ export async function OPTIONS() {
 }
 
 // Registra quando o loader da vitrine cai pro checkout nativo em vez de
-// rotear pra dark store. Best-effort: nunca deve afetar o fluxo de compra do
+// rotear pra loja checkout. Best-effort: nunca deve afetar o fluxo de compra do
 // cliente, entao qualquer falha aqui so retorna ok:false em silencio.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));

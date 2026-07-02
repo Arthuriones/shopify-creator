@@ -57,7 +57,7 @@ export interface ResolvedLineDetail {
 
 // Igual ao resolveCheckoutLines, mas devolve TODAS as linhas (resolvidas ou
 // nao) com o SKU, para o chamador tentar um fallback (ex.: resolver por SKU no
-// products.json publico da dark store quando o mapa nao cobre a variante).
+// products.json publico da loja checkout quando o mapa nao cobre a variante).
 export function resolveCheckoutLinesDetailed(
   lines: CheckoutRouteLine[],
   maps: CheckoutRouteMaps
@@ -83,7 +83,7 @@ export function resolveCheckoutLinesDetailed(
 
 // Deriva o mercado (pais/locale) do idioma da loja destino para o checkout
 // abrir na moeda certa via Shopify Markets. Ex.: "es-CL" => country CL.
-// Exige que a dark store tenha esse mercado/moeda configurado na Shopify.
+// Exige que a loja checkout tenha esse mercado/moeda configurado na Shopify.
 export function marketParamsFromLanguage(
   language?: string | null
 ): { country?: string; locale?: string } {

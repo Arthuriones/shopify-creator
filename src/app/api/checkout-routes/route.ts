@@ -67,14 +67,14 @@ export async function POST(request: NextRequest) {
 
   if (!name || !sourceStoreId || !targetStoreId) {
     return NextResponse.json(
-      { error: "Nome, loja vitrine e dark store sao obrigatorios." },
+      { error: "Nome, loja vitrine e loja checkout sao obrigatorios." },
       { status: 400 }
     );
   }
 
   if (sourceStoreId === targetStoreId) {
     return NextResponse.json(
-      { error: "A vitrine e a dark store precisam ser lojas diferentes." },
+      { error: "A vitrine e a loja checkout precisam ser lojas diferentes." },
       { status: 400 }
     );
   }
@@ -138,14 +138,14 @@ export async function PATCH(request: NextRequest) {
 
   if (!id || !name || !sourceStoreId || !targetStoreId) {
     return NextResponse.json(
-      { error: "Id, nome, loja vitrine e dark store sao obrigatorios." },
+      { error: "Id, nome, loja vitrine e loja checkout sao obrigatorios." },
       { status: 400 }
     );
   }
 
   if (sourceStoreId === targetStoreId) {
     return NextResponse.json(
-      { error: "A vitrine e a dark store precisam ser lojas diferentes." },
+      { error: "A vitrine e a loja checkout precisam ser lojas diferentes." },
       { status: 400 }
     );
   }
