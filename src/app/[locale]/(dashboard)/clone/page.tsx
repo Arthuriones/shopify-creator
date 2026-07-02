@@ -862,7 +862,7 @@ export default function ClonePage() {
     selectedRouteConfig || configs.find((config) => config.enabled) || configs[0] || null;
   const installToken = scriptConfig?.public_token || "";
   function buildRoutedInstallSnippet(token: string) {
-    return `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>\n<!-- Use "Atualizar tema" para embutir o mapa de SKUs automaticamente via API -->`;
+    return `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>`;
   }
 
   const installSnippet = buildRoutedInstallSnippet(
