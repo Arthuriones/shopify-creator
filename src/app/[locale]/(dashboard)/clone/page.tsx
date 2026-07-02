@@ -683,7 +683,8 @@ export default function ClonePage() {
   async function handleCopyFullScript(config: CheckoutConfig) {
     setCopyingScriptId(config.id);
     try {
-      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  async>\n</script>`;
+      const configUrl = `${appOrigin}/api/c/${config.public_token}`;
+      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config-url="${configUrl}"\n  async>\n</script>`;
       await navigator.clipboard.writeText(script);
       toast.success("Script copiado! Cole antes de </head> no theme.liquid da vitrine.");
     } catch {
@@ -2780,11 +2781,15 @@ export default function ClonePage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            copyToClipboard(routeSnippet, "script da rota")
-                          }
+                          onClick={() => handleCopyFullScript(config)}
+                          disabled={copyingScriptId === config.id}
+                          title="Copia o script com data-config-url para resolução local sem chamar a API no clique"
                         >
-                          <Copy className="h-3.5 w-3.5" />
+                          {copyingScriptId === config.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
                           Copiar script
                         </Button>
                       </div>
@@ -2863,20 +2868,6 @@ export default function ClonePage() {
                             <PackageCheck className="h-3.5 w-3.5" />
                           )}
                           Atualizar tema
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyFullScript(config)}
-                          disabled={copyingScriptId === config.id}
-                          title="Copia o script com o mapa de SKUs embutido. Cole manualmente antes de </head> no theme.liquid da vitrine."
-                        >
-                          {copyingScriptId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
-                          Copiar script
                         </Button>
                         {(() => {
                           const health = routeHealth[config.id];
