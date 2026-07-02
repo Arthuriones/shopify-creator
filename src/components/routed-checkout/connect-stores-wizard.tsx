@@ -623,7 +623,7 @@ export function ConnectStoresWizard({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-lg" showCloseButton={!busy}>
+      <DialogContent className="sm:max-w-lg" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RouteIcon className="h-4 w-4 text-primary" />
@@ -668,7 +668,7 @@ export function ConnectStoresWizard({
 
         {/* Passo 1 — Lojas e opções */}
         {step === 1 && (
-          <div className="space-y-4">
+          <div className="max-h-[60vh] overflow-y-auto"><div className="space-y-4">
             {stores.length < 2 && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
                 Conecte pelo menos duas lojas (uma vitrine e uma loja checkout).
@@ -1121,12 +1121,12 @@ export function ConnectStoresWizard({
                   : "Criar destino na loja checkout"}
               <ArrowRight className="h-4 w-4" />
             </Button>
-          </div>
+          </div></div>
         )}
 
         {/* Passo 2 — Criar destino / progresso */}
         {step === 2 && (
-          <div className="min-h-0 flex-1 overflow-y-auto"><div className="space-y-4">
+          <div className="max-h-[60vh] overflow-y-auto"><div className="space-y-4">
             {creatingDestination && (
               <div className="space-y-3 rounded-lg border border-border/60 bg-background/45 p-4">
                 <div className="flex items-center gap-3">
