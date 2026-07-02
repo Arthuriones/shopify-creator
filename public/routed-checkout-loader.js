@@ -309,10 +309,9 @@
 
     try {
       if (isImmediatePurchaseTarget(target)) {
-        var directLine = readProductFormLine(target);
-        if (directLine) {
-          window.location.href = await resolveCheckoutLines([directLine]);
-          return;
+        var form = findProductForm(target);
+        if (form) {
+          try { await submitProductForm(form); } catch (e) {}
         }
       }
 
