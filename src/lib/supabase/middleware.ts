@@ -37,8 +37,15 @@ function attachSupabase(request: NextRequest, response: NextResponse) {
   );
 }
 
-function localeOf(pathname: string): "pt" | "en" {
-  return pathname === "/en" || pathname.startsWith("/en/") ? "en" : "pt";
+function localeOf(pathname: string): "pt" | "en" | "ja" {
+  if (pathname === "/en" || pathname.startsWith("/en/")) return "en";
+  if (pathname === "/ja" || pathname.startsWith("/ja/")) return "ja";
+  return "pt";
+}
+
+// PT e o default (sem prefixo); demais idiomas ganham /<locale>.
+function prefixOf(locale: "pt" | "en" | "ja"): string {
+  return locale === "pt" ? "" : `/${locale}`;
 }
 
 function isPublic(pathname: string) {
@@ -71,8 +78,10 @@ export async function updateSession(request: NextRequest) {
   if (isMarketingHost) {
     if (isApi) return NextResponse.next({ request });
     const locale = localeOf(pathname);
-    const bare =
-      locale === "en" ? pathname.replace(/^\/en/, "") || "/" : pathname;
+    const localePrefix = prefixOf(locale);
+    const bare = localePrefix
+      ? pathname.slice(localePrefix.length) || "/"
+      : pathname;
     const marketingBare = [
       "/",
       "/lp",
@@ -148,7 +157,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const locale = localeOf(pathname);
-  const prefix = locale === "en" ? "/en" : "";
+  const prefix = prefixOf(locale);
   const isAuthPath =
     pathname === `${prefix}/login` ||
     pathname.startsWith(`${prefix}/login`) ||

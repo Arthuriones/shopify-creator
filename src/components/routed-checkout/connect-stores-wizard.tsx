@@ -1058,6 +1058,7 @@ export function ConnectStoresWizard({
                     <SelectItem value="es-CL">Espanhol (Chile)</SelectItem>
                     <SelectItem value="es-MX">Espanhol (México)</SelectItem>
                     <SelectItem value="en">Inglês</SelectItem>
+                    <SelectItem value="ja">日本語 (Japonês)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">

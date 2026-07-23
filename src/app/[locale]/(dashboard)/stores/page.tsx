@@ -91,6 +91,7 @@ const CURRENCY_OPTIONS = [
   { value: "BRL", label: "BRL - Real brasileiro" },
   { value: "EUR", label: "EUR - Euro" },
   { value: "GBP", label: "GBP - Libra esterlina" },
+  { value: "JPY", label: "JPY - Iene japonês" },
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -100,6 +101,7 @@ const LANGUAGE_OPTIONS = [
   { value: "fr-FR", label: "Français" },
   { value: "de-DE", label: "Deutsch" },
   { value: "it-IT", label: "Italiano" },
+  { value: "ja-JP", label: "日本語" },
 ];
 
 function StoreSkeleton() {

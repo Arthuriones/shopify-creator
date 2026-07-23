@@ -48,6 +48,7 @@ const MARKETS: Record<string, { label: string; locale: string }> = {
   ES: { label: "España (euro)", locale: "es-ES" },
   BR: { label: "Brasil (real)", locale: "pt-BR" },
   US: { label: "Estados Unidos (dólar)", locale: "en-US" },
+  JP: { label: "Japão (iene)", locale: "ja-JP" },
 };
 
 export function CheckoutSettingsDialog({
