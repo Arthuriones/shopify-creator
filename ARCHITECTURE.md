@@ -1,91 +1,212 @@
-# Shopify Creator — Arquitetura
+# xcart — Complete Technical Reference
 
-## O que é
-Ferramenta de automação para lojas Shopify focada em dropshipping. Importa produtos do AliExpress, otimiza descrições/títulos com Gemini AI, gera políticas da loja e sugere melhorias de tema.
+> Package name: `shopify-creator`. Product/UI name: **Xcart**.
+> This file is the canonical, self-contained explanation of how the app works. Any AI or developer pulling this repo should read this first. Last deep-audited: 2026-07.
 
-## Stack
+---
 
-| Tecnologia | Razão |
+## 1. What xcart is (the core idea — read this first)
+
+xcart is a **dropshipping automation tool built around a two-store "routed checkout" model**:
+
+- **Vitrine (showcase / source store)** — the store that receives ad traffic. It carries **branded / replica** products with real brand names, replica model names, brand imagery and logos (e.g. "Rolex GMT-Master", "Air Jordan"). This is what the customer browses and adds to cart. Optimized to convert.
+- **Loja checkout (dark store / target store)** — a mirror catalog where the **actual sale and payment happen**. Its products are **neutralized**: brand/replica names stripped from titles, descriptions and tags → generic wording ("メンズ GMT腕時計", "Tênis esportivo casual"), and product photos **replaced by AI-generated de-branded images** (logos/watermarks removed). This reduces the checkout store's exposure to trademark takedowns and payment-processor review.
+
+At checkout, the customer's cart is **routed from the vitrine to the checkout store, matched by SKU**, and they are redirected (via a Shopify cart permalink) to the checkout store's checkout in the correct currency. The stores never appear linked (the loader forces `no-referrer`).
+
+**The whole system hinges on SKU.** Neutralization deliberately rewrites titles and images, so title/handle/image can never be the join key. SKUs are copied verbatim from vitrine → checkout store and are the anchor for the routing map. **If source products lack SKUs, routing cannot work.** (See §9 and §13.)
+
+One neutralized checkout store can be **reused** across multiple vitrines; a vitrine routes to exactly one checkout store.
+
+Beyond routing, xcart also: imports/clones products from many sources, AI-optimizes/translates copy, AI-neutralizes text & images, generates store policies/pages/menus/reviews/Instagram content, and manages billing/credits.
+
+---
+
+## 2. Stack & deployment
+
+- **Next.js 16.2.4** (App Router, `output: "standalone"`, `runtime = "nodejs"` on API routes), **React 19.2.4**, TypeScript, Tailwind v4 + shadcn/ui, `zustand`, `sonner`.
+- **Supabase** — Auth (`@supabase/ssr`), Postgres (RLS on every table), Storage (public buckets). Project id `hvfwjlwydmcstarfjtko`.
+- **Google Gemini** — two SDKs: `@google/generative-ai` (text, `gemini-2.5-flash`) and `@google/genai` (per-call config + images, `gemini-2.5-flash-image`). Requires `GEMINI_API_KEY`.
+- **Stripe** — subscriptions + one-time credit packs.
+- **Scraping** — `cheerio`, `playwright-core` + `@sparticuz/chromium` (headless Chromium on Vercel), `undici` proxy, Bright Data fallback. `sharp` for image transcoding.
+- **Shopify** — Admin GraphQL API, version pinned `2024-10`.
+- **Deploy**: Vercel (primary; `vercel.json` sets `maxDuration` per route + an hourly cron) and Docker (`Dockerfile` multi-stage `node:20-alpine`, `docker-compose.yml` for VPS). `AGENTS.md` warns Next.js 16 has breaking changes — read `node_modules/next/dist/docs/` before writing Next code.
+
+`next.config.ts`: `serverExternalPackages: [playwright-core, @sparticuz/chromium, undici]`, remote image hosts (alicdn, aliexpress, cdn.shopify.com), wrapped with `next-intl/plugin`. Root layout forces **dark theme** and `lang="pt-BR"`.
+
+---
+
+## 3. Multi-host + i18n routing
+
+All host/locale logic is in the edge middleware: `src/proxy.ts` → `src/lib/supabase/middleware.ts`.
+
+**Hosts** (by `Host` header):
+- `adm.*` → **admin** subdomain (no i18n; pinned to `/admin/**`; requires `profiles.is_admin`).
+- `user.*` (or localhost/`*.vercel.app`) → **app** subdomain (the dashboard).
+- anything else → **marketing** root: only `/`, `/lp`, `/privacy`, `/terms`, `/data-deletion`, `/user-data-deletion` render; every other path 307-redirects to the `user.` app origin.
+- Static files with an extension (e.g. `/routed-checkout-loader.js`) bypass i18n + auth entirely.
+
+**Locale** (`src/i18n/routing.ts`): `locales: ["pt","en","ja"]`, default **pt (unprefixed)**, `en`→`/en`, `ja`→`/ja`. `localeDetection` off; `localeOf`/`prefixOf` in the middleware derive locale from the path prefix (the geo-IP default described in comments is not actually implemented — pt is effective default). Messages in `messages/{pt,en,ja}.json`. Use `src/i18n/navigation.ts` (`Link`, `useRouter`, `redirect`) not `next/*`. Language switcher cycles pt→en→ja.
+
+---
+
+## 4. Auth & sessions
+
+Supabase Auth, standard cookie sessions (no custom JWT). Clients: `src/lib/supabase/{client (browser), server (RSC), admin (service-role, bypasses RLS)}.ts`.
+
+- **Login/signup/recovery**: `src/app/[locale]/(auth)/login/page.tsx` → password or magic-link; `callback/route.ts` exchanges `?code`; recovery → `set-password`.
+- Middleware refreshes the session every request and enforces: unauthenticated → `/login`; authenticated without `user_metadata.has_password === true` → forced to `/set-password` (mechanism for admin-provisioned accounts).
+- Dashboard layout gate: `userHasAccess()` (billing). Admin layout gate: `profiles.is_admin`.
+- `handle_new_user` trigger auto-creates a `profiles` row per `auth.users` insert.
+
+---
+
+## 5. Data model (Supabase, `supabase/migrations/001-018`)
+
+All tables have RLS (owner-scoped via `auth.uid()`); service-role bypasses. Shared `update_updated_at()` trigger.
+
+| Table | Purpose / key columns |
 |---|---|
-| **Next.js 15 (App Router)** | SSR + API Routes no mesmo projeto, stack principal do time |
-| **TypeScript (strict)** | Type safety desde o dia 1 |
-| **Tailwind CSS + shadcn/ui** | UI consistente e rápida de montar |
-| **Supabase** | Auth (magic link), Postgres com RLS, zero config de banco |
-| **Gemini 2.0 Flash** | Custo baixo (~$0.001/otimização), qualidade suficiente pra copywriting |
-| **Cheerio** | Scraping leve do AliExpress, sem overhead de browser |
-| **Docker (multi-stage)** | Deploy consistente em VPS |
+| **stores** | Connected Shopify stores. `user_id`, `shop_domain` (unique per user), `name`, `theme_id`, **`client_id`/`client_secret`** (custom-app creds), `access_token` (OAuth fallback, nullable). Profile: `niche`, `target_audience`, `brand_voice`, `store_description`, `logo_path`. Pricing: `currency_code`, `auto_convert_prices`, `currency_rate`, `price_markup_percent`. `target_language` (default `pt-BR`, drives AI output language). |
+| **products** | Imported/optimized products (app-side mirror). `store_id`, `aliexpress_url`, `shopify_product_id`, title/original, price, `images[]`, `status` (pending/optimized/published/failed). |
+| **store_assets** | Brand visual materials (`file_path`, `label`). |
+| **app_secrets** | Global KV secrets, **service-role only** (e.g. proxy creds). |
+| **background_jobs** | Async queue. `type` (`bulk_import`, `neutralize_image`, optimize, etc.), `status` (pending/processing/completed/failed), **`progress` jsonb doubles as the input payload + live step**, `result`, `error`. Index `(store_id,type,status,created_at)`. |
+| **clone_runs** | Audit of clone ops (preview/export/apply). |
+| **routed_checkout_configs** | **The routing map.** `source_store_id` (vitrine), `target_store_id` (checkout), `mode` (`standard`/`enterprise`/`enterprise_static` — wizard writes `enterprise_static`), `public_token` (unique; public loader identifier), `enabled`, **`sku_map`** `{sku→targetVariantId}`, **`variant_map`** `{sourceVariantId→targetVariantId}`, `settings` (`checkout_domain`/`checkout_country`/`checkout_locale` overrides). |
+| **routed_checkout_fallbacks** | Loader fallback telemetry (`route_config_id`, `reason`, `detail`, `page_url`). |
+| **ai_product_reviews** | AI-generated synthetic reviews (product ref, rating, body, disclosure, image_url, `published`). |
+| **instagram_connections / instagram_posts** | IG business-account tokens + published carousels. |
+| **profiles** | One per user. `is_admin`, `plan` (free/pro), Stripe ids, `subscription_status`, `current_period_end`, **`ai_credits`**, `access_granted`, `free_clone_store_id` (trial; NULL = available). |
+| **ai_usage_log** | Every AI action + `cost_usd` + `credits_used` (metering; service-role insert only). |
+| **credit_purchases** | One-time credit-pack purchases. |
 
-## Estrutura de Pastas
+Storage buckets (public read; write scoped to `foldername[1] == auth.uid()`): `store-logos`, `product-images` (neutralized/branded/review images live here), `store-assets`.
 
-```
-src/
-├── app/
-│   ├── (auth)/           # Login e callback de auth
-│   │   ├── login/        # Magic link login
-│   │   └── callback/     # Auth callback
-│   ├── (dashboard)/      # Dashboard com sidebar
-│   │   ├── stores/       # Gestão de lojas conectadas
-│   │   ├── products/     # Import + otimização de produtos
-│   │   └── optimizer/    # Políticas + tema
-│   └── api/
-│       ├── aliexpress/   # Scraping de produtos
-│       ├── ai/           # Gemini AI endpoints
-│       │   ├── optimize/ # Otimização de produtos
-│       │   ├── policies/ # Geração de políticas
-│       │   └── theme/    # Análise de tema
-│       ├── shopify/      # Integração Shopify
-│       │   ├── connect/  # Conexão de lojas
-│       │   └── products/ # CRUD de produtos
-│       └── health/       # Health check
-├── components/
-│   ├── layout/           # Sidebar, header
-│   └── ui/               # shadcn/ui components
-├── lib/
-│   ├── aliexpress/       # Scraper
-│   ├── gemini/           # Gemini AI client
-│   ├── shopify/          # Shopify GraphQL client
-│   └── supabase/         # Supabase clients (browser/server)
-└── types/                # TypeScript types
-```
+---
 
-## Como rodar
+## 6. Shopify integration (`src/lib/shopify/client.ts`)
 
-```bash
-# 1. Clone e instale
-npm install
+- **Auth = Client Credentials Grant.** `getAccessToken` POSTs `grant_type=client_credentials` to `/admin/oauth/access_token`; token cached in-memory per `domain:clientId`, 24h TTL, renews 5 min before expiry. If a stored OAuth `access_token` exists, it's used directly.
+- **Install flow**: a store must be OAuth-installed once (`src/app/api/shopify/auth/route.ts`, scopes: `write_products`, `write_content`, `write_legal_policies`, `write_online_store_navigation`, `read/write_publications`, `read_themes`, metaobjects, …). **`write_themes` is NOT requested and Client Credentials Grant cannot mint it — theme edits require a Shopify CLI + Theme Access password, not this app.**
+- `shopifyGraphQL` — retries on 429 and GraphQL `THROTTLED` (up to 4×); handles 402 (store frozen).
+- **Product create/update**: `createProduct` (productCreate + `productVariantsBulkCreate/Update` + `productCreateMedia` + inventory + `publishablePublish` to Online Store). `updateShopifyProduct` (productUpdate + bulk variant update + full media replace). `productSet` is used by external scripts but not the app. SKU lives on `inventoryItem.sku`.
+- Store setup: `updateStorePolicies` (`shopPolicyUpdate`), `createMenu` (`menuCreate`), `createPages` (`pageCreate`, idempotent on handle clash). Taxonomy enrichment via `src/lib/products/shopify-taxonomy-enrichment.ts` + metafields.
 
-# 2. Configure env
-cp .env.example .env
-# Preencha: Supabase URL/Key, Gemini API Key
+---
 
-# 3. Rode a migration no Supabase Dashboard (SQL Editor)
-# Use o arquivo: supabase/migrations/001_initial.sql
+## 7. StoreContext & AI generation
 
-# 4. Rode o dev
-npm run dev
-```
+`StoreContext` (`{name, niche, targetAudience, brandVoice, storeDescription, targetLanguage}`) is fetched by `getStoreContext(storeId, userId)` (`src/lib/store-context.ts`) and conditions **every** AI call. Returns `null` if `niche` is empty → AI routes 400 "configure the store profile". `targetLanguage` forces output language everywhere.
 
-## Ports
+AI features (all in `src/lib/gemini/client.ts` unless noted; text = `gemini-2.5-flash`, images = `gemini-2.5-flash-image`):
+- `optimizeProduct` — title/description/tags/SEO (forbids revealing dropshipping/marketplace origin).
+- `generateStorePolicies` — 4 HTML policies (hardcoded BR/CDC/LGPD defaults).
+- `suggestThemeImprovements` — markdown suggestions (targets a fixed "Vessel" BR theme).
+- `generateStoreSetup` — policies + menus + pages + copyright.
+- `generateImageEditPrompt`, `suggestShopifyTaxonomy` (multimodal).
+- Reviews (`api/ai/reviews`) — synthetic UGC text + optional AI images, saved to `ai_product_reviews`.
 
-| Serviço | Porta |
-|---|---|
-| Next.js (dev) | 3000 |
+Logo watermarking (non-AI): `src/lib/images/apply-logo.ts` composites the store logo over product images with `sharp`.
 
-## Decisões de Segurança
+---
 
-- **Auth**: Supabase Magic Link (sem senhas)
-- **RLS**: Row Level Security no Postgres — usuários só veem suas lojas/produtos
-- **Access Tokens**: Shopify tokens armazenados no Supabase com RLS, nunca expostos ao client
-- **CORS**: Controlado pelo Next.js (same-origin por padrão)
-- **Docker**: Multi-stage build, non-root user, .dockerignore configurado
-- **Secrets**: Todos via .env, nunca hardcoded
+## 8. Import / clone pipeline
 
-## Custos
+Two **independent** detection stacks:
+- **Generic import** (`src/lib/import/source-adapters.ts` → `importFromSource`): AliExpress, Shopify-public, generic HTML. Drives single import + bulk-import jobs.
+- **Clone route** (`src/app/api/shopify/clone/route.ts`): Shopify-public, **WooCommerce**, **Shoplazza**. ⚠️ Woo/Shoplazza adapters are **clone-only** — the bulk/multi-site pages force `sourceType:"generic_site"` and never reach them (misleading UI copy).
 
-| Operação | Custo estimado |
-|---|---|
-| Otimizar 1 produto (Gemini Flash) | ~$0.001 |
-| Gerar 4 políticas | ~$0.003 |
-| Análise de tema | ~$0.002 |
-| Loja completa (50 produtos + políticas + tema) | ~$0.15 |
-| Supabase (free tier) | $0/mês |
+- **AliExpress** (`src/lib/aliexpress/`): browser-first (intercepts the MTOP PDP XHR via Playwright), HTML fallback with proxy escalation (env proxy → Bright Data Web Unlocker → Bright Data native proxy). Anti-bot heavy; needs a proxy for scale.
+- **Shopify public** (`src/lib/shopify/public-store.ts`): `/products.json` pagination; `resolveVariantIdsBySku` powers the routing SKU fallback.
+- **Generic HTML** (`src/lib/import/generic-site.ts`): JSON-LD + meta + CSS heuristics; variants via Cartesian product of `<select>`/radio options. **Usually yields no SKU** → breaks routing for those products.
+
+**Job model**: Supabase-table queue (`background_jobs`), NOT Inngest/BullMQ/Redis. `POST /api/jobs/bulk-import` inserts one row per source (cap 20/batch) and drains inline via Next `after()`; an **hourly Vercel cron** (`/api/jobs/bulk-import/process`) re-drains `pending`. ⚠️ `processBulkImportJobs` has **no atomic claim and no stale-recovery** — concurrent drainers can double-process, and a job that dies mid-loop stays `processing` forever. The **image queue** (`processImageNeutralizeJobs`) is the robust one: concurrency pool, 4-min stale reset, credit-gated, self-chaining.
+
+---
+
+## 9. Text & image neutralization (`src/lib/ai/product-neutralizer.ts`)
+
+The mechanism that produces the **checkout store's generic catalog**. Two modes: `stock-neutralize` (remove ALL brands/models → generic stock) and `external-references` (remove only marketplace/seller refs, keep the product's real brand).
+
+- **Text** (`neutralizeText`, `gemini-2.5-flash`): rewrites title/description/tags/SEO brand-free in `targetLanguage` (title ≤70 chars). `stripExternalArtifacts` also regex-strips marketplace terms.
+- **Image** (`neutralizeImage`, `gemini-2.5-flash-image`): downloads original → `sharp` to ≤1200px JPEG → Gemini image model removes logos/watermarks and reconstructs a generic stock photo → uploads JPEG to the `product-images` Supabase bucket → returns public URL. Deferred to the background image queue for the checkout store (1 hero image/product). Whole-store re-run: `POST /api/jobs/neutralize-store-images` (billing-gated, 1 credit/image; skips images already under `/product-images/`).
+
+**Both require `GEMINI_API_KEY`** (only on the deployed env; may be absent from a local `.env.local`).
+
+---
+
+## 10. Routed checkout — full runtime flow
+
+Files: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/**`, `src/lib/shopify/cart-routing.ts`, `src/components/routed-checkout/**`.
+
+**Setup (wizard, `connect-stores-wizard.tsx`)** — 3 modes:
+- **generate** — read vitrine → AI-neutralize (text + optional image) → create products in the checkout store → build maps. Calls `create-destination` then `POST /api/checkout-routes`. ⚠️ Heavy/AI; times out on large catalogs.
+- **reuse** — copy an already-neutralized checkout store into a new one (no AI) → connect by SKU.
+- **connect ("Só conectar")** — both stores already populated → **only matches by SKU/label and generates the script**, creates nothing. Calls `connect-by-sku`. **Use this when the catalog already exists on both stores.**
+
+`connect-by-sku` reads all variants of both stores, matches source→target **by SKU first, label second**, and inserts a `routed_checkout_configs` row (`enterprise_static`, fresh `public_token`, the `sku_map`/`variant_map`).
+
+**Runtime**:
+1. Loader `<script>` (with `data-token` = `public_token`, optional `data-config-url` = a theme-CDN `xcart-config.json`) sits in the vitrine `theme.liquid`. Forces `no-referrer`.
+2. Add-to-cart is **not** intercepted (vitrine cart works normally). Only **checkout** clicks are intercepted (capture-phase listeners + 500 ms rescan; matches Shopify/Yampi/Dropi buttons via multilingual regex).
+3. On checkout: reads `/cart.js` → lines `{sku, sourceVariantId, quantity}`.
+4. Resolve: **inline map first** (`variantMap[sourceVariantId]` → `skuMap[sku]`), else `POST /api/checkout-routes/resolve` (server, keyed by `public_token`). Server precedence: `targetVariantId` → `variantMap` → `skuMap` → live `products.json` SKU lookup on the checkout store.
+5. Builds a Shopify **cart permalink** `https://<checkoutDomain>/cart/<variantId>:<qty>,...?country=&locale=&attributes[routed_checkout]=<id>` and redirects. Currency forced via Shopify Markets (`country`/`locale` from `settings` or `target_language`).
+6. Failures → red toast + `track-fallback` telemetry; never routes to the vitrine's own checkout (it can't charge).
+
+**CRITICAL for anyone editing the checkout store**: routing resolves **only by SKU / variant ID**. You can freely rewrite the checkout products' **title, description, tags, SEO and images** (that's exactly what neutralization does) — routing is unaffected as long as you do **not** change/delete variants or SKUs. Never delete+recreate checkout products after a route exists (new variant IDs break `variant_map`; even if SKUs are re-copied and `sku_map` still resolves, prefer in-place `productUpdate`).
+
+---
+
+## 11. Billing & credits
+
+Two env flags, both **default OFF** (measure-only): `BILLING_ENFORCED` (credit debiting), `ACCESS_CONTROL_ENABLED` (entry + free-clone trial gate).
+
+- **1 credit = 1 product image neutralized** — the only credit-debiting action (debited before Gemini, refunded on failure). Pro plan (`PRO_PRICE_USD = 17`) resets to `PRO_INCLUDED_CREDITS = 20` each paid invoice; packs `pack_50/200/500`.
+- Stripe: subscription checkout, credit-pack checkout (dynamic price), customer portal, webhook (`invoice.paid` → `reset_ai_credits`, `checkout.session.completed` credit_pack → `add_ai_credits`). Credit RPCs are `SECURITY DEFINER` (`consume_ai_credits`/`add_ai_credits`/`reset_ai_credits`).
+- Free-clone trial: first clone consumes `free_clone_store_id`; a second different store → 402 `subscribe_required`.
+
+---
+
+## 12. Environment variables
+
+Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, proxy vars (`IMPORT_FETCH_PROXY_URL`, `GLOBAL_FETCH_PROXY_URL`, `ALIEXPRESS_FETCH_PROXY_URL`, `BRIGHTDATA_*`), Instagram/Meta (`INSTAGRAM_*`, `META_*`, `META_GRAPH_VERSION`).
+
+**Used in code but MISSING from `.env.example`** (add these when deploying): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `BILLING_ENFORCED`, `ACCESS_CONTROL_ENABLED`, `BULK_IMPORT_CRON_SECRET`.
+
+---
+
+## 13. Known issues / gotchas
+
+1. **SKUs are load-bearing** for routing. AliExpress uses `skuId`; generic-site imports usually produce **no SKU** → routing falls back to fragile positional index matching or fails. Always ensure the vitrine has SKUs before routing.
+2. **`create-destination` timeout + late dedup**: it AI-translates/neutralizes *before* checking for existing products, and processes the whole catalog in one request (concurrency 6, `maxDuration=300`). Large catalogs time out ("Failed to fetch") leaving partial/duplicate products. Prefer the **"Só conectar"** mode when the catalog already exists.
+3. **Bulk-import job queue** has no atomic claim / stale recovery (unlike the image queue) → possible double-processing and stuck `processing` jobs.
+4. **Woo/Shoplazza are clone-only**; the multi-site page advertises them but HTML-scrapes instead.
+5. **`write_themes` is unavailable** via this app's Client Credentials Grant — theme edits need Shopify CLI + a Theme Access password (`shptka_...`), which only works through the CLI, not the Admin REST/GraphQL API directly.
+6. **Currency correctness** depends on the checkout store actually having the Shopify Market/currency configured.
+7. **Pricing/copy inconsistencies**: `PRO_PRICE_USD=17` but some strings still say "R$89/mês"; some AI prompts hardcode BR (CDC/LGPD/15-30 business days) regardless of `target_language`.
+8. **CORS wide open** on `resolve`/`track-fallback` (needed cross-origin); auth is solely the unguessable `public_token`.
+
+---
+
+## 14. Operational playbook — set up a routed store correctly
+
+1. Connect both stores (vitrine + checkout) in `/stores` (OAuth-install each once).
+2. Import/build the vitrine catalog. **Ensure every variant has a SKU.** (If imported without SKUs, stamp them first — e.g. sequential `STORE-0001…`.)
+3. Populate the checkout store with the SAME SKUs. Either let the wizard **generate** (AI-neutralized, but watch the timeout on big catalogs) or replicate products with matching SKUs and then neutralize.
+4. **Neutralize the checkout store** — generic brand-free titles/descriptions/tags + AI photos (via `neutralize-store-images`, needs `GEMINI_API_KEY` + credits). Titles/descriptions/images can be rewritten freely; **never touch SKUs/variants**.
+5. Connect via the wizard **"Só conectar"** mode → it builds `sku_map`/`variant_map` and outputs the loader `<script>`.
+6. Install the loader script in the vitrine `theme.liquid` (or via `update-theme`).
+7. Verify: SKU parity between the two stores must be 1:1; a cart on the vitrine should redirect to the checkout store's checkout in the right currency.
+
+---
+
+## 15. File map (entry points)
+
+- Routing: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/{resolve,connect-by-sku,create-destination,repair,health,settings,track-fallback,[id]/*}/route.ts`, `src/lib/shopify/cart-routing.ts`, `src/components/routed-checkout/*`.
+- Import: `src/lib/import/*`, `src/lib/aliexpress/*`, `src/lib/shopify/public-store.ts`, `src/lib/jobs/*`, `src/app/api/{import,aliexpress,jobs}/*`.
+- Shopify + AI: `src/lib/shopify/client.ts`, `src/lib/gemini/client.ts`, `src/lib/ai/product-neutralizer.ts`, `src/lib/store-context.ts`, `src/lib/products/shopify-taxonomy-enrichment.ts`, `src/app/api/{shopify,ai,product}/*`.
+- Shell: `src/proxy.ts`, `src/lib/supabase/middleware.ts`, `src/i18n/*`, `src/lib/billing/*`, `src/app/[locale]/(dashboard)/*`, `src/app/admin/*`.
+- Data: `supabase/migrations/001-018_*.sql`.
+- Deploy: `next.config.ts`, `vercel.json`, `Dockerfile`, `docker-compose.yml`, `.env.example`.
