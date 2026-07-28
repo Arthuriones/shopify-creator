@@ -347,10 +347,23 @@ async function findExistingProduct(
     .map((variant) => variant.sku?.trim())
     .filter(Boolean) as string[];
   if (sourceSkus.length > 0) {
+    const sourceSkuSet = new Set(sourceSkus);
     const skuQuery = `sku:${sourceSkus[0]}`;
-    const skuResult = await getProducts(creds, { first: 5, query: skuQuery });
-    const bySkuMatch = (skuResult?.products?.nodes || []) as ConnectedProduct[];
-    if (bySkuMatch.length > 0) return bySkuMatch[0];
+    const skuResult = await getProducts(creds, { first: 50, query: skuQuery });
+    const candidates = (skuResult?.products?.nodes || []) as ConnectedProduct[];
+    // A busca `sku:` da Shopify e tokenizada: ela quebra o SKU no "-" e casa
+    // pelo tamanho (ex.: buscar "MODELO-035" tambem retorna "OUTRO-035"). Por
+    // isso NAO basta pegar o primeiro resultado — precisamos confirmar que algum
+    // candidato tem uma variante com o SKU EXATO do produto de origem. Sem isso,
+    // dois modelos diferentes eram fundidos no mesmo produto do destino e as
+    // variantes com opcao colidente (mesma cor+tamanho) eram descartadas pela
+    // Shopify, deixando SKUs sem mapeamento na rota.
+    const exactBySku = candidates.find((product) =>
+      (product.variants?.nodes || []).some(
+        (variant) => variant.sku && sourceSkuSet.has(variant.sku.trim())
+      )
+    );
+    if (exactBySku) return exactBySku;
   }
 
   // Fallback: busca por handle exato (mais seguro que titulo).
