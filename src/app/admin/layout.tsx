@@ -25,7 +25,31 @@ export default async function AdminLayout({
     .select("is_admin")
     .eq("id", user.id)
     .single();
-  if (!profile?.is_admin) redirect("/login");
+
+  // Conta logada sem permissao de admin: mostra um aviso explicito em vez de
+  // redirecionar para /login. O redirect criava um loop infinito (login ->
+  // /stores -> middleware manda para /admin -> layout devolve para /login),
+  // fazendo parecer que o admin estava fora do ar quando na verdade era a
+  // conta errada.
+  if (!profile?.is_admin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+        <div className="w-full max-w-md rounded-xl border border-border/60 bg-card p-6 text-center">
+          <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <h1 className="mb-2 text-lg font-semibold">Acesso restrito</h1>
+          <p className="mb-1 text-sm text-muted-foreground">
+            A conta <span className="font-medium text-foreground">{user.email}</span>{" "}
+            nao tem permissao de administrador.
+          </p>
+          <p className="mb-5 text-sm text-muted-foreground">
+            Saia e entre com a conta de administrador.
+          </p>
+          <AdminLogout />
+        </div>
+        <Toaster />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
