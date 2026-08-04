@@ -101,9 +101,21 @@ export async function updateSession(request: NextRequest) {
     return intlMiddleware(request);
   }
 
-  // ===== HOST ADMIN (sem i18n) =====
+  // ===== HOST ADMIN =====
+  // O painel (/admin) vive FORA de [locale], entao nao pode passar pelo
+  // next-intl. Ja as telas de auth (/login, /callback, /set-password) vivem em
+  // src/app/[locale]/(auth)/ e SO resolvem com o rewrite de locale. Sem ele,
+  // "/login" caia em /[locale] com locale="login", o layout chamava notFound()
+  // e o admin ficava inacessivel (404 na tela de login).
   if (isAdminHost) {
-    const response = NextResponse.next({ request });
+    const isAdminAuthRoute =
+      pathname === "/login" ||
+      pathname.startsWith("/login/") ||
+      pathname.startsWith("/callback") ||
+      pathname.startsWith("/set-password");
+    const response = isAdminAuthRoute
+      ? intlMiddleware(request)
+      : NextResponse.next({ request });
     const supabase = attachSupabase(request, response);
     const {
       data: { user },
