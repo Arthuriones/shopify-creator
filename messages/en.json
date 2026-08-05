@@ -109,20 +109,50 @@
     "featuresTitle": "Everything to build the store fast",
     "featuresSubtitle": "From import to publish, no repetitive manual work.",
     "features": [
-      { "title": "Import from any source", "desc": "Shopify, WooCommerce, Shoplazza and AliExpress. Paste the link and xcart detects the platform and pulls products, variants, prices and images." },
-      { "title": "Automatic translation", "desc": "Titles, descriptions and variants translated to Portuguese or Spanish with AI, in the right tone for your audience." },
-      { "title": "Image neutralization", "desc": "Removes brands and watermarks from photos with AI. Images upload ready to Shopify — you spend 1 credit per image." },
-      { "title": "Routed checkout", "desc": "Separate showcase and checkout stores. The cart is resolved by SKU at runtime, with per-market currency and domain." },
-      { "title": "Full store setup", "desc": "Policies, menus, pages (About, Contact, Tracking, FAQ) and footer generated and published in one click." },
-      { "title": "Unlimited cloning", "desc": "Clone as many stores and products as you want. No quantity limit — only neutralized images use credits." }
+      {
+        "title": "Import from any source",
+        "desc": "Shopify, WooCommerce, Shoplazza and AliExpress. Paste the link and xcart detects the platform and pulls products, variants, prices and images."
+      },
+      {
+        "title": "Automatic translation",
+        "desc": "Titles, descriptions and variants translated to Portuguese or Spanish with AI, in the right tone for your audience."
+      },
+      {
+        "title": "Image neutralization",
+        "desc": "Removes brands and watermarks from photos with AI. Images upload ready to Shopify — you spend 1 credit per image."
+      },
+      {
+        "title": "Routed checkout",
+        "desc": "Separate showcase and checkout stores. The cart is resolved by SKU at runtime, with per-market currency and domain."
+      },
+      {
+        "title": "Full store setup",
+        "desc": "Policies, menus, pages (About, Contact, Tracking, FAQ) and footer generated and published in one click."
+      },
+      {
+        "title": "Unlimited cloning",
+        "desc": "Clone as many stores and products as you want. No quantity limit — only neutralized images use credits."
+      }
     ],
     "howTitle": "How it works",
     "howSubtitle": "Four steps from link to live store.",
     "steps": [
-      { "title": "Connect your Shopify", "desc": "Paste the domain and app credentials. Token refreshed automatically." },
-      { "title": "Paste the source store link", "desc": "xcart detects the platform and imports everything: products, variants and photos." },
-      { "title": "Translate and neutralize", "desc": "AI adapts the text to your audience and cleans brands off the images." },
-      { "title": "Publish", "desc": "Products live on your Shopify, with routed checkout if you want." }
+      {
+        "title": "Connect your Shopify",
+        "desc": "Paste the domain and app credentials. Token refreshed automatically."
+      },
+      {
+        "title": "Paste the source store link",
+        "desc": "xcart detects the platform and imports everything: products, variants and photos."
+      },
+      {
+        "title": "Translate and neutralize",
+        "desc": "AI adapts the text to your audience and cleans brands off the images."
+      },
+      {
+        "title": "Publish",
+        "desc": "Products live on your Shopify, with routed checkout if you want."
+      }
     ],
     "pricingTitle": "Simple pricing",
     "pricingSubtitle": "One plan with everything unlocked. Pay only for extra neutralized images.",
@@ -159,7 +189,9 @@
     "backToLogin": "Back to sign in",
     "genericError": "Something went wrong. Please try again.",
     "tooManyAttempts": "Too many attempts. Wait {seconds}s and try again.",
-    "invalidCredentials": "Invalid credentials. If you used a magic link or didn't set a password, click 'Forgot password'."
+    "invalidCredentials": "Invalid credentials. If you used a magic link or didn't set a password, click 'Forgot password'.",
+    "confirmEmailSent": "Confirm your email to activate your account",
+    "alreadyRegistered": "This email already has an account. Sign in with your password or use \"Forgot password\"."
   },
   "optimizer": {
     "title": "Store Optimizer",

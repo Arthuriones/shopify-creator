@@ -177,7 +177,12 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isAuthPath && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
+    const intendedPath = `${pathname}${request.nextUrl.search}`;
     url.pathname = `${prefix}/login`;
+    url.search = "";
+    // Guarda o destino para o login devolver o usuario ao lugar certo depois de
+    // entrar (ex.: link direto para /products ou instalacao da Shopify).
+    url.searchParams.set("next", intendedPath);
     return NextResponse.redirect(url);
   }
 

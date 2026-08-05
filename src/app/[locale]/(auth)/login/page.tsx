@@ -1,19 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Check } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 
 type Mode = "login" | "signup" | "recovery";
 
-export default function LoginPage() {
+// So aceita destino interno ("/algo"), nunca URL absoluta — evita open redirect.
+function safeNextPath(value: string | null) {
+  if (!value) return null;
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
+}
+
+// useSearchParams exige um limite de Suspense (o default export abaixo faz isso).
+function LoginForm() {
   const t = useTranslations("auth");
-  const [mode, setMode] = useState<Mode>("login");
+  const searchParams = useSearchParams();
+  // A landing manda ?mode=signup para quem clicou em "Comecar agora" cair
+  // direto no formulario de cadastro (antes caia no de login).
+  const initialMode: Mode =
+    searchParams.get("mode") === "signup" ? "signup" : "login";
+  const [mode, setMode] = useState<Mode>(initialMode);
+  // O middleware e o /api/shopify/auth mandam ?next=... para retomar o fluxo
+  // interrompido (ex.: instalacao do app na Shopify com a sessao expirada).
+  // Antes esse parametro era ignorado e o usuario perdia o contexto.
+  const redirectTarget = safeNextPath(searchParams.get("next")) || "/stores";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,25 +65,33 @@ export default function LoginPage() {
 
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              has_password: true
-            }
-          }
+              has_password: true,
+            },
+          },
         });
         if (error) throw error;
-        // Assume login is successful immediately if no email confirmation required
-        router.push("/stores");
+        // Com "Confirm email" ligado no Supabase, signUp retorna SEM erro e SEM
+        // sessao. Antes o codigo assumia sucesso e mandava para /stores, onde o
+        // middleware nao achava usuario e devolvia para /login sem explicacao —
+        // o cadastro parecia simplesmente nao funcionar. Agora mostramos o
+        // estado "confirme seu email".
+        if (!data.session) {
+          setSent(true);
+          return;
+        }
+        router.push(redirectTarget);
       } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
-        router.push("/stores");
+        router.push(redirectTarget);
       } else if (mode === "recovery") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/callback?type=recovery`,
@@ -88,6 +114,15 @@ export default function LoginPage() {
         setErrorMessage(t("tooManyAttempts", { seconds: waitSeconds }));
       } else if (normalizedMessage.includes("invalid login credentials")) {
         setErrorMessage(t("invalidCredentials"));
+      } else if (
+        normalizedMessage.includes("already registered") ||
+        normalizedMessage.includes("already been registered") ||
+        normalizedMessage.includes("user already exists")
+      ) {
+        // Erro mais comum no cadastro: antes vazava a mensagem crua em ingles.
+        // Traduz e ja leva o usuario para o modo de login.
+        setErrorMessage(t("alreadyRegistered"));
+        setMode("login");
       } else {
         setErrorMessage(message);
       }
@@ -127,7 +162,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form / Success */}
-        {sent && mode === "recovery" ? (
+        {sent && (mode === "recovery" || mode === "signup") ? (
           <div className="animate-fade-in text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full animate-scale-in"
               style={{ background: "oklch(0.72 0.19 155 / 12%)" }}
@@ -137,7 +172,9 @@ export default function LoginPage() {
                 style={{ color: "oklch(0.72 0.19 155)" }}
               />
             </div>
-            <p className="text-sm text-foreground font-medium">{t("recoverySent")}</p>
+            <p className="text-sm text-foreground font-medium">
+              {mode === "signup" ? t("confirmEmailSent") : t("recoverySent")}
+            </p>
             <p className="mt-1.5 text-[13px] text-muted-foreground mb-4">
               {t("checkEmail")} <strong className="text-foreground font-medium">{email}</strong>
             </p>
@@ -255,5 +292,15 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={<div className="min-h-screen bg-background" aria-hidden />}
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

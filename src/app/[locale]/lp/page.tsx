@@ -28,7 +28,14 @@ const FEATURE_ICONS = [ShoppingBag, Languages, ImageOff, Route, Store, Zap];
 export default function LandingPage() {
   const t = useTranslations("landing");
   const locale = useLocale();
-  const loginUrl = `${appUrl}${locale === "en" ? "/en" : ""}/login`;
+  // pt e o locale padrao (sem prefixo); en e ja usam prefixo. Antes "ja" caia
+  // no app em portugues porque so "en" era tratado.
+  const localePrefix = locale === "pt" ? "" : `/${locale}`;
+  const loginUrl = `${appUrl}${localePrefix}/login`;
+  // Os CTAs de conversao abrem direto o formulario de CADASTRO. Antes todos
+  // apontavam para /login, entao quem clicava em "Comecar agora" caia numa tela
+  // de entrar e precisava achar a aba "Criar Conta".
+  const signupUrl = `${loginUrl}?mode=signup`;
   const features = t.raw("features") as { title: string; desc: string }[];
   const steps = t.raw("steps") as { title: string; desc: string }[];
   const proFeatures = (t.raw("proFeatures") as string[]).map((s) =>
@@ -53,7 +60,7 @@ export default function LandingPage() {
               {t("signIn")}
             </a>
             <a
-              href={loginUrl}
+              href={signupUrl}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
             >
               {t("start")} <ArrowRight className="h-4 w-4" />
@@ -80,7 +87,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
-              href={loginUrl}
+              href={signupUrl}
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-base font-medium text-primary-foreground transition hover:opacity-90"
             >
               {t("ctaStartNow")} <ArrowRight className="h-4 w-4" />
@@ -171,7 +178,7 @@ export default function LandingPage() {
               ))}
             </ul>
             <a
-              href={loginUrl}
+              href={signupUrl}
               className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground transition hover:opacity-90"
             >
               {t("subscribePro")} <ArrowRight className="h-4 w-4" />
@@ -209,7 +216,7 @@ export default function LandingPage() {
           <h2 className="font-heading text-3xl font-bold tracking-tight">{t("finalTitle")}</h2>
           <p className="mt-3 text-muted-foreground">{t("finalSubtitle")}</p>
           <a
-            href={loginUrl}
+            href={signupUrl}
             className="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-7 py-3 text-base font-medium text-primary-foreground transition hover:opacity-90"
           >
             {t("ctaStartNow")} <ArrowRight className="h-4 w-4" />

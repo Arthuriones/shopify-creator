@@ -109,20 +109,50 @@
     "featuresTitle": "Tudo pra montar a loja rápido",
     "featuresSubtitle": "Da importação à publicação, sem trabalho manual repetitivo.",
     "features": [
-      { "title": "Importe de qualquer fonte", "desc": "Shopify, WooCommerce, Shoplazza e AliExpress. Cola o link, a xcart detecta a plataforma e puxa produtos, variantes, preços e imagens." },
-      { "title": "Tradução automática", "desc": "Títulos, descrições e variantes traduzidos para português ou espanhol com IA, no tom certo pro seu público." },
-      { "title": "Neutralização de imagens", "desc": "Remove marcas e watermarks das fotos com IA. As imagens já sobem prontas pra Shopify — você gasta 1 crédito por imagem." },
-      { "title": "Checkout roteado", "desc": "Vitrine e loja de checkout separadas. O carrinho é resolvido por SKU em runtime, com moeda e domínio por mercado." },
-      { "title": "Setup completo da loja", "desc": "Policies (CDC/LGPD), menus, páginas (Sobre, Contato, Rastreamento, FAQ) e footer gerados e publicados em um clique." },
-      { "title": "Clonagem ilimitada", "desc": "Clone quantas lojas e produtos quiser. Sem trava por quantidade — só as imagens neutralizadas consomem créditos." }
+      {
+        "title": "Importe de qualquer fonte",
+        "desc": "Shopify, WooCommerce, Shoplazza e AliExpress. Cola o link, a xcart detecta a plataforma e puxa produtos, variantes, preços e imagens."
+      },
+      {
+        "title": "Tradução automática",
+        "desc": "Títulos, descrições e variantes traduzidos para português ou espanhol com IA, no tom certo pro seu público."
+      },
+      {
+        "title": "Neutralização de imagens",
+        "desc": "Remove marcas e watermarks das fotos com IA. As imagens já sobem prontas pra Shopify — você gasta 1 crédito por imagem."
+      },
+      {
+        "title": "Checkout roteado",
+        "desc": "Vitrine e loja de checkout separadas. O carrinho é resolvido por SKU em runtime, com moeda e domínio por mercado."
+      },
+      {
+        "title": "Setup completo da loja",
+        "desc": "Policies (CDC/LGPD), menus, páginas (Sobre, Contato, Rastreamento, FAQ) e footer gerados e publicados em um clique."
+      },
+      {
+        "title": "Clonagem ilimitada",
+        "desc": "Clone quantas lojas e produtos quiser. Sem trava por quantidade — só as imagens neutralizadas consomem créditos."
+      }
     ],
     "howTitle": "Como funciona",
     "howSubtitle": "Quatro passos do link à loja no ar.",
     "steps": [
-      { "title": "Conecte sua Shopify", "desc": "Cole o domínio e as credenciais do app. Token renovado automaticamente." },
-      { "title": "Cole o link da loja origem", "desc": "A xcart detecta a plataforma e importa tudo: produtos, variantes e fotos." },
-      { "title": "Traduza e neutralize", "desc": "IA ajusta textos pro seu público e limpa as imagens das marcas." },
-      { "title": "Publique", "desc": "Produtos no ar na sua Shopify, com checkout roteado se quiser." }
+      {
+        "title": "Conecte sua Shopify",
+        "desc": "Cole o domínio e as credenciais do app. Token renovado automaticamente."
+      },
+      {
+        "title": "Cole o link da loja origem",
+        "desc": "A xcart detecta a plataforma e importa tudo: produtos, variantes e fotos."
+      },
+      {
+        "title": "Traduza e neutralize",
+        "desc": "IA ajusta textos pro seu público e limpa as imagens das marcas."
+      },
+      {
+        "title": "Publique",
+        "desc": "Produtos no ar na sua Shopify, com checkout roteado se quiser."
+      }
     ],
     "pricingTitle": "Preço simples",
     "pricingSubtitle": "Um plano com tudo liberado. Pague só por imagem neutralizada a mais.",
@@ -159,7 +189,9 @@
     "backToLogin": "Voltar ao Login",
     "genericError": "Ocorreu um erro. Tente novamente.",
     "tooManyAttempts": "Muitas tentativas. Aguarde {seconds}s e tente novamente.",
-    "invalidCredentials": "Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'."
+    "invalidCredentials": "Credenciais inválidas. Se você acessava por link mágico ou não configurou senha, clique em 'Esqueci a senha'.",
+    "confirmEmailSent": "Confirme seu e-mail para ativar a conta",
+    "alreadyRegistered": "Este e-mail já tem conta. Entre com sua senha ou use \"Esqueci a senha\"."
   },
   "optimizer": {
     "title": "Otimizador de Loja",
