@@ -5,6 +5,7 @@ import {
 } from "@/lib/ai/product-neutralizer";
 import { applyLogoToProductImages } from "@/lib/images/apply-logo";
 import { buildShopifyTaxonomyEnrichment } from "@/lib/products/shopify-taxonomy-enrichment";
+import { ensureVariantSku } from "@/lib/products/sku";
 import { translateProductVariantOptionsToPortuguese } from "@/lib/products/variant-translation";
 import { createProduct, type ShopifyCredentials } from "@/lib/shopify/client";
 import type { AliExpressProduct, OptimizationResult, StoreContext } from "@/types";
@@ -122,12 +123,20 @@ export function toCreateProductInput(input: {
     images: product.images.slice(0, 20),
     options: hasOptions ? product.options : undefined,
     variants: product.variants.length
-      ? product.variants.slice(0, 100).map((variant) => ({
+      ? product.variants.slice(0, 100).map((variant, index) => ({
           price: money(variant.price || product.price),
           compareAtPrice: variant.compareAtPrice
             ? money(variant.compareAtPrice)
             : undefined,
           options: variant.optionValues,
+          // Sem SKU o produto nao roteia no checkout (a rota casa por SKU).
+          // Importacoes de site generico quase nunca trazem SKU, entao geramos
+          // um deterministico a partir do handle + posicao da variante.
+          sku: ensureVariantSku(
+            variant.sku,
+            product.handle || product.sourceProductId || product.title,
+            index
+          ),
           inventoryTracked: inventory.tracked,
           ...(inventory.tracked && typeof inventory.quantity === "number"
             ? { inventoryQuantity: inventory.quantity }

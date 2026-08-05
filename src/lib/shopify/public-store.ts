@@ -1,5 +1,7 @@
 import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { fetchWithImportProxy } from "@/lib/import/proxy-fetch";
+import { runWithConcurrency } from "@/lib/concurrency";
+import { ensureVariantSku } from "@/lib/products/sku";
 
 export interface PublicShopifyVariant {
   id: number;
@@ -332,6 +334,14 @@ async function fetchCollectionProductHandles(
   return handles;
 }
 
+// Quantas colecoes sao lidas em paralelo. Cada uma pode paginar ate 20 vezes,
+// entao antes (laco sequencial) o pior caso era ~1000 requisicoes em serie —
+// a causa real dos timeouts de preview em loja grande.
+const COLLECTION_ATTACH_CONCURRENCY = 8;
+// Com as leituras em paralelo da para cobrir bem mais colecoes do que as 50
+// originais sem estourar o tempo da rota.
+const COLLECTION_ATTACH_LIMIT = 200;
+
 export async function attachCollectionsToProducts(
   source: string,
   products: PublicShopifyProduct[],
@@ -348,12 +358,18 @@ export async function attachCollectionsToProducts(
     products.map((product) => [product.handle, new Set<string>()])
   );
 
-  for (const collection of sourceCollections.slice(0, 50)) {
-    const handles = await fetchCollectionProductHandles(domain, collection.handle);
-    handles.forEach((handle) => {
+  const scoped = sourceCollections.slice(0, COLLECTION_ATTACH_LIMIT);
+  const perCollection = await runWithConcurrency(
+    scoped,
+    COLLECTION_ATTACH_CONCURRENCY,
+    (collection) => fetchCollectionProductHandles(domain, collection.handle)
+  );
+
+  scoped.forEach((collection, index) => {
+    perCollection[index]?.forEach((handle) => {
       productsByHandle.get(handle)?.add(collection.handle);
     });
-  }
+  });
 
   return products.map((product) => ({
     ...product,
@@ -558,12 +574,19 @@ export function toShopifyCreateProductInput(product: PublicShopifyProduct) {
     title: product.title,
     descriptionHtml: product.descriptionHtml || "<p></p>",
     tags: product.tags,
+    // vendor e productType eram descartados aqui embora createProduct os aceite.
+    // productType e o campo nativo de categoria da Shopify (e o unico sinal de
+    // categoria que sobrevive a uma importacao WooCommerce).
+    vendor: product.vendor || undefined,
+    productType: product.productType || undefined,
     images: product.images.slice(0, 20),
     options: product.options.length > 0 ? product.options : undefined,
-    variants: product.variants.slice(0, 100).map((variant) => ({
+    variants: product.variants.slice(0, 100).map((variant, index) => ({
       price: variant.price,
       compareAtPrice: variant.compareAtPrice || undefined,
       options: variant.optionValues,
+      // SKU e a chave do checkout roteado — gera um estavel quando falta.
+      sku: ensureVariantSku(variant.sku, product.handle, index),
     })),
     seo: {
       title: product.title.slice(0, 70),

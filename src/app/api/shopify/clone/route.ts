@@ -629,11 +629,21 @@ export async function POST(request: NextRequest) {
       ? await fetchPublicShopifyCollections(source)
       : { collections: [] };
     if (collectionsResult.collections.length > 0) {
-      products = await attachCollectionsToProducts(
-        source,
-        products,
-        collectionsResult.collections
-      );
+      if (collectionHandle) {
+        // Escopo por colecao: todos os produtos vieram de /collections/<handle>,
+        // entao a associacao ja e conhecida. Varrer as demais colecoes aqui era
+        // trabalho de rede puro (ate 20 requisicoes por colecao) sem ganho.
+        products = products.map((product) => ({
+          ...product,
+          collectionHandles: [collectionHandle],
+        }));
+      } else {
+        products = await attachCollectionsToProducts(
+          source,
+          products,
+          collectionsResult.collections
+        );
+      }
     }
 
     if (action === "preview" && body.transformPreview === true) {
