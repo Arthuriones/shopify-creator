@@ -75,6 +75,24 @@ interface PreviewProduct {
   collectionHandles?: string[];
 }
 
+// Ordenacao da lista de preview. "source" mantem a ordem em que a loja de
+// origem publicou os produtos (padrao); "recent" usa o id, que na Shopify
+// cresce com o tempo de criacao.
+type PreviewSort =
+  | "source"
+  | "title_asc"
+  | "title_desc"
+  | "price_asc"
+  | "price_desc"
+  | "recent";
+
+function previewPrice(product: PreviewProduct) {
+  const prices = (product.variants || [])
+    .map((variant) => Number.parseFloat(variant.price))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return prices.length ? Math.min(...prices) : Number.POSITIVE_INFINITY;
+}
+
 interface TransformedPreviewProduct {
   source: {
     title: string;
@@ -582,6 +600,12 @@ export default function ClonePage() {
   const [selectedImportMode, setSelectedImportMode] = useState<ImportMode | null>(null);
   const [sourceCollections, setSourceCollections] = useState<SourceCollection[]>([]);
   const [selectedProductHandles, setSelectedProductHandles] = useState<string[]>([]);
+  // Filtros/ordenacao da lista de preview. Sao aplicados no cliente: o preview
+  // ja traz collectionHandles por produto, entao da para filtrar por categoria
+  // sem nenhuma chamada extra a origem.
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewSort, setPreviewSort] = useState<PreviewSort>("source");
+  const [previewCollections, setPreviewCollections] = useState<string[]>([]);
 
   const [configs, setConfigs] = useState<CheckoutConfig[]>([]);
   const [cloneRuns, setCloneRuns] = useState<CloneRun[]>([]);
@@ -784,6 +808,72 @@ export default function ClonePage() {
     () => stores.find((store) => store.id === targetStoreId),
     [stores, targetStoreId]
   );
+
+  // Categorias presentes nos produtos carregados (para os filtros por coleção).
+  // Sai do proprio preview, entao cobre tambem lojas cuja listagem publica de
+  // colecoes falha mas cujos produtos trazem collectionHandles.
+  const previewCollectionOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const product of preview) {
+      for (const handle of product.collectionHandles || []) {
+        counts.set(handle, (counts.get(handle) || 0) + 1);
+      }
+    }
+    const titleByHandle = new Map(
+      sourceCollections.map((collection) => [collection.handle, collection.title])
+    );
+    return [...counts.entries()]
+      .map(([handle, count]) => ({
+        handle,
+        title: titleByHandle.get(handle) || handle,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+  }, [preview, sourceCollections]);
+
+  // Lista efetivamente exibida: busca + filtro de categoria + ordenação.
+  const visiblePreview = useMemo(() => {
+    const term = previewSearch.trim().toLowerCase();
+    let list = preview;
+    if (previewCollections.length > 0) {
+      list = list.filter((product) =>
+        (product.collectionHandles || []).some((handle) =>
+          previewCollections.includes(handle)
+        )
+      );
+    }
+    if (term) {
+      list = list.filter((product) => {
+        const haystack = [
+          product.title,
+          product.handle,
+          ...(product.variants || []).map((variant) => variant.sku || ""),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(term);
+      });
+    }
+    if (previewSort === "source") return list;
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (previewSort) {
+        case "title_asc":
+          return a.title.localeCompare(b.title);
+        case "title_desc":
+          return b.title.localeCompare(a.title);
+        case "price_asc":
+          return previewPrice(a) - previewPrice(b);
+        case "price_desc":
+          return previewPrice(b) - previewPrice(a);
+        case "recent":
+          return (b.id || 0) - (a.id || 0);
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [preview, previewSearch, previewCollections, previewSort]);
 
   const selectedRouteConfig = useMemo(
     () =>
@@ -1467,8 +1557,16 @@ export default function ClonePage() {
     });
   }
 
+  // Marca/desmarca apenas o que esta visivel no filtro atual, preservando a
+  // selecao de itens escondidos — assim da para montar a selecao categoria por
+  // categoria sem perder o que ja foi escolhido.
   function toggleAllProducts(checked: boolean) {
-    setSelectedProductHandles(checked ? preview.map((product) => product.handle) : []);
+    const visibleHandles = visiblePreview.map((product) => product.handle);
+    setSelectedProductHandles((current) => {
+      if (checked) return [...new Set([...current, ...visibleHandles])];
+      const visibleSet = new Set(visibleHandles);
+      return current.filter((handle) => !visibleSet.has(handle));
+    });
   }
 
   async function copyToClipboard(value: string, label: string) {
@@ -1954,7 +2052,10 @@ export default function ClonePage() {
                       <input
                         type="checkbox"
                         checked={
-                          selectedProductHandles.length === preview.length
+                          visiblePreview.length > 0 &&
+                          visiblePreview.every((product) =>
+                            selectedProductHandles.includes(product.handle)
+                          )
                         }
                         onChange={(event) =>
                           toggleAllProducts(event.target.checked)
@@ -1965,9 +2066,94 @@ export default function ClonePage() {
                     </label>
                   )}
                 </div>
+
+                {/* Busca + ordenacao + filtro por categoria da lista carregada */}
+                {preview.length > 0 && (
+                  <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        value={previewSearch}
+                        onChange={(event) => setPreviewSearch(event.target.value)}
+                        placeholder="Buscar por título, handle ou SKU"
+                        className="h-9 flex-1 text-sm"
+                      />
+                      <Select
+                        value={previewSort}
+                        onValueChange={(value) =>
+                          setPreviewSort(value as PreviewSort)
+                        }
+                      >
+                        <SelectTrigger className="h-9 w-full sm:w-56">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="source">Ordem da origem</SelectItem>
+                          <SelectItem value="recent">Mais recentes</SelectItem>
+                          <SelectItem value="title_asc">Título (A-Z)</SelectItem>
+                          <SelectItem value="title_desc">Título (Z-A)</SelectItem>
+                          <SelectItem value="price_asc">Menor preço</SelectItem>
+                          <SelectItem value="price_desc">Maior preço</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {previewCollectionOptions.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-medium text-muted-foreground">
+                            Filtrar por categoria
+                          </p>
+                          {previewCollections.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewCollections([])}
+                              className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-auto">
+                          {previewCollectionOptions.map((collection) => {
+                            const active = previewCollections.includes(
+                              collection.handle
+                            );
+                            return (
+                              <button
+                                key={collection.handle}
+                                type="button"
+                                onClick={() =>
+                                  setPreviewCollections((current) =>
+                                    active
+                                      ? current.filter(
+                                          (item) => item !== collection.handle
+                                        )
+                                      : [...current, collection.handle]
+                                  )
+                                }
+                                className={cn(
+                                  "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                                  active
+                                    ? "border-primary bg-primary/15 text-foreground"
+                                    : "border-border/70 text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {collection.title}
+                                <span className="ml-1 opacity-60">
+                                  {collection.count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">
                   {preview.length
-                    ? `${selectedProductHandles.length} de ${preview.length} selecionado(s)`
+                    ? `${selectedProductHandles.length} selecionado(s) · exibindo ${visiblePreview.length} de ${preview.length}`
                     : "Clique em analisar para carregar os produtos da origem."}
                 </p>
                 <div className="max-h-72 overflow-auto rounded-lg border border-border/60">
@@ -1975,8 +2161,12 @@ export default function ClonePage() {
                     <div className="p-8 text-center text-sm text-muted-foreground">
                       {t("no_products_loaded")}
                     </div>
+                  ) : visiblePreview.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum produto corresponde ao filtro.
+                    </div>
                   ) : (
-                    preview.map((product) => (
+                    visiblePreview.map((product) => (
                       <label
                         key={product.handle}
                         className="grid cursor-pointer grid-cols-[24px_48px_minmax(0,1fr)] gap-3 border-b border-border/50 p-3 last:border-b-0 hover:bg-muted/35"
