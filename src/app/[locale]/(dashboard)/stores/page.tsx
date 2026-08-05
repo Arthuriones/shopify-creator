@@ -41,11 +41,14 @@ import {
   X,
   HelpCircle,
   ChevronDown,
+  Copy,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
+import { SHOPIFY_SCOPES_STRING } from "@/lib/shopify/scopes";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { PageHeader } from "@/components/layout/page-header";
@@ -103,6 +106,45 @@ const LANGUAGE_OPTIONS = [
   { value: "it-IT", label: "Italiano" },
   { value: "ja-JP", label: "日本語" },
 ];
+
+// Bloco de texto que o usuario precisa colar no painel da Shopify (escopos,
+// URL de redirecionamento, URL do app). Antes era so um <p> em fonte 10.5px com
+// break-all e o usuario tinha que selecionar o texto a mao — o passo mais
+// propenso a erro de todo o onboarding.
+function CopyField({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success(`${label} copiado`);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Não foi possível copiar. Selecione e copie manualmente.");
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border/40 bg-background/50 px-2 py-1.5">
+      <code className="min-w-0 flex-1 break-all font-mono text-[10.5px] leading-relaxed text-foreground/80">
+        {value}
+      </code>
+      <button
+        type="button"
+        onClick={copy}
+        title={`Copiar ${label}`}
+        className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-primary" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+  );
+}
 
 function StoreSkeleton() {
   return (
@@ -182,6 +224,12 @@ export default function StoresPage() {
       ? getPublicAppUrl(window.location.origin)
       : getPublicAppUrl();
   const [showTutorial, setShowTutorial] = useState(false);
+  // Guarda se ja abrimos o tutorial automaticamente, para nao reabrir depois que
+  // o usuario fechar.
+  const tutorialAutoOpenedRef = useRef(false);
+  // Sinaliza que voltamos do OAuth (?installed=1) e devemos abrir o perfil da
+  // loja recem-instalada assim que a lista carregar.
+  const pendingProfileAfterInstallRef = useRef(false);
 
   // Profile editing
   const [profileOpen, setProfileOpen] = useState(false);
@@ -228,6 +276,11 @@ export default function StoresPage() {
     const errorMessage = params.get("error");
     if (installed) {
       toast.success("Loja instalada e conectada com sucesso!");
+      // Marca para abrir o perfil assim que a lista de lojas carregar. Sem isso
+      // o usuario terminava toda a instalacao e caia num card "Perfil
+      // incompleto" sem nenhuma acao sugerida — e o perfil (nicho) e o que
+      // destrava toda a IA do produto.
+      pendingProfileAfterInstallRef.current = true;
     }
     if (errorMessage) {
       toast.error(errorMessage);
@@ -238,6 +291,32 @@ export default function StoresPage() {
       window.history.replaceState({}, "", url.toString());
     }
   }, []);
+
+  useEffect(() => {
+    if (loadingStores || !pendingProfileAfterInstallRef.current) return;
+    if (stores.length === 0) return;
+    pendingProfileAfterInstallRef.current = false;
+    // Prioriza a loja sem perfil completo (a que acabou de ser instalada);
+    // se todas estiverem completas, nao abre nada.
+    const target = stores.find((store) => !isProfileComplete(store));
+    if (target) void openProfileEditor(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingStores, stores]);
+
+  useEffect(() => {
+    // Primeira loja do usuario: o passo a passo da Shopify e a unica coisa que
+    // desbloqueia o produto, entao abre aberto em vez de escondido atras de um
+    // clique. Depois que existe ao menos uma loja, volta a ficar recolhido.
+    if (
+      !loadingStores &&
+      stores.length === 0 &&
+      open &&
+      !tutorialAutoOpenedRef.current
+    ) {
+      tutorialAutoOpenedRef.current = true;
+      setShowTutorial(true);
+    }
+  }, [loadingStores, stores.length, open]);
 
   useEffect(() => {
     if (!loadingStores && stores.length > 0 && !materialsStoreId) {
@@ -835,23 +914,20 @@ export default function StoresPage() {
                     <strong className="text-foreground/90">Configuration</strong> e em{" "}
                     <strong className="text-foreground/90">Acesso &rarr; Selecionar escopos</strong>, cole:
                   </p>
-                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    write_legal_policies,write_online_store_navigation,read_products,write_products,read_publications,write_publications,read_content,write_content,read_themes,write_themes,read_metaobjects,write_metaobjects,read_metaobject_definitions,write_metaobject_definitions
-                  </p>
+                  <CopyField value={SHOPIFY_SCOPES_STRING} label="Escopos" />
                   <p>
                     <strong className="text-foreground/90">3.</strong> Em{" "}
                     <strong className="text-foreground/90">URLs de redirecionamento</strong>, cole exatamente:
                   </p>
-                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    {`${publicAppUrl}/api/shopify/auth`}
-                  </p>
+                  <CopyField
+                    value={`${publicAppUrl}/api/shopify/auth`}
+                    label="URL de redirecionamento"
+                  />
                   <p>
                     <strong className="text-foreground/90">4.</strong> Em{" "}
                     <strong className="text-foreground/90">URL do app</strong>, cole apenas o dominio (sem o /api/shopify/auth):
                   </p>
-                  <p className="rounded-md border border-border/40 bg-background/50 px-2 py-1.5 font-mono text-[10.5px] text-foreground/80 break-all">
-                    {publicAppUrl}
-                  </p>
+                  <CopyField value={publicAppUrl} label="URL do app" />
                   <p>
                     Marque <strong className="text-foreground/90">Usar fluxo de instalacao legado</strong> e clica em <strong className="text-foreground/90">Lancar</strong> a versao no topo da pagina.
                   </p>

@@ -2,22 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getShopInfo, getThemes } from "@/lib/shopify/client";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
+import { SHOPIFY_SCOPES_STRING } from "@/lib/shopify/scopes";
 
-const SCOPES = [
-  "write_legal_policies",
-  "write_online_store_navigation",
-  "read_products",
-  "write_products",
-  "read_publications",
-  "write_publications",
-  "read_content",
-  "write_content",
-  "read_themes",
-  "read_metaobjects",
-  "write_metaobjects",
-  "read_metaobject_definitions",
-  "write_metaobject_definitions",
-].join(",");
+// Mesma lista mostrada no tutorial de conexao — ver src/lib/shopify/scopes.ts.
+const SCOPES = SHOPIFY_SCOPES_STRING;
 
 function dashboardUrl(request: NextRequest, query?: string): string {
   const url = new URL("/stores", request.nextUrl.origin);
