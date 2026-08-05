@@ -140,8 +140,11 @@ export async function POST(request: NextRequest) {
     // e devolve a URL de instalacao pro frontend redirecionar.
     if (
       error instanceof ShopifyClientError &&
-      error.code === "INVALID_CREDENTIALS" &&
-      /nao esta instalado|application_cannot_be_found/i.test(error.message)
+      (error.code === "APP_NOT_INSTALLED" ||
+        // Compatibilidade com tokens/erros antigos que ainda chegam como
+        // INVALID_CREDENTIALS descrevendo o app ausente.
+        (error.code === "INVALID_CREDENTIALS" &&
+          /application_cannot_be_found/i.test(error.message)))
     ) {
       const { data: store, error: upsertError } = await upsertStore(
         supabase,

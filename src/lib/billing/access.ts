@@ -37,11 +37,19 @@ export async function userHasAccess(userId: string): Promise<boolean> {
   if (!accessControlEnabled()) return true;
   if (!userId) return false;
   const supabase = createAdminClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("is_admin, plan, access_granted, free_clone_store_id")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
+
+  // Conta recem-criada cujo trigger handle_new_user ainda nao commitou (ou
+  // linha ausente por qualquer motivo): tratamos como trial disponivel. Antes
+  // caia em profileCanEnter(null) === false e o usuario que acabou de se
+  // cadastrar era mandado para /no-access dizendo que a avaliacao GRATUITA
+  // tinha terminado — sem nunca ter usado nada.
+  if (error || !data) return true;
+
   return profileCanEnter(data);
 }
 

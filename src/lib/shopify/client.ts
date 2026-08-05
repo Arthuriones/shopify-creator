@@ -11,6 +11,11 @@ const tokenCache = new Map<
 type ShopifyClientErrorCode =
   | "INVALID_DOMAIN"
   | "INVALID_CREDENTIALS"
+  // App existe mas nao esta instalado na loja: o caller deve mandar o usuario
+  // para o fluxo de OAuth. Antes isso era detectado casando a frase em
+  // portugues "nao esta instalado" na mensagem — qualquer ajuste de copy
+  // (inclusive acentuar) quebrava silenciosamente a instalacao.
+  | "APP_NOT_INSTALLED"
   | "REQUEST_FAILED";
 
 export class ShopifyClientError extends Error {
@@ -149,7 +154,7 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
     if (lowerBody.includes("application_cannot_be_found")) {
       throw new ShopifyClientError(
         "App nao esta instalado nessa loja. Crie o app no dev.shopify.com, gere o link de Custom Distribution para esta loja e instale antes de conectar.",
-        "INVALID_CREDENTIALS",
+        "APP_NOT_INSTALLED",
         401
       );
     }
@@ -176,7 +181,7 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
     ) {
       throw new ShopifyClientError(
         "App nao esta instalado nessa loja. Instale o app primeiro: no dev.shopify.com, va em seu App > Distribution > gere o link de Custom Distribution e instale na loja.",
-        "INVALID_CREDENTIALS",
+        "APP_NOT_INSTALLED",
         401
       );
     }

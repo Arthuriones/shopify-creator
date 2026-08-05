@@ -75,6 +75,47 @@ async function updateJob(
   await supabase.from("background_jobs").update(payload).eq("id", jobId);
 }
 
+// Um job que morreu no meio (invocacao serverless encerrada) fica preso em
+// "processing" para sempre e some do drenador, que so olha "pending". Depois
+// deste tempo devolvemos para a fila.
+const STALE_PROCESSING_MS = 10 * 60 * 1000;
+
+// Devolve para "pending" os jobs presos em "processing" ha muito tempo.
+async function recoverStaleJobs(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId?: string,
+  storeId?: string
+) {
+  const cutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+  let query = supabase
+    .from("background_jobs")
+    .update({ status: "pending" })
+    .eq("type", "bulk_import")
+    .eq("status", "processing")
+    .lt("updated_at", cutoff);
+  if (userId) query = query.eq("user_id", userId);
+  if (storeId) query = query.eq("store_id", storeId);
+  await query;
+}
+
+// Marca o job como "processing" SOMENTE se ele ainda estiver "pending".
+// Como o update e condicional e atomico no Postgres, dois drenadores
+// concorrentes (o after() da request e o cron horario) nao conseguem pegar o
+// mesmo job — antes ambos liam a lista "pending" e importavam em duplicidade.
+async function claimJob(
+  supabase: ReturnType<typeof createAdminClient>,
+  jobId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("background_jobs")
+    .update({ status: "processing" })
+    .eq("id", jobId)
+    .eq("status", "pending")
+    .select("id");
+  if (error) return false;
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function processBulkImportJobs(input: {
   userId?: string;
   storeId?: string;
@@ -82,6 +123,8 @@ export async function processBulkImportJobs(input: {
 }) {
   const supabase = createAdminClient();
   const limit = Math.min(Math.max(Number(input.limit || 3), 1), 10);
+
+  await recoverStaleJobs(supabase, input.userId, input.storeId);
 
   let query = supabase
     .from("background_jobs")
@@ -108,6 +151,10 @@ export async function processBulkImportJobs(input: {
   };
 
   for (const job of pendingJobs) {
+    // Se outro drenador ja pegou este job, segue para o proximo.
+    const claimed = await claimJob(supabase, job.id);
+    if (!claimed) continue;
+
     const progress = job.progress || {};
     const source = String(progress.source || "");
     const optimize = progress.optimize === true;
