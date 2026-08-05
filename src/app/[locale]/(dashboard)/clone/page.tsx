@@ -596,6 +596,10 @@ export default function ClonePage() {
   const [sourceDomain, setSourceDomain] = useState("");
   const [previewKey, setPreviewKey] = useState("");
   const [applyProgress, setApplyProgress] = useState<CloneApplyProgress | null>(null);
+  // Detalhe das falhas do ultimo import, para o usuario saber o que deu errado.
+  const [cloneFailures, setCloneFailures] = useState<
+    { handle: string; error: string }[]
+  >([]);
   const [importMode, setImportMode] = useState<ImportMode>("bulk");
   const [selectedImportMode, setSelectedImportMode] = useState<ImportMode | null>(null);
   const [sourceCollections, setSourceCollections] = useState<SourceCollection[]>([]);
@@ -1334,6 +1338,7 @@ export default function ClonePage() {
     }
 
     setApplyLoading(true);
+    setCloneFailures([]);
     setApplyProgress({
       phase: "analyzing",
       current: 0,
@@ -1399,6 +1404,10 @@ export default function ClonePage() {
         logoAppliedCount: 0,
         skuMap: {} as Record<string, string>,
         variantMap: {} as Record<string, string>,
+        // A API ja devolve failed[] com {sourceHandle, error} por produto, mas o
+        // cliente descartava tudo e mostrava so o numero. Quem via "40 produtos
+        // falharam" nao tinha como saber o motivo nem quais foram.
+        failures: [] as { handle: string; error: string }[],
       };
 
       const activeSelectedHandles =
@@ -1468,6 +1477,19 @@ export default function ClonePage() {
         aggregate.logoAppliedCount += Number(data.logoAppliedCount || 0);
         Object.assign(aggregate.skuMap, data.skuMap || {});
         Object.assign(aggregate.variantMap, data.variantMap || {});
+        if (Array.isArray(data.failed)) {
+          for (const item of data.failed as {
+            sourceHandle?: string;
+            handle?: string;
+            error?: string;
+          }[]) {
+            aggregate.failures.push({
+              handle: item?.sourceHandle || item?.handle || "(sem handle)",
+              error: item?.error || "Erro desconhecido",
+            });
+          }
+        }
+        setCloneFailures([...aggregate.failures]);
 
         setApplyProgress({
           phase: "importing",
@@ -2649,7 +2671,47 @@ export default function ClonePage() {
                         }}
                       />
                     </div>
+
+                    {/* Contadores ao vivo: ja existiam no estado e nunca eram exibidos */}
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-muted-foreground">
+                        {applyProgress.created} criados · {applyProgress.skipped}{" "}
+                        pulados · {applyProgress.failed} falhas
+                      </p>
+                      {applyLoading && applyProgress.phase !== "done" && (
+                        <button
+                          type="button"
+                          onClick={() => cloneAbortRef.current?.abort()}
+                          className="rounded border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </div>
+                )}
+
+                {/* Detalhe das falhas — antes so aparecia a contagem num toast */}
+                {cloneFailures.length > 0 && (
+                  <details className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-foreground">
+                      {cloneFailures.length} produto(s) não importado(s) — ver
+                      motivo
+                    </summary>
+                    <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+                      {cloneFailures.map((failure, index) => (
+                        <li
+                          key={`${failure.handle}-${index}`}
+                          className="text-[11px] leading-relaxed text-muted-foreground"
+                        >
+                          <span className="font-medium text-foreground/90">
+                            {failure.handle}
+                          </span>
+                          : {failure.error}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
               </div>
             )}
