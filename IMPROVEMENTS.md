@@ -16,23 +16,19 @@ Last updated: 2026-08 (after the signup / clone / onboarding audit).
 
 ---
 
-## P0 — reliability
+- **Preview N+1 parallelized** (`be56732`) — collection attach went from ~1000 serial requests to a pool of 8, and is skipped entirely when a collection scope is set.
+- **SKUs always emitted** (`be56732`) — deterministic SKU when the source has none; `vendor`/`productType` now carried through.
+- **Bulk-import queue hardened** (`7a5adf6`) — atomic claim + 10-min stale recovery.
+- **Typed `APP_NOT_INSTALLED`** (`7a5adf6`) — no longer regex-matches a Portuguese sentence.
+- **`/no-access` guard** (`7a5adf6`) — a missing profile row no longer means "trial over".
+- **Market-aware AI policies** (`730490a`) — pt/es/ja/en profiles instead of hardcoded CDC/LGPD/PIX.
+- **OAuth HMAC verification** + **dashboard onboarding checklist**.
 
-1. **Auto-generate SKUs on import.** Generic-site imports produce empty SKUs, which silently breaks routed checkout (everything keys on SKU). Stamp a deterministic SKU at create time in `toCreateProductInput` / `publishImportedProduct` / `create-destination`.
+## P0 — reliability
 
 2. **Rework `create-destination` for large catalogs.** It AI-translates *before* checking for existing products and processes the whole catalog in one 300 s request → timeouts leaving partial/duplicate products. Move dedup before the AI step; convert to the background-job queue pattern used by `neutralize_image`.
 
-3. **Kill the preview N+1.** `attachCollectionsToProducts` runs on *every* preview and export: it loops up to 50 collections × up to 20 sequential paginated fetches ≈ 1000 sequential round-trips inside a `maxDuration = 120` route, and `handleApply` re-triggers a full preview before every import. Make it opt-in, skip it when a collection scope is set, and parallelize with a concurrency pool.
-
-4. **Harden the bulk-import queue.** `processBulkImportJobs` has no atomic claim (the `after()` drainer and the hourly cron can double-process → duplicate products) and no stale recovery (a job dying mid-loop stays `processing` forever). Copy the image queue's optimistic claim + stale cutoff.
-
 5. **Persist batched clone runs.** `recordRun: false` is sent on every batch, so bulk imports write no `clone_runs` row — history is empty for exactly the runs that matter.
-
-6. **Verify the Shopify OAuth HMAC.** `api/shopify/auth/route.ts` exchanges the code without validating the `hmac` query param, and `state` is the raw store id rather than a single-use nonce.
-
-7. **Replace prose-regex install detection.** `api/shopify/connect/route.ts` decides "app not installed" by matching the accent-less Portuguese string `nao esta instalado`. Any copy edit silently breaks the OAuth redirect. Needs a typed `APP_NOT_INSTALLED` code.
-
-8. **Guard `/no-access` against a missing profile row.** `profileCanEnter(null)` returns `false`, so a brand-new user whose `profiles` row hasn't committed is told their free trial ended.
 
 ## P1 — feature gaps
 

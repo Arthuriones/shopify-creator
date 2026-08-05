@@ -88,7 +88,12 @@
     "actionCloneTitle": "Clonar loja",
     "actionCloneDesc": "Clone uma loja completa",
     "actionShowcaseTitle": "Loja vitrine",
-    "actionShowcaseDesc": "Gerenciar roteamento"
+    "actionShowcaseDesc": "Gerenciar roteamento",
+    "checklistTitle": "Primeiros passos",
+    "checklistSubtitle": "{done} de {total} concluídos",
+    "checklistStore": "Conectar sua loja Shopify",
+    "checklistProfile": "Completar o perfil da loja (libera a IA)",
+    "checklistProduct": "Importar o primeiro produto"
   },
   "landing": {
     "metaTitle": "xcart — Clone qualquer loja para a Shopify em minutos",

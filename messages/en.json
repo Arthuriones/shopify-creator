@@ -88,7 +88,12 @@
     "actionCloneTitle": "Clone store",
     "actionCloneDesc": "Clone an entire store",
     "actionShowcaseTitle": "Showcase store",
-    "actionShowcaseDesc": "Manage routing"
+    "actionShowcaseDesc": "Manage routing",
+    "checklistTitle": "Getting started",
+    "checklistSubtitle": "{done} of {total} done",
+    "checklistStore": "Connect your Shopify store",
+    "checklistProfile": "Complete the store profile (unlocks AI)",
+    "checklistProduct": "Import your first product"
   },
   "landing": {
     "metaTitle": "xcart — Clone any store to Shopify in minutes",

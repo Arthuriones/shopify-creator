@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getShopInfo, getThemes } from "@/lib/shopify/client";
@@ -6,6 +7,34 @@ import { SHOPIFY_SCOPES_STRING } from "@/lib/shopify/scopes";
 
 // Mesma lista mostrada no tutorial de conexao — ver src/lib/shopify/scopes.ts.
 const SCOPES = SHOPIFY_SCOPES_STRING;
+
+// Valida a assinatura HMAC do callback de OAuth da Shopify: remove o parametro
+// `hmac`, ordena o resto, refaz a query string e compara com HMAC-SHA256 do
+// client secret, em tempo constante.
+function verifyShopifyHmac(
+  params: URLSearchParams,
+  clientSecret: string
+): boolean {
+  const received = params.get("hmac");
+  if (!received || !clientSecret) return false;
+
+  const message = [...params.entries()]
+    .filter(([key]) => key !== "hmac" && key !== "signature")
+    .map(([key, value]) => [key, value] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  const digest = createHmac("sha256", clientSecret).update(message).digest();
+  let expected: Buffer;
+  try {
+    expected = Buffer.from(received, "hex");
+  } catch {
+    return false;
+  }
+  if (expected.length !== digest.length) return false;
+  return timingSafeEqual(digest, expected);
+}
 
 function dashboardUrl(request: NextRequest, query?: string): string {
   const url = new URL("/stores", request.nextUrl.origin);
@@ -120,6 +149,16 @@ export async function GET(request: NextRequest) {
     if (store.shop_domain !== normalizedShop) {
       return NextResponse.redirect(
         dashboardUrl(request, "error=Loja+do+callback+nao+confere")
+      );
+    }
+
+    // A Shopify assina a query do callback com HMAC-SHA256 usando o client
+    // secret. Sem essa verificacao qualquer um poderia chamar o endpoint com um
+    // `code` arbitrario. Ver:
+    // https://shopify.dev/docs/apps/auth/oauth/getting-started
+    if (!verifyShopifyHmac(request.nextUrl.searchParams, store.client_secret)) {
+      return NextResponse.redirect(
+        dashboardUrl(request, "error=Assinatura+do+callback+invalida")
       );
     }
 

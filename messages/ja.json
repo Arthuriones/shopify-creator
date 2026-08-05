@@ -88,7 +88,12 @@
     "actionCloneTitle": "ストアをクローン",
     "actionCloneDesc": "ストア全体をクローン",
     "actionShowcaseTitle": "ショーケースストア",
-    "actionShowcaseDesc": "ルーティングを管理"
+    "actionShowcaseDesc": "ルーティングを管理",
+    "checklistTitle": "はじめに",
+    "checklistSubtitle": "{total}件中{done}件完了",
+    "checklistStore": "Shopify ストアを接続",
+    "checklistProfile": "ストアプロフィールを完成させる（AI が有効化されます）",
+    "checklistProduct": "最初の商品をインポート"
   },
   "landing": {
     "metaTitle": "xcart — どんなストアも数分で Shopify にクローン",

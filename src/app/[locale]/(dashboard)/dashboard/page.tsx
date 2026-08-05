@@ -103,6 +103,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [storeCount, setStoreCount] = useState(0);
+  // Alguma loja com perfil preenchido (nicho)? Sem isso a IA fica bloqueada.
+  const [hasCompleteProfile, setHasCompleteProfile] = useState(false);
   const [productCount, setProductCount] = useState(0);
   const [publishedCount, setPublishedCount] = useState(0);
   const [recent, setRecent] = useState<RecentProduct[]>([]);
@@ -116,7 +118,9 @@ export default function DashboardPage() {
       const [{ data: userData }, stores, products, published, recentProducts] =
         await Promise.all([
           supabase.auth.getUser(),
-          supabase.from("stores").select("id", { count: "exact", head: true }),
+          // Traz o nicho junto: e ele que define se o perfil da loja esta
+          // completo, e o perfil e o que destrava toda a IA do produto.
+          supabase.from("stores").select("id, niche", { count: "exact" }),
           supabase.from("products").select("id", { count: "exact", head: true }),
           supabase
             .from("products")
@@ -133,6 +137,11 @@ export default function DashboardPage() {
 
       setName(displayName(userData?.user ?? null));
       setStoreCount(stores.count ?? 0);
+      setHasCompleteProfile(
+        ((stores.data as { niche?: string | null }[] | null) ?? []).some(
+          (store) => Boolean(store.niche && store.niche.trim())
+        )
+      );
       setProductCount(products.count ?? 0);
       setPublishedCount(published.count ?? 0);
       setRecent((recentProducts.data as RecentProduct[] | null) ?? []);
@@ -152,6 +161,29 @@ export default function DashboardPage() {
 
   const noStores = !loading && storeCount === 0;
 
+  // Passos de ativacao. Enquanto algum estiver pendente o checklist aparece.
+  const checklist = [
+    {
+      key: "store",
+      label: t("checklistStore"),
+      href: "/stores",
+      done: storeCount > 0,
+    },
+    {
+      key: "profile",
+      label: t("checklistProfile"),
+      href: "/stores",
+      done: hasCompleteProfile,
+    },
+    {
+      key: "product",
+      label: t("checklistProduct"),
+      href: "/clone/shopify/individual",
+      done: productCount > 0,
+    },
+  ];
+  const showChecklist = !loading && checklist.some((step) => !step.done);
+
   return (
     <div className="space-y-8 animate-fade-in pb-10">
       {/* Greeting */}
@@ -168,26 +200,66 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Empty state — usuário sem nenhuma loja */}
-      {noStores ? (
-        <div className="rounded-2xl border border-border bg-card/70 p-10 text-center">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Rocket className="h-7 w-7" />
-          </span>
-          <h2 className="mt-5 text-xl font-heading font-bold tracking-tight text-foreground">
-            {t("connectFirstTitle")}
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-[14px] text-muted-foreground">
-            {t("connectFirstBody")}
-          </p>
-          <Link
-            href="/stores"
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <Store className="h-4 w-4" /> {t("connectStore")}
-          </Link>
+      {/* Checklist de primeiros passos. Antes existia so um empty state com um
+          botao: quem ja tinha conectado a loja nao recebia nenhuma orientacao e
+          ficava sem saber que o perfil (nicho) e o que destrava a IA. */}
+      {showChecklist && (
+        <div className="rounded-2xl border border-border bg-card/70 p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Rocket className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-heading font-bold tracking-tight text-foreground">
+                {t("checklistTitle")}
+              </h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {t("checklistSubtitle", {
+                  done: checklist.filter((step) => step.done).length,
+                  total: checklist.length,
+                })}
+              </p>
+            </div>
+          </div>
+
+          <ol className="mt-5 space-y-2">
+            {checklist.map((step, index) => (
+              <li key={step.key}>
+                <Link
+                  href={step.href}
+                  className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                    step.done
+                      ? "border-border/50 bg-background/40"
+                      : "border-primary/30 bg-primary/5 hover:border-primary/60"
+                  }`}
+                >
+                  {step.done ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+                  ) : (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-primary/50 text-[11px] font-semibold text-primary">
+                      {index + 1}
+                    </span>
+                  )}
+                  <span
+                    className={`flex-1 text-[14px] ${
+                      step.done
+                        ? "text-muted-foreground line-through"
+                        : "font-semibold text-foreground"
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                  {!step.done && (
+                    <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ol>
         </div>
-      ) : (
+      )}
+
+      {noStores ? null : (
         <>
           {/* Stat cards */}
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
