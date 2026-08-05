@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
+import { marketContextBlock } from "@/lib/gemini/market-profile";
 import type {
   AliExpressProduct,
   OptimizationResult,
@@ -93,15 +94,11 @@ Gere 4 polÃ­ticas no idioma final obrigatÃ³rio:
 3. Termos de ServiÃ§o
 4. PolÃ­tica de Envio
 
-Contexto da loja:
-- Loja brasileira de e-commerce (Shopify)
-- Prazo de entrega: 15 a 30 dias Ãºteis (envio internacional)
-- Prazo de reembolso: 7 dias apÃ³s recebimento (CDC brasileiro)
-- Prazo de troca: 7 dias apÃ³s recebimento
-- Pagamentos: cartÃ£o de crÃ©dito (atÃ© 12x), PIX, boleto
-- Rastreamento disponÃ­vel para todos os pedidos
-- Deve seguir o CÃ³digo de Defesa do Consumidor (CDC)
-- Deve mencionar LGPD na polÃ­tica de privacidade
+Contexto da loja (derivado do idioma configurado — NAO assuma Brasil):
+${marketContextBlock(language)}
+- Rastreamento disponivel para todos os pedidos
+- Cite a base legal de consumo e a lei de protecao de dados indicadas acima,
+  e NAO cite legislacao de outro pais
 
 Cada polÃ­tica deve:
 - Ser profissional e transmitir confianÃ§a
@@ -192,12 +189,10 @@ GERE:
 
 1. **4 PolÃ­ticas** (refund, privacy, terms, shipping):
    - HTML limpo e profissional
-   - Conformidade com CDC (CÃ³digo de Defesa do Consumidor)
-   - LGPD na polÃ­tica de privacidade
-   - Prazo de entrega: 15-30 dias Ãºteis
-   - Reembolso: 7 dias apÃ³s recebimento
-   - Pagamentos: cartÃ£o (atÃ© 12x), PIX, boleto
-   - Rastreamento disponÃ­vel para todos os pedidos
+   - Use EXATAMENTE o contexto de mercado abaixo (derivado do idioma da loja;
+     NAO assuma Brasil e NAO cite legislacao de outro pais):
+${marketContextBlock(language)}
+   - Rastreamento disponivel para todos os pedidos
 
 2. **Menu principal** (handle: main-menu):
    - InÃ­cio (/)
@@ -215,8 +210,8 @@ GERE:
 
 4. **PÃ¡ginas** (Shopify Pages):
    - **Sobre**: histÃ³ria profissional da marca no nicho "${niche}", tom confiante e aspiracional
-   - **Contato**: formulÃ¡rio conceitual com email placeholder (contato@${storeName.toLowerCase().replace(/\s+/g, "")}.com.br) e menÃ§Ã£o a WhatsApp
-   - **Rastreamento**: explica como rastrear pedidos passo a passo, menciona prazo de 15-30 dias Ãºteis, link para 17track.net
+   - **Contato**: formulÃ¡rio conceitual com email placeholder (contato@${storeName.toLowerCase().replace(/\s+/g, "")}.com) e canal de mensagem usual do mercado
+   - **Rastreamento**: explica como rastrear pedidos passo a passo, usando o prazo de entrega do contexto de mercado acima, link para 17track.net
    - **FAQ**: perguntas frequentes sobre prazo de entrega, formas de pagamento, trocas/devoluÃ§Ãµes, como escolher tamanho, seguranÃ§a do site
 
 5. **Copyright**: "2025 ${storeName} - Todos os Direitos Reservados"
@@ -226,8 +221,8 @@ REGRAS:
 - Tom profissional, transmitir confianÃ§a
 - HTML limpo sem CSS inline excessivo, usar tags semÃ¢nticas (h2, h3, p, ul, li)
 - NÃƒO mencionar China, AliExpress, importaÃ§Ã£o, dropshipping
-- PolÃ­ticas devem parecer de uma marca brasileira estabelecida
-- FAQ deve abordar dÃºvidas reais de compradores online brasileiros
+- PolÃ­ticas devem parecer de uma marca estabelecida no mercado indicado acima
+- FAQ deve abordar duvidas reais de compradores online desse mercado
 
 Responda APENAS em JSON vÃ¡lido:
 {
