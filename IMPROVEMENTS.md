@@ -1,40 +1,77 @@
 # xcart — Improvement Backlog
 
-Prioritized suggestions from a full-codebase audit (2026-07). Rationale for each is in `ARCHITECTURE.md §13`. Ordered by impact/effort.
+Prioritized suggestions from full-codebase audits. Rationale in `ARCHITECTURE.md §13`.
+Last updated: 2026-08 (after the signup / clone / onboarding audit).
 
-## P0 — reliability of the core routing flow (these have already bitten in production)
+---
 
-1. **Auto-generate SKUs on import.** Generic-site imports (and any source without SKUs) produce products with empty SKUs, which silently breaks routed checkout (the whole system keys on SKU). Stamp a deterministic SKU at create time when the source has none — e.g. `<storeSlug>-<sequential>` or a hash of `handle+optionValues`. Do it in `toCreateProductInput`/`publishImportedProduct` and in `create-destination`. *This was the root cause of a real routing failure.*
+## ✅ Done
 
-2. **Rework `create-destination` for large catalogs.** Today it (a) AI-translates/neutralizes *before* checking for existing products, and (b) processes the whole catalog in one 300s request. Big catalogs time out ("Failed to fetch") leaving partial + duplicate products. Fix:
-   - Move `findExistingProduct` (SKU match) **before** the AI step — skip existing, don't re-translate.
-   - Convert to the **background-job queue** pattern (like `neutralize_image`): enqueue one job per product, drain with concurrency + stale-recovery + self-chaining. Return immediately; poll progress.
+- **Exact-SKU dedup in `create-destination`** (`d2b0774`) — Shopify's `sku:` search is tokenized (splits on `-`), so distinct models were merged and colliding variants silently dropped.
+- **Admin 404 + redirect loop** (`a9f704c`, `6c2e16f`) — the `adm.` host never ran next-intl, so `/login` 404'd and the panel was impossible to sign into; a non-admin account looped instead of being told.
+- **Signup silently failing** (`6e18e9c`) — `signUp()` result ignored `data.session`, so with "Confirm email" ON new users were bounced back to login with zero feedback. Also: `?next=` now honored, `User already registered` mapped, landing CTAs open the signup form, `ja` locale prefix fixed.
+- **Onboarding: copy buttons + single-source scopes + auto-open profile** (`51e8bbd`) — the three paste-into-Shopify blocks now have copy buttons; scopes live in `src/lib/shopify/scopes.ts` (tutorial and OAuth had drifted on `write_themes`); the profile editor opens after OAuth install.
+- **Clone: search / sort / category filter** (`25f9082`) — preview toolbar with text search, 6 sort modes and multi-select category chips; "select all" now respects the filter.
+- **Clone: failure details, live counters, cancel** (`e758cc6`) — `failed[]` from the API is rendered per product instead of a bare count; created/skipped/failed shown; the already-wired AbortController got a UI trigger.
 
-3. **Harden the bulk-import queue.** `processBulkImportJobs` has **no atomic claim** (select-then-update → the `after()` drainer and hourly cron can double-process the same rows → duplicate products) and **no stale recovery** (a job that dies mid-loop stays `processing` forever, invisible to the `pending`-only drainer). Adopt the image queue's pattern: optimistic claim (`update ... where status='pending'` returning the row) + reset `processing` older than N minutes back to `pending`.
+---
 
-## P1 — correctness & coverage
+## P0 — reliability
 
-4. **Make AI output honor `target_language` fully.** `generateStorePolicies` and `suggestThemeImprovements` hardcode Brazilian context (CDC/LGPD, 15–30 business days, "R$", green Vessel theme) regardless of `target_language`. For a JP/other store this produces wrong legal/marketing content. Parameterize the locale-specific facts (return period, legal framework name, currency, business-day estimate) by `target_language`/country. (For Japan specifically: 特定商取引法 page, 8-day return norm, JPY.)
+1. **Auto-generate SKUs on import.** Generic-site imports produce empty SKUs, which silently breaks routed checkout (everything keys on SKU). Stamp a deterministic SKU at create time in `toCreateProductInput` / `publishImportedProduct` / `create-destination`.
 
-5. **Wire WooCommerce & Shoplazza into the generic import pipeline.** They're currently clone-only; the multi-site page advertises them but forces `sourceType:"generic_site"` (HTML scrape, lossy). Add `isWooCommerceStore`/`isShoplazzaStore` detection to `importFromSource` so bulk/multi-site can use their Store APIs (with SKUs).
+2. **Rework `create-destination` for large catalogs.** It AI-translates *before* checking for existing products and processes the whole catalog in one 300 s request → timeouts leaving partial/duplicate products. Move dedup before the AI step; convert to the background-job queue pattern used by `neutralize_image`.
 
-6. **SKU-integrity check + repair surfaced in the UI.** Add a one-click "verify route health" that reports SKU parity between vitrine and checkout store, missing SKUs, and stale `variant_map` entries (the `repair`/`health` endpoints already compute most of this). Route breakage is currently silent until a customer fails to check out.
+3. **Kill the preview N+1.** `attachCollectionsToProducts` runs on *every* preview and export: it loops up to 50 collections × up to 20 sequential paginated fetches ≈ 1000 sequential round-trips inside a `maxDuration = 120` route, and `handleApply` re-triggers a full preview before every import. Make it opt-in, skip it when a collection scope is set, and parallelize with a concurrency pool.
 
-## P2 — security, cost, polish
+4. **Harden the bulk-import queue.** `processBulkImportJobs` has no atomic claim (the `after()` drainer and the hourly cron can double-process → duplicate products) and no stale recovery (a job dying mid-loop stays `processing` forever). Copy the image queue's optimistic claim + stale cutoff.
 
-7. **`public_token` hardening.** `resolve`/`track-fallback` are wide-open CORS with only the unguessable token as auth; anyone with the token can enumerate a route's resolved variant ids by POSTing arbitrary lines. Consider rate-limiting per token and not echoing full maps.
+5. **Persist batched clone runs.** `recordRun: false` is sent on every batch, so bulk imports write no `clone_runs` row — history is empty for exactly the runs that matter.
 
-8. **Credit gating is inconsistent.** The deferred image queue debits credits, but inline neutralization inside `publishImportedProduct` (bulk/clone) does not. Unify cost control so all Gemini image calls go through the same credit path.
+6. **Verify the Shopify OAuth HMAC.** `api/shopify/auth/route.ts` exchanges the code without validating the `hmac` query param, and `state` is the raw store id rather than a single-use nonce.
 
-9. **Complete `.env.example`.** Missing (but required in code): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `BILLING_ENFORCED`, `ACCESS_CONTROL_ENABLED`, `BULK_IMPORT_CRON_SECRET`. A fresh deploy silently breaks billing without these.
+7. **Replace prose-regex install detection.** `api/shopify/connect/route.ts` decides "app not installed" by matching the accent-less Portuguese string `nao esta instalado`. Any copy edit silently breaks the OAuth redirect. Needs a typed `APP_NOT_INSTALLED` code.
 
-10. **Fix pricing/copy inconsistencies.** `PRO_PRICE_USD=17` vs strings still saying "R$89/mês"; landing/billing copy should be single-sourced from `plans.ts`.
+8. **Guard `/no-access` against a missing profile row.** `profileCanEnter(null)` returns `false`, so a brand-new user whose `profiles` row hasn't committed is told their free trial ended.
 
-11. **AliExpress reviews are a stub** (`/api/aliexpress/reviews` returns hardcoded fake reviews). Either implement real review scraping or remove/relabel the feature so it isn't mistaken for real data.
+## P1 — feature gaps
 
-## Product / growth ideas
+9. **Carry `productType`, `vendor` and `sku` through the clone.** `toShopifyCreateProductInput` drops all three though `createProduct` accepts them. Product Type is Shopify's native category field and the *only* category signal that survives a WooCommerce import.
 
-12. **Native theme injection for the loader.** Automate the `update-theme` step end-to-end from the wizard (detect theme, inject `<script>`, verify) so users never hand-edit `theme.liquid`.
-13. **Multi-currency vitrine → per-market checkout store routing.** One vitrine could route to different checkout stores by geo/currency.
-14. **Route observability dashboard.** Surface `routed_checkout_fallbacks` trends (fallback reasons over time) so drops in routing success are caught early.
-15. **Post-neutralization QA pass.** An automated check that the checkout store has zero brand tokens left in titles/descriptions/tags before a route is enabled.
+10. **Server-side multi-collection scope.** The client can now filter by several categories, but the server still accepts a single `collectionHandle`. For large sources, fetching only the chosen collections would be much faster.
+
+11. **Richer collection recreation.** `createCollection` sends only `{title, handle}` — no `descriptionHtml`, `image`, `sortOrder`, `seo`, `ruleSet` (smart collections become manual ones). Also read `products_count` / `sort_order` from `/collections.json` (already on the wire, discarded in `normalizeCollection`) and paginate past 250 collections.
+
+12. **Collection sort order on the target.** No `sortOrder` is set, so Shopify defaults to `BEST_SELLING` — on a brand-new store with zero sales that is effectively arbitrary. For `MANUAL` source collections, replay positions with `collectionReorderProducts`.
+
+13. **Make AI output honor `target_language`.** `generateStorePolicies` and `suggestThemeImprovements` hardcode Brazilian context (CDC/LGPD, 15–30 business days, R$) regardless of the store's language — wrong legal content for a JP/CL store.
+
+14. **Wire WooCommerce & Shoplazza into the generic import pipeline.** They are clone-only; the multi-site page advertises them but forces `generic_site` (lossy HTML scrape, no SKUs).
+
+15. **Route health should check shipping and payments.** A missing shipping rate on the checkout store blocks every order and the current `health` endpoint (SKU-only) reports everything green. This happened in production.
+
+## P2 — UX / polish
+
+16. **Onboarding checklist on the dashboard** (Connect store → Complete profile → Import first product), driven by counts already fetched.
+17. **Empty states** for `/clone`, `/optimizer`, `/products`, `/reviews`, `/instagram` — today a user with no store hits a silently dead form.
+18. **Deep-link the "profile incomplete" AI errors** to the profile editor, and signal it before the user fills a form.
+19. **Move the clone wizard out of the 672 px modal**, virtualize the product list (`MAX_CLONE_LIMIT = 5000` renders 5000 eager `<img>`), add `loading="lazy"`.
+20. **Inline, persistent connect errors** — a mistyped secret vanishes with a 4 s toast while the dialog stays filled. Add a "Testar credenciais" probe.
+21. **Name capture + password confirm + terms checkbox at signup**; replace `confirm()` on destructive store actions.
+22. **Surface trial status** so `/no-access` is never a surprise.
+23. **Remove or implement `CloneMode`** — declared and never read.
+
+## P3 — i18n debt (blocks a non-PT launch)
+
+24. **The Shopify tutorial body is hardcoded Portuguese** behind an i18n'd toggle — EN/JA users read PT instructions for the hardest step.
+25. **`set-password` has zero translations** and imports `useRouter` from `next/navigation`, dropping the locale prefix.
+26. **~31 hardcoded toasts in `stores/page.tsx`**, mixed with hardcoded *English* labels in the same dialog.
+27. **Clone steps 3–4 and every toast** are hardcoded pt-BR though `clone_page` keys exist.
+28. **`auth.sendAccessLink` says "Enviar link de acesso"** but the action sends a password reset.
+
+## Security / cost
+
+29. **`public_token` hardening** — `resolve` / `track-fallback` are wide-open CORS with only the token as auth; anyone holding it can enumerate a route's variant ids.
+30. **Credit gating is inconsistent** — the deferred image queue debits credits; inline neutralization in bulk/clone does not.
+31. **Complete `.env.example`** — missing `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `BILLING_ENFORCED`, `ACCESS_CONTROL_ENABLED`, `BULK_IMPORT_CRON_SECRET`.
+32. **AliExpress reviews endpoint is a stub** returning hardcoded fake reviews.
