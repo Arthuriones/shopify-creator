@@ -336,6 +336,38 @@ async function toDestinationProductInput({
   };
 }
 
+// Busca por SKU exato, sem depender de nada gerado por IA.
+//
+// Serve como pre-checagem barata antes de traduzir/neutralizar: os SKUs vem da
+// vitrine e nao mudam com a IA, entao se o produto ja existe no destino da para
+// pular a chamada ao Gemini inteira. Antes a IA rodava SEMPRE, mesmo em
+// re-execucoes onde 100% dos produtos ja existiam.
+async function findExistingBySku(
+  creds: ShopifyCredentials,
+  sourceProduct: ConnectedProduct
+): Promise<ConnectedProduct | null> {
+  const sourceSkus = (sourceProduct.variants?.nodes || [])
+    .map((variant) => variant.sku?.trim())
+    .filter(Boolean) as string[];
+  if (sourceSkus.length === 0) return null;
+
+  const sourceSkuSet = new Set(sourceSkus);
+  const skuResult = await getProducts(creds, {
+    first: 50,
+    query: `sku:${sourceSkus[0]}`,
+  });
+  const candidates = (skuResult?.products?.nodes || []) as ConnectedProduct[];
+  // A busca `sku:` da Shopify e tokenizada — confirmar match exato (ver
+  // comentario em findExistingProduct).
+  return (
+    candidates.find((product) =>
+      (product.variants?.nodes || []).some(
+        (variant) => variant.sku && sourceSkuSet.has(variant.sku.trim())
+      )
+    ) || null
+  );
+}
+
 async function findExistingProduct(
   creds: ShopifyCredentials,
   sourceProduct: ConnectedProduct
@@ -520,6 +552,33 @@ export async function POST(request: NextRequest) {
   async function processOne(product: ConnectedProduct) {
     if (request.signal.aborted) return;
     try {
+      // Pre-checagem barata: os SKUs vem da vitrine e nao mudam com a IA, entao
+      // se o produto ja existe no destino nao ha motivo para traduzir/
+      // neutralizar antes de descobrir isso. Numa re-execucao com o catalogo ja
+      // criado isso evita uma chamada de IA por produto.
+      const alreadyThere = await findExistingBySku(targetCreds, product);
+      if (alreadyThere?.id) {
+        const maps = buildVariantMaps(product, alreadyThere);
+        Object.assign(skuMap, maps.skuMap);
+        Object.assign(variantMap, maps.variantMap);
+        const skuUpdates = Object.entries(maps.skuMap).map(([sku, variantId]) => ({
+          variantId,
+          sku,
+        }));
+        if (skuUpdates.length > 0) {
+          try {
+            await updateVariantSkus(targetCreds, alreadyThere.id, skuUpdates);
+          } catch {
+            // SKU duplicado/limite nao deve derrubar a operacao.
+          }
+        }
+        skipped.push({
+          sourceHandle: product.handle,
+          targetProductId: alreadyThere.id,
+        });
+        return;
+      }
+
       const destination = await toDestinationProductInput({
         product,
         neutralize: neutralizeProducts,
