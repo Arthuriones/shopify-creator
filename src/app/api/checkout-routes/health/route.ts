@@ -1,6 +1,109 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
+import {
+  getProducts,
+  shopifyRestGet,
+  type ShopifyCredentials,
+} from "@/lib/shopify/client";
 import { createClient } from "@/lib/supabase/server";
+import { marketProfileFor } from "@/lib/gemini/market-profile";
+
+interface ShippingZone {
+  name?: string;
+  countries?: { code?: string }[];
+  price_based_shipping_rates?: unknown[];
+  weight_based_shipping_rates?: unknown[];
+  carrier_shipping_rate_providers?: unknown[];
+}
+
+/**
+ * Verifica se a loja de checkout consegue entregar no pais da rota.
+ *
+ * Uma zona que cobre o pais mas nao tem NENHUMA tarifa faz a Shopify mostrar
+ * "no shipping methods available for your address" no checkout: o cliente
+ * preenche tudo e nao consegue pagar. Isso aconteceu em producao e o health,
+ * que so olhava SKU, reportava tudo verde enquanto nenhum pedido fechava.
+ */
+async function checkShipping(
+  creds: ShopifyCredentials,
+  countryCode: string | null
+): Promise<{
+  ok: boolean;
+  reason?: string;
+  zone?: string;
+  checkedCountry?: string | null;
+}> {
+  try {
+    const data = await shopifyRestGet<{ shipping_zones?: ShippingZone[] }>(
+      creds,
+      "shipping_zones.json"
+    );
+    const zones = data.shipping_zones || [];
+    if (zones.length === 0) {
+      return { ok: false, reason: "Nenhuma zona de envio configurada.", checkedCountry: countryCode };
+    }
+    if (!countryCode) {
+      // Sem pais definido na rota, so checamos se existe alguma tarifa.
+      const anyRate = zones.some((zone) => countRates(zone) > 0);
+      return anyRate
+        ? { ok: true, checkedCountry: null }
+        : { ok: false, reason: "Nenhuma zona de envio tem tarifa configurada.", checkedCountry: null };
+    }
+
+    const covering = zones.filter((zone) =>
+      (zone.countries || []).some(
+        (country) => (country.code || "").toUpperCase() === countryCode
+      )
+    );
+    if (covering.length === 0) {
+      return {
+        ok: false,
+        reason: `Nenhuma zona de envio cobre o pais ${countryCode}.`,
+        checkedCountry: countryCode,
+      };
+    }
+    const withRates = covering.find((zone) => countRates(zone) > 0);
+    if (!withRates) {
+      return {
+        ok: false,
+        reason: `A zona que cobre ${countryCode} nao tem nenhuma tarifa de envio — o cliente nao consegue finalizar a compra.`,
+        zone: covering[0]?.name,
+        checkedCountry: countryCode,
+      };
+    }
+    return { ok: true, zone: withRates.name, checkedCountry: countryCode };
+  } catch (error) {
+    // Falta de escopo ou erro de rede nao deve derrubar o health inteiro.
+    return {
+      ok: true,
+      reason:
+        error instanceof Error
+          ? `Nao foi possivel verificar o frete: ${error.message}`
+          : undefined,
+      checkedCountry: countryCode,
+    };
+  }
+}
+
+// "es-CL" -> "CL". Quando o idioma nao carrega regiao, cai no pais principal
+// do perfil de mercado (ex.: "ja" -> Japao).
+function countryFromLanguage(language: string | null | undefined): string | null {
+  const value = (language || "").trim();
+  if (!value) return null;
+  const parts = value.split(/[-_]/);
+  if (parts.length > 1 && parts[1].length === 2) return parts[1].toUpperCase();
+  const fallback: Record<string, string> = { pt: "BR", ja: "JP", en: "US" };
+  const base = parts[0].toLowerCase();
+  // marketProfileFor valida que o idioma e conhecido antes do fallback.
+  return marketProfileFor(base) && fallback[base] ? fallback[base] : null;
+}
+
+function countRates(zone: ShippingZone): number {
+  return (
+    (zone.price_based_shipping_rates?.length || 0) +
+    (zone.weight_based_shipping_rates?.length || 0) +
+    (zone.carrier_shipping_rate_providers?.length || 0)
+  );
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -51,7 +154,7 @@ export async function POST(request: NextRequest) {
 
   const { data: config, error: configError } = await supabase
     .from("routed_checkout_configs")
-    .select("id, name, sku_map, source_store_id, target_store_id")
+    .select("id, name, sku_map, settings, source_store_id, target_store_id")
     .eq("id", routeId)
     .eq("user_id", user.id)
     .single();
@@ -62,7 +165,7 @@ export async function POST(request: NextRequest) {
 
   const { data: stores } = await supabase
     .from("stores")
-    .select("id, shop_domain, client_id, client_secret, access_token")
+    .select("id, shop_domain, client_id, client_secret, access_token, target_language")
     .in("id", [config.source_store_id, config.target_store_id]);
 
   const sourceStore = stores?.find((store) => store.id === config.source_store_id);
@@ -139,10 +242,22 @@ export async function POST(request: NextRequest) {
       fallbackByReason[item.reason] = (fallbackByReason[item.reason] || 0) + 1;
     }
 
-    const ok = missingSkus.length === 0 && wrongSkus.length === 0;
+    // Pais efetivo do checkout: override da rota, senao derivado do idioma da
+    // loja de destino.
+    const routeSettings = (config.settings || {}) as {
+      checkout_country?: string;
+    };
+    const marketCountry =
+      routeSettings.checkout_country?.toUpperCase() ||
+      countryFromLanguage(targetStore.target_language);
+    const shipping = await checkShipping(targetCreds, marketCountry);
+
+    const ok =
+      missingSkus.length === 0 && wrongSkus.length === 0 && shipping.ok;
 
     return NextResponse.json({
       ok,
+      shipping,
       checkedAt: new Date().toISOString(),
       totalSourceSkus: checkedCount,
       mappedCount: checkedCount - missingSkus.length,

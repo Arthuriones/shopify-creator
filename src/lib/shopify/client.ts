@@ -221,6 +221,36 @@ async function getAccessToken(creds: ShopifyCredentials): Promise<string> {
   return accessToken;
 }
 
+// GET na Admin REST API. Alguns recursos (ex.: shipping_zones) nao existem no
+// GraphQL sem escopos extras, e a REST responde bem para leitura.
+export async function shopifyRestGet<T>(
+  creds: ShopifyCredentials,
+  path: string
+): Promise<T> {
+  const accessToken = await getAccessToken(creds);
+  const normalizedShopDomain = normalizeShopDomain(creds.shopDomain);
+  if (!normalizedShopDomain) {
+    throw new ShopifyClientError(
+      "Use o dominio da loja no formato sualoja.myshopify.com.",
+      "INVALID_DOMAIN",
+      400
+    );
+  }
+
+  const res = await fetch(
+    `https://${normalizedShopDomain}/admin/api/${SHOPIFY_API_VERSION}/${path}`,
+    { headers: { "X-Shopify-Access-Token": accessToken } }
+  );
+  if (!res.ok) {
+    throw new ShopifyClientError(
+      `Falha ao ler ${path} (HTTP ${res.status}).`,
+      "REQUEST_FAILED",
+      res.status
+    );
+  }
+  return (await res.json()) as T;
+}
+
 export async function shopifyGraphQL(
   creds: ShopifyCredentials,
   query: string,
