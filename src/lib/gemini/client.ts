@@ -125,7 +125,7 @@ export async function suggestThemeImprovements(
   currentTheme: string
 ): Promise<string> {
   const language = targetLanguage(context);
-  const prompt = `VocÃª Ã© um especialista em design e conversÃ£o de lojas Shopify brasileiras.
+  const prompt = `VocÃª Ã© um especialista em design e conversÃ£o de lojas Shopify.
 
 Loja: "${context.name}"
 Nicho: "${context.niche}"
@@ -135,7 +135,11 @@ Sobre a loja: "${context.storeDescription || "NÃ£o especificado"}"
 Tema atual: "${currentTheme}"
 Idioma da resposta: "${language}"
 
-Contexto: a loja usa um tema brasileiro otimizado com:
+Contexto de mercado (derivado do idioma da loja — adapte badges de pagamento,
+moeda, prazos e provas sociais a ESTE mercado, nao ao Brasil):
+${marketContextBlock(language)}
+
+Contexto: o tema atual tem elementos de conversao como:
 - BotÃ£o "Comprar Agora" verde (#16c789) direto pro checkout
 - Countdown timer de ofertas
 - Barra de escassez ("Restam X unidades")

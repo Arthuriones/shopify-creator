@@ -788,6 +788,12 @@ export async function POST(request: NextRequest) {
         : collectionsResult.collections.map((collection) => ({
             handle: collection.handle,
             title: collection.title,
+            // Recria a colecao no destino com a mesma descricao, imagem e
+            // ordenacao da origem (antes so handle+title iam, entao toda
+            // colecao nascia sem descricao e com ordenacao BEST_SELLING).
+            bodyHtml: collection.bodyHtml,
+            image: collection.image,
+            sortOrder: collection.sortOrder,
           }));
 
     function assignProductToCollections(product: PublicShopifyProduct, productId?: string) {

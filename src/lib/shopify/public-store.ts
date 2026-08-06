@@ -33,6 +33,11 @@ export interface PublicShopifyCollection {
   handle: string;
   image?: string | null;
   productsUrl: string;
+  // Campos que a /collections.json ja devolve e antes eram descartados.
+  bodyHtml?: string | null;
+  /** Ordenacao da colecao na origem: "manual", "best-selling", "price-asc"... */
+  sortOrder?: string | null;
+  productsCount?: number | null;
 }
 
 interface ProductsJsonImage {
@@ -73,6 +78,9 @@ interface CollectionsJsonCollection {
   title?: string;
   handle?: string;
   image?: { src?: string | null } | string | null;
+  body_html?: string | null;
+  sort_order?: string | null;
+  products_count?: number | null;
 }
 
 function normalizeTags(tags: string | string[] | undefined): string[] {
@@ -220,6 +228,12 @@ function normalizeCollection(
     handle,
     image,
     productsUrl: `https://${domain}/collections/${handle}`,
+    bodyHtml: collection.body_html || null,
+    sortOrder: collection.sort_order || null,
+    productsCount:
+      typeof collection.products_count === "number"
+        ? collection.products_count
+        : null,
   };
 }
 

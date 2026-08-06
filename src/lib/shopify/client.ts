@@ -578,10 +578,32 @@ async function applyInitialInventoryQuantities(
   return warnings;
 }
 
+// Converte o sort_order da /collections.json publica para o enum
+// CollectionSortOrder da Admin API.
+function toCollectionSortOrder(value: string | null | undefined): string | null {
+  const map: Record<string, string> = {
+    manual: "MANUAL",
+    "best-selling": "BEST_SELLING",
+    "alpha-asc": "ALPHA_ASC",
+    "alpha-desc": "ALPHA_DESC",
+    "price-asc": "PRICE_ASC",
+    "price-desc": "PRICE_DESC",
+    "created-desc": "CREATED_DESC",
+    created: "CREATED",
+  };
+  return map[(value || "").trim().toLowerCase()] || null;
+}
+
 export async function syncProductCollections(
   creds: ShopifyCredentials,
   input: {
-    collections: { handle: string; title: string }[];
+    collections: {
+      handle: string;
+      title: string;
+      bodyHtml?: string | null;
+      image?: string | null;
+      sortOrder?: string | null;
+    }[];
     assignments: { collectionHandle: string; productIds: string[] }[];
   }
 ) {
@@ -617,7 +639,13 @@ export async function syncProductCollections(
       | undefined;
   }
 
-  async function createCollection(collection: { handle: string; title: string }) {
+  async function createCollection(collection: {
+    handle: string;
+    title: string;
+    bodyHtml?: string | null;
+    image?: string | null;
+    sortOrder?: string | null;
+  }) {
     const mutation = `
       mutation collectionCreate($input: CollectionInput!) {
         collectionCreate(input: $input) {
@@ -637,6 +665,14 @@ export async function syncProductCollections(
       input: {
         title: collection.title,
         handle: collection.handle,
+        // Antes so title+handle eram enviados: descricao, imagem e ordenacao da
+        // colecao de origem eram perdidas. Sem sortOrder a Shopify assume
+        // BEST_SELLING, que numa loja nova (zero vendas) fica arbitraria.
+        ...(collection.bodyHtml ? { descriptionHtml: collection.bodyHtml } : {}),
+        ...(collection.image ? { image: { src: collection.image } } : {}),
+        ...(toCollectionSortOrder(collection.sortOrder)
+          ? { sortOrder: toCollectionSortOrder(collection.sortOrder) }
+          : {}),
       },
     });
     const errors = result?.collectionCreate?.userErrors as
@@ -650,7 +686,13 @@ export async function syncProductCollections(
       | undefined;
   }
 
-  async function ensureCollection(collection: { handle: string; title: string }) {
+  async function ensureCollection(collection: {
+    handle: string;
+    title: string;
+    bodyHtml?: string | null;
+    image?: string | null;
+    sortOrder?: string | null;
+  }) {
     const existing = await findCollectionByHandle(collection.handle);
     if (existing?.id) return existing;
     return createCollection(collection);
