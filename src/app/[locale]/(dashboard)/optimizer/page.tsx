@@ -282,6 +282,26 @@ export default function OptimizerPage() {
         </p>
       </header>
 
+      {/* Sem loja conectada a pagina inteira ficava vazia (o seletor era
+          escondido e o banner virava null), passando a impressao de bug. */}
+      {stores.length === 0 && (
+        <div className="rounded-xl border border-border/60 bg-card/60 p-6 text-center">
+          <p className="text-sm font-semibold text-foreground">
+            Conecte uma loja para usar o otimizador
+          </p>
+          <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
+            O conteudo e gerado a partir do perfil da loja (nicho, publico e voz
+            da marca), entao e preciso ter ao menos uma loja conectada.
+          </p>
+          <Link
+            href="/stores"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Conectar loja
+          </Link>
+        </div>
+      )}
+
       {stores.length > 0 && (
         <div className="w-72 space-y-2">
           <Label className="text-[13px] text-muted-foreground">

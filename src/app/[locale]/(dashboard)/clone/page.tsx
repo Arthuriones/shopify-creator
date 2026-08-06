@@ -118,6 +118,8 @@ interface SourceCollection {
   handle: string;
   image?: string | null;
   productsUrl: string;
+  /** Quantos produtos a colecao tem na origem (vem da /collections.json). */
+  productsCount?: number | null;
 }
 
 interface CheckoutConfig {
@@ -1502,6 +1504,28 @@ export default function ClonePage() {
         });
       }
 
+      // Registra UMA linha de historico com o agregado do lote. Cada batch
+      // envia recordRun:false para nao poluir, o que antes deixava a
+      // importacao em massa sem nenhum registro em "Execucoes recentes".
+      try {
+        await fetch("/api/shopify/clone/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceDomain: resolvedSourceDomain || source,
+            targetStoreId,
+            createdCount: aggregate.createdCount,
+            skippedCount: aggregate.skippedCount,
+            failedCount: aggregate.failedCount,
+            neutralizedCount: aggregate.neutralizedCount,
+            logoAppliedCount: aggregate.logoAppliedCount,
+            failures: aggregate.failures,
+          }),
+        });
+      } catch {
+        // Historico e best-effort: nunca deve derrubar a importacao.
+      }
+
       let routingConfig: unknown = null;
       if (createRoutingConfig && sourceStoreId && targetStoreId) {
         setApplyProgress({
@@ -2039,6 +2063,9 @@ export default function ClonePage() {
                                 </span>
                                 <span className="block truncate font-mono text-[11px] text-muted-foreground">
                                   /collections/{collection.handle}
+                                  {typeof collection.productsCount === "number"
+                                    ? ` · ${collection.productsCount} produto(s)`
+                                    : ""}
                                 </span>
                               </span>
                             </button>
