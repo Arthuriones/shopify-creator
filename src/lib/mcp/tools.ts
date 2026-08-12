@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   shopifyGraphQL,
   getShopInfo,
-  getProducts,
   getProductsCount,
   getProductById,
 } from "@/lib/shopify/client";
@@ -77,10 +76,44 @@ export const TOOLS: Tool[] = [
     }),
     handler: async (a, id) => {
       const store = await resolve(id, a.storeId as string);
-      return getProducts(credsOf(store), {
-        first: (a.limit as number) ?? 50,
-        query: a.query as string | undefined,
-      });
+      // Query propria em vez de getProducts(): aquela nao traz "vendor" — que
+      // e a marca que vai para o Merchant Center — e traz descriptionHtml,
+      // metafields e 12 imagens por produto, peso morto numa listagem.
+      // get_product continua sendo o caminho para o detalhe completo.
+      const r = await shopifyGraphQL(
+        credsOf(store),
+        `query($first: Int!, $query: String) {
+           products(first: $first, query: $query) {
+             pageInfo { hasNextPage endCursor }
+             nodes {
+               id handle title status vendor productType tags
+               images(first: 1) { nodes { url } }
+               variants(first: 1) { nodes { price sku } }
+             }
+           }
+         }`,
+        { first: Math.min(Math.max(1, (a.limit as number) ?? 50), 250), query: (a.query as string) || null }
+      );
+      // shopifyGraphQL devolve json.data, ja sem o envelope.
+      const p = r?.products;
+      const nodes = p?.nodes ?? [];
+      return {
+        total_retornado: nodes.length,
+        tem_mais: p?.pageInfo?.hasNextPage ?? false,
+        cursor: p?.pageInfo?.endCursor ?? null,
+        produtos: nodes.map((n: Record<string, any>) => ({
+          id: n.id,
+          handle: n.handle,
+          titulo: n.title,
+          status: n.status,
+          marca: n.vendor,
+          tipo: n.productType,
+          tags: n.tags,
+          preco: n.variants?.nodes?.[0]?.price ?? null,
+          sku: n.variants?.nodes?.[0]?.sku ?? null,
+          imagem: n.images?.nodes?.[0]?.url ?? null,
+        })),
+      };
     },
   },
 
@@ -157,9 +190,13 @@ export const TOOLS: Tool[] = [
          }`,
         { input }
       );
-      const erros = data?.data?.productUpdate?.userErrors ?? [];
+      // shopifyGraphQL devolve json.data, ja sem o envelope. Ler data.data aqui
+      // engolia userErrors: a Shopify podia recusar a escrita e a ferramenta
+      // responderia "ok" com produto undefined.
+      const erros = data?.productUpdate?.userErrors ?? [];
       if (erros.length) throw new Error(`Shopify recusou: ${JSON.stringify(erros)}`);
-      const res = data?.data?.productUpdate?.product;
+      const res = data?.productUpdate?.product;
+      if (!res) throw new Error("A Shopify nao devolveu o produto atualizado.");
       return {
         ok: true,
         produto: res,
