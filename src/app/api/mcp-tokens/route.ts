@@ -18,7 +18,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("mcp_tokens")
-    .select("id, name, token_suffix, last_used_at, revoked_at, created_at")
+    .select("id, name, token_suffix, last_used_at, revoked_at, created_at, expires_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

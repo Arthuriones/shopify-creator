@@ -21,37 +21,46 @@ export interface McpIdentity {
   tokenId: string;
 }
 
-export async function authenticate(req: Request): Promise<McpIdentity | null> {
+export type AuthResult =
+  | { ok: true; identity: McpIdentity }
+  | { ok: false; reason: "invalid" | "revoked" | "expired" | "rate_limited"; retryAfter: number };
+
+// Teto por token e por minuto. Serve para um token vazado nao conseguir
+// martelar a Admin API ate a Shopify limitar a loja inteira do usuario.
+const LIMITE_POR_MINUTO = 120;
+
+export async function authenticate(req: Request): Promise<AuthResult> {
   const header = req.headers.get("authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
-  if (!match) return null;
+  if (!match) return { ok: false, reason: "invalid", retryAfter: 0 };
 
   const raw = match[1].trim();
-  if (!raw.startsWith(MCP_TOKEN_PREFIX)) return null;
+  if (!raw.startsWith(MCP_TOKEN_PREFIX)) return { ok: false, reason: "invalid", retryAfter: 0 };
 
   const hash = hashMcpToken(raw);
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("mcp_tokens")
-    .select("id, user_id, token_hash, revoked_at")
-    .eq("token_hash", hash)
-    .maybeSingle();
 
-  if (!data || data.revoked_at) return null;
+  // Uma ida ao banco resolve validade, revogacao, limite e contador, sob o
+  // lock da linha — duas chamadas simultaneas nao leem o mesmo contador.
+  const { data, error } = await admin
+    .rpc("mcp_authenticate", { p_hash: hash, p_limit: LIMITE_POR_MINUTO })
+    .maybeSingle<{
+      user_id: string | null;
+      token_id: string | null;
+      allowed: boolean;
+      reason: string;
+      retry_after: number;
+    }>();
 
-  // O lookup ja e por igualdade exata no banco; a comparacao constante aqui
-  // evita depender do timing do Postgres para nao vazar informacao.
-  const a = Buffer.from(data.token_hash);
-  const b = Buffer.from(hash);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (error || !data) return { ok: false, reason: "invalid", retryAfter: 0 };
 
-  // Sem await: atualizar o "visto por ultimo" nao pode atrasar a ferramenta.
-  void admin
-    .from("mcp_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", data.id);
+  if (!data.allowed) {
+    const conhecidos = ["invalid", "revoked", "expired", "rate_limited"] as const;
+    const motivo = conhecidos.find((r) => r === data.reason) ?? "invalid";
+    return { ok: false, reason: motivo, retryAfter: data.retry_after ?? 0 };
+  }
 
-  return { userId: data.user_id, tokenId: data.id };
+  return { ok: true, identity: { userId: data.user_id!, tokenId: data.token_id! } };
 }
 
 export interface StoreRow {

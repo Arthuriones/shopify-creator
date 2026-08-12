@@ -64,29 +64,35 @@ export async function POST(req: Request) {
   if (method === "ping") return ok(id, {});
 
   // Tudo abaixo toca dados do usuario e exige token.
-  const identity = await authenticate(req);
-  if (!identity) {
+  const auth = await authenticate(req);
+  if (!auth.ok) {
+    const MOTIVO = {
+      invalid:
+        "Token ausente ou invalido. Gere um em xcart > Canais > Claude (MCP) e mande no " +
+        "header Authorization: Bearer xcart_mcp_...",
+      revoked: "Este token foi revogado. Gere um novo em xcart > Canais > Claude (MCP).",
+      expired: "Este token expirou. Gere um novo em xcart > Canais > Claude (MCP).",
+      rate_limited:
+        `Limite de chamadas atingido. Tente de novo em ${auth.retryAfter}s. ` +
+        "O teto existe para uma automacao em loop nao esgotar o limite da API da sua loja na Shopify.",
+    } as const;
+
+    const limitado = auth.reason === "rate_limited";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (limitado) headers["Retry-After"] = String(auth.retryAfter);
+    // Sinaliza ao cliente MCP que o problema e credencial, nao rota.
+    else headers["WWW-Authenticate"] = 'Bearer realm="xcart"';
+
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
         id,
-        error: {
-          code: -32001,
-          message:
-            "Token ausente ou invalido. Gere um em xcart > Configuracoes > Claude (MCP) " +
-            "e mande no header Authorization: Bearer xcart_mcp_...",
-        },
+        error: { code: limitado ? -32029 : -32001, message: MOTIVO[auth.reason] },
       }),
-      {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-          // Sinaliza ao cliente MCP que o problema e credencial, nao rota.
-          "WWW-Authenticate": 'Bearer realm="xcart"',
-        },
-      }
+      { status: limitado ? 429 : 401, headers }
     );
   }
+  const identity = auth.identity;
 
   if (method === "tools/list") {
     return ok(id, {

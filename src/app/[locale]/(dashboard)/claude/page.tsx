@@ -20,6 +20,11 @@ interface TokenRow {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  expires_at: string;
+}
+
+function diasAte(iso: string) {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
 function Copiavel({ texto, rotulo }: { texto: string; rotulo?: string }) {
@@ -173,6 +178,14 @@ export default function ClaudePage() {
                       {t.last_used_at
                         ? `usado ${new Date(t.last_used_at).toLocaleDateString()}`
                         : "nunca usado"}
+                    </Badge>
+                    <Badge
+                      variant={diasAte(t.expires_at) <= 7 ? "destructive" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {diasAte(t.expires_at) <= 0
+                        ? "expirado"
+                        : `expira em ${diasAte(t.expires_at)}d`}
                     </Badge>
                   </div>
                   <Button
