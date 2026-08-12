@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LogOut, Store } from "lucide-react";
+import { ChevronDown, LogOut, Store, Terminal } from "lucide-react";
 import { LayoutPanelTopIcon } from "@/components/ui/layout-panel-top";
 import { DownloadIcon } from "@/components/ui/download";
 import { WorkflowIcon } from "@/components/ui/workflow";
@@ -50,6 +50,14 @@ const StoreIcon = forwardRef<AnimatedIconHandle, NavIconProps>(
   function StoreIcon(props, ref) {
     useImperativeHandle(ref, () => ({ startAnimation() {}, stopAnimation() {} }));
     return <Store {...props} />;
+  }
+);
+
+// Mesmo adaptador do Store: lucide estatico no contrato dos animados.
+const TerminalIcon = forwardRef<AnimatedIconHandle, NavIconProps>(
+  function TerminalIcon(props, ref) {
+    useImperativeHandle(ref, () => ({ startAnimation() {}, stopAnimation() {} }));
+    return <Terminal {...props} />;
   }
 );
 
@@ -112,6 +120,7 @@ const navSections: NavSection[] = [
     label: "channels",
     items: [
       { href: "/instagram", label: "instagram", icon: InstagramIcon, badge: "beta" },
+      { href: "/claude", label: "claude", icon: TerminalIcon, badge: "novo" },
     ],
   },
   {

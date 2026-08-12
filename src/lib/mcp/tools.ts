@@ -1,0 +1,244 @@
+import { z } from "zod";
+import {
+  shopifyGraphQL,
+  getShopInfo,
+  getProducts,
+  getProductsCount,
+  getProductById,
+} from "@/lib/shopify/client";
+import { getStore, listStores, credsOf, type McpIdentity } from "@/lib/mcp/auth";
+import { checkContent, guardError, assertReadOnlyQuery } from "@/lib/mcp/guards";
+
+export interface Tool {
+  name: string;
+  description: string;
+  schema: z.ZodType<Record<string, unknown>>;
+  handler: (args: Record<string, unknown>, id: McpIdentity) => Promise<unknown>;
+}
+
+const storeId = z.string().describe("id da loja, obtido em list_stores");
+
+async function resolve(id: McpIdentity, sid: string) {
+  const store = await getStore(id.userId, sid);
+  if (!store) throw new Error(`Loja ${sid} nao encontrada nesta conta. Chame list_stores primeiro.`);
+  return store;
+}
+
+export const TOOLS: Tool[] = [
+  {
+    name: "list_stores",
+    description:
+      "Lista as lojas Shopify conectadas a esta conta xcart. Chame primeiro: " +
+      "todas as outras ferramentas precisam de um storeId daqui.",
+    schema: z.object({}),
+    handler: async (_a, id) => {
+      const stores = await listStores(id.userId);
+      if (!stores.length) {
+        return { stores: [], aviso: "Nenhuma loja conectada. Conecte uma no painel do xcart antes." };
+      }
+      return {
+        stores: stores.map((s) => ({
+          storeId: s.id,
+          nome: s.name,
+          dominio: s.shop_domain,
+          idioma: s.target_language,
+        })),
+      };
+    },
+  },
+
+  {
+    name: "store_overview",
+    description:
+      "Visao geral da loja: nome, moeda, dominio publico e quantos produtos existem por status. " +
+      "Use antes de sugerir mudancas, para nao opinar sobre um catalogo que voce nao viu.",
+    schema: z.object({ storeId }),
+    handler: async (a, id) => {
+      const store = await resolve(id, a.storeId as string);
+      const creds = credsOf(store);
+      const [shop, ativos, rascunhos] = await Promise.all([
+        getShopInfo(creds),
+        getProductsCount(creds, { status: "ACTIVE" }).catch(() => null),
+        getProductsCount(creds, { status: "DRAFT" }).catch(() => null),
+      ]);
+      return { loja: shop, produtos: { ativos, rascunhos } };
+    },
+  },
+
+  {
+    name: "search_products",
+    description:
+      "Busca produtos da loja. 'query' aceita a sintaxe de busca da Shopify " +
+      "(ex.: 'title:serum', 'vendor:medicube', 'status:draft').",
+    schema: z.object({
+      storeId,
+      query: z.string().optional().describe("filtro no formato de busca da Shopify"),
+      limit: z.number().int().min(1).max(250).optional(),
+    }),
+    handler: async (a, id) => {
+      const store = await resolve(id, a.storeId as string);
+      return getProducts(credsOf(store), {
+        first: (a.limit as number) ?? 50,
+        query: a.query as string | undefined,
+      });
+    },
+  },
+
+  {
+    name: "get_product",
+    description: "Detalhe completo de um produto: descricao, SEO, variantes, imagens e colecoes.",
+    schema: z.object({ storeId, productId: z.string().describe("id numerico ou gid://") }),
+    handler: async (a, id) => {
+      const store = await resolve(id, a.storeId as string);
+      return getProductById(credsOf(store), a.productId as string);
+    },
+  },
+
+  {
+    name: "update_product",
+    description:
+      "Atualiza campos de texto de um produto (titulo, descricao HTML, SEO, marca, tipo, tags, status). " +
+      "NAO altera preco, variantes nem SKU — no xcart o SKU e a chave do checkout roteado e " +
+      "mexer nele quebra a rota. Textos passam por checagem de alegacao nao comprovavel.",
+    schema: z.object({
+      storeId,
+      productId: z.string(),
+      title: z.string().optional(),
+      descriptionHtml: z.string().optional(),
+      seoTitle: z.string().optional(),
+      seoDescription: z.string().optional(),
+      vendor: z.string().optional(),
+      productType: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      status: z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]).optional(),
+    }),
+    handler: async (a, id) => {
+      const hits = checkContent([
+        a.title as string,
+        a.descriptionHtml as string,
+        a.seoTitle as string,
+        a.seoDescription as string,
+        // tag tambem e texto publico: aparece em filtro de colecao e vaza
+        // para o feed do Merchant Center.
+        ...((a.tags as string[]) ?? []),
+      ]);
+      if (hits.length) throw new Error(guardError(hits));
+
+      const store = await resolve(id, a.storeId as string);
+
+      // Monta o input so com o que foi informado. updateShopifyProduct() do
+      // client exige title/descriptionHtml/tags sempre — usar ele aqui
+      // apagaria os campos que o usuario nao mencionou.
+      const gid = String(a.productId).startsWith("gid://")
+        ? (a.productId as string)
+        : `gid://shopify/Product/${a.productId}`;
+      const input: Record<string, unknown> = { id: gid };
+      for (const k of ["title", "descriptionHtml", "vendor", "productType", "status"] as const) {
+        if (a[k] !== undefined) input[k] = a[k];
+      }
+      if (a.tags !== undefined) input.tags = a.tags;
+      if (a.seoTitle !== undefined || a.seoDescription !== undefined) {
+        const seo: Record<string, unknown> = {};
+        if (a.seoTitle !== undefined) seo.title = a.seoTitle;
+        if (a.seoDescription !== undefined) seo.description = a.seoDescription;
+        input.seo = seo;
+      }
+      if (Object.keys(input).length === 1) {
+        throw new Error("Informe ao menos um campo para alterar.");
+      }
+
+      const data = await shopifyGraphQL(
+        credsOf(store),
+        `mutation($input: ProductInput!) {
+           productUpdate(input: $input) {
+             product { id title handle status vendor }
+             userErrors { field message }
+           }
+         }`,
+        { input }
+      );
+      const erros = data?.data?.productUpdate?.userErrors ?? [];
+      if (erros.length) throw new Error(`Shopify recusou: ${JSON.stringify(erros)}`);
+      const res = data?.data?.productUpdate?.product;
+      return {
+        ok: true,
+        produto: res,
+        proximo_passo:
+          "A Shopify serve a pagina por CDN. A alteracao leva ate ~1 minuto para aparecer. " +
+          "Use verify_page para confirmar no HTML servido antes de dizer que terminou.",
+      };
+    },
+  },
+
+  {
+    name: "verify_page",
+    description:
+      "Busca uma pagina publica da loja e reporta o que quebrou: erro de Liquid, " +
+      "placeholder da Shopify (aquele desenho de mochila, que aparece em TODO campo de " +
+      "imagem/produto/colecao deixado vazio) e um texto que voce queira confirmar. " +
+      "Resposta de API dizendo 'ok' nao prova que renderizou — sempre confirme aqui.",
+    schema: z.object({
+      storeId,
+      path: z.string().describe("caminho, ex.: /products/meu-produto"),
+      expect: z.string().optional().describe("texto que deve aparecer na pagina"),
+    }),
+    handler: async (a, id) => {
+      const store = await resolve(id, a.storeId as string);
+
+      // O path vem do modelo. Sem travar, ele poderia mandar "//evil.com/x" ou
+      // "https://evil.com" e transformar a ferramenta em buscador de URL
+      // arbitraria rodando a partir do nosso servidor.
+      const rawPath = String(a.path);
+      if (/^[a-z][a-z0-9+.-]*:/i.test(rawPath) || rawPath.startsWith("//")) {
+        throw new Error("path deve ser um caminho da propria loja, ex.: /products/meu-produto");
+      }
+      const caminho = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+
+      const dominio = store.shop_domain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      const url = `https://${dominio}${caminho}`;
+      // cache-buster: sem isso a CDN devolve a versao antiga e a verificacao mente
+      const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}_mcp=${Date.now()}`, {
+        headers: { "User-Agent": "xcart-mcp/1.0" },
+        cache: "no-store",
+      });
+      const html = await res.text();
+      const conta = (re: RegExp) => (html.match(re) || []).length;
+      const esperado = a.expect ? html.includes(String(a.expect)) : null;
+      return {
+        url,
+        status: res.status,
+        erros_liquid: conta(/Liquid error/g),
+        placeholders: conta(/placeholder-svg|placeholder_svg/g),
+        texto_esperado: a.expect ? { texto: a.expect, encontrado: esperado } : undefined,
+        veredito:
+          conta(/Liquid error/g) === 0 && conta(/placeholder-svg/g) === 0 && esperado !== false
+            ? "pagina limpa"
+            : "há problema — veja os contadores acima",
+      };
+    },
+  },
+
+  {
+    name: "shopify_query",
+    description:
+      "Executa uma query GraphQL de LEITURA na Admin API da loja, para o que as outras " +
+      "ferramentas nao cobrem. Mutation e recusada de proposito: escrita crua sem validacao " +
+      "e a principal causa de tema e produto quebrados.",
+    schema: z.object({
+      storeId,
+      query: z.string(),
+      variables: z.record(z.string(), z.unknown()).optional(),
+    }),
+    handler: async (a, id) => {
+      assertReadOnlyQuery(a.query as string);
+      const store = await resolve(id, a.storeId as string);
+      return shopifyGraphQL(
+        credsOf(store),
+        a.query as string,
+        a.variables as Record<string, unknown> | undefined
+      );
+    },
+  },
+];
+
+export const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));

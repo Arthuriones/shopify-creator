@@ -20,7 +20,8 @@
     "billing": "Subscription & credits",
     "settings": "Settings",
     "myAccount": "My account",
-    "logout": "Log out"
+    "logout": "Log out",
+    "claude": "Claude (MCP)"
   },
   "noAccess": {
     "title": "Your free trial has ended",

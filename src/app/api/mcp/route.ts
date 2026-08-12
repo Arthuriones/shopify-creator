@@ -1,0 +1,144 @@
+import { z } from "zod";
+import { authenticate } from "@/lib/mcp/auth";
+import { TOOLS, TOOLS_BY_NAME } from "@/lib/mcp/tools";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// Implementacao stateless de MCP sobre Streamable HTTP: cada POST e uma
+// requisicao JSON-RPC completa e independente. Sem sessao e sem SSE, porque
+// nenhuma ferramenta daqui e long-running e o app roda em Vercel, onde manter
+// stream aberto entre invocacoes nao e confiavel.
+
+const PROTOCOL = "2025-06-18";
+
+type Json = Record<string, unknown>;
+
+const ok = (id: unknown, result: unknown) =>
+  Response.json({ jsonrpc: "2.0", id, result });
+
+const fail = (id: unknown, code: number, message: string) =>
+  Response.json({ jsonrpc: "2.0", id, error: { code, message } });
+
+function inputSchemaOf(schema: z.ZodType) {
+  try {
+    const js = z.toJSONSchema(schema, { io: "input" }) as Json;
+    // O MCP exige type:"object" na raiz; z.object() ja produz isso, mas
+    // ferramentas sem argumento podem sair sem "properties".
+    return { type: "object", properties: {}, ...js };
+  } catch {
+    return { type: "object", properties: {} };
+  }
+}
+
+export async function POST(req: Request) {
+  let body: Json;
+  try {
+    body = (await req.json()) as Json;
+  } catch {
+    return fail(null, -32700, "JSON invalido");
+  }
+
+  const { id, method, params } = body as { id: unknown; method: string; params?: Json };
+
+  // Notificacoes (sem id) nao esperam resposta. 202 sem corpo.
+  const isNotification = id === undefined || id === null;
+
+  if (method === "initialize") {
+    return ok(id, {
+      protocolVersion: PROTOCOL,
+      capabilities: { tools: { listChanged: false } },
+      serverInfo: { name: "xcart", title: "xcart — sua loja Shopify", version: "1.0.0" },
+      instructions:
+        "Ferramentas para ler e editar as lojas Shopify conectadas na conta xcart do usuario. " +
+        "Chame list_stores primeiro para descobrir os storeId. " +
+        "Depois de qualquer escrita, confirme com verify_page: a Shopify serve por CDN e " +
+        "resposta de API dizendo 'ok' nao prova que a pagina renderizou.",
+    });
+  }
+
+  if (method === "notifications/initialized" || isNotification) {
+    return new Response(null, { status: 202 });
+  }
+
+  if (method === "ping") return ok(id, {});
+
+  // Tudo abaixo toca dados do usuario e exige token.
+  const identity = await authenticate(req);
+  if (!identity) {
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32001,
+          message:
+            "Token ausente ou invalido. Gere um em xcart > Configuracoes > Claude (MCP) " +
+            "e mande no header Authorization: Bearer xcart_mcp_...",
+        },
+      }),
+      {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+          // Sinaliza ao cliente MCP que o problema e credencial, nao rota.
+          "WWW-Authenticate": 'Bearer realm="xcart"',
+        },
+      }
+    );
+  }
+
+  if (method === "tools/list") {
+    return ok(id, {
+      tools: TOOLS.map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: inputSchemaOf(t.schema),
+      })),
+    });
+  }
+
+  if (method === "tools/call") {
+    const nome = params?.name as string;
+    const tool = TOOLS_BY_NAME.get(nome);
+    if (!tool) return fail(id, -32602, `Ferramenta desconhecida: ${nome}`);
+
+    const parsed = tool.schema.safeParse((params?.arguments as Json) ?? {});
+    if (!parsed.success) {
+      return ok(id, {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Argumentos invalidos para ${nome}:\n${JSON.stringify(parsed.error.issues, null, 2)}`,
+          },
+        ],
+      });
+    }
+
+    try {
+      const out = await tool.handler(parsed.data as Json, identity);
+      return ok(id, {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+      });
+    } catch (e) {
+      // Erro de ferramenta volta como isError (nao como erro JSON-RPC): assim o
+      // modelo le a mensagem e corrige, em vez de a conversa inteira falhar.
+      return ok(id, {
+        isError: true,
+        content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
+      });
+    }
+  }
+
+  return fail(id, -32601, `Metodo nao suportado: ${method}`);
+}
+
+// Alguns clientes abrem GET esperando SSE. Respondemos 405 explicitamente para
+// que caiam no modo POST-only em vez de ficarem pendurados.
+export async function GET() {
+  return new Response("Este endpoint MCP aceita apenas POST (Streamable HTTP sem SSE).", {
+    status: 405,
+    headers: { Allow: "POST" },
+  });
+}

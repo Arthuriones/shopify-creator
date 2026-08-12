@@ -20,7 +20,8 @@
     "billing": "サブスクリプション＆クレジット",
     "settings": "設定",
     "myAccount": "マイアカウント",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "claude": "Claude (MCP)"
   },
   "noAccess": {
     "title": "無料トライアルが終了しました",

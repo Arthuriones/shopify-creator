@@ -20,7 +20,8 @@
     "billing": "Assinatura e créditos",
     "settings": "Configurações",
     "myAccount": "Minha conta",
-    "logout": "Sair"
+    "logout": "Sair",
+    "claude": "Claude (MCP)"
   },
   "noAccess": {
     "title": "Sua avaliação gratuita terminou",
