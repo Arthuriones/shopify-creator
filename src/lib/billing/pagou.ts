@@ -114,7 +114,16 @@ export async function getOrCreateCustomer(
     .eq("id", userId)
     .single();
 
-  if (profile?.pagou_customer_id) return profile.pagou_customer_id;
+  if (profile?.pagou_customer_id) {
+    // Nao ha endpoint para atualizar customer na Pagou. Se o registro veio de
+    // antes de coletarmos CPF, ele fica sem documento — e assinatura sem
+    // documento e recusada. Nesse caso criamos um novo, com o documento.
+    if (!document) return profile.pagou_customer_id;
+    const atual = await api<PagouCustomer & { document?: unknown }>(
+      `/v2/customers/${encodeURIComponent(profile.pagou_customer_id)}`
+    ).catch(() => null);
+    if (atual?.document) return profile.pagou_customer_id;
+  }
 
   // Pode existir de uma tentativa anterior que falhou antes de gravar.
   const encontrado = await api<PagouCustomer[]>(
@@ -190,7 +199,16 @@ export async function createPixTransaction(params: {
       currency: params.currency,
       method: "pix",
       external_ref: params.externalRef,
-      buyer: params.buyer,
+      // A Pagou recusa buyer.id junto com name/email:
+      //   "buyer.name and buyer.email shouldnt be provided if buyer.id is
+      //    provided."
+      // Mandamos o buyer completo (sem id) porque o customer salvo pode ter
+      // sido criado antes de existir CPF, e Pix sem documento da 422.
+      buyer: {
+        name: params.buyer.name,
+        email: params.buyer.email,
+        document: params.buyer.document,
+      },
       products: [
         {
           name: params.produto.name,
