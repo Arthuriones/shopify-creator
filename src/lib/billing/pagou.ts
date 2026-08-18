@@ -70,11 +70,20 @@ async function api<T>(
   }
 
   if (!res.ok) {
-    const j = json as { message?: string; error?: string; code?: string } | null;
+    const j = json as {
+      message?: string; error?: string; code?: string; title?: string; detail?: string;
+      validation_errors?: Array<{ field?: string; message?: string }>;
+    } | null;
+    // A Pagou devolve o campo exato em validation_errors; sem isso a tela do
+    // usuario mostraria so "Pagou respondeu 422".
+    const campos = (j?.validation_errors || [])
+      .map((v) => [v.field, v.message].filter(Boolean).join(": "))
+      .filter(Boolean)
+      .join("; ");
     throw new PagouError(
-      j?.message || j?.error || `Pagou respondeu ${res.status}`,
+      campos || j?.title || j?.message || j?.error || `Pagou respondeu ${res.status}`,
       res.status,
-      j?.code,
+      j?.detail || j?.code,
       json
     );
   }
@@ -95,7 +104,8 @@ export interface PagouCustomer {
 export async function getOrCreateCustomer(
   userId: string,
   email?: string | null,
-  name?: string | null
+  name?: string | null,
+  document?: DocumentoBuyer | null
 ): Promise<string> {
   const supabase = createAdminClient();
   const { data: profile } = await supabase
@@ -119,6 +129,7 @@ export async function getOrCreateCustomer(
         name: name || email?.split("@")[0] || "Cliente xcart",
         email: email || `${userId}@sem-email.xcart`,
         externalRef: userId,
+        ...(document ? { document } : {}),
       },
     });
     id = criado.id;
@@ -138,7 +149,10 @@ export async function getOrCreateCustomer(
 export type TransactionStatus =
   | "authorized" | "canceled" | "captured" | "chargedback" | "three_ds_required"
   | "expired" | "in_protest" | "paid" | "partially_paid" | "partially_refunded"
-  | "pending" | "processing" | "processed" | "refunded" | "med" | "refused";
+  | "pending" | "processing" | "processed" | "refunded" | "med" | "refused"
+  // Nao esta na lista da doc, mas e o que a API devolve numa cobranca Pix
+  // recem-criada.
+  | "waiting_payment";
 
 export interface PagouTransaction {
   id: string;
@@ -155,11 +169,17 @@ export interface PagouTransaction {
   created_at?: string;
 }
 
+export interface DocumentoBuyer {
+  // A Pagou rejeita minusculo: tem que ser CPF/CNPJ em caixa alta.
+  type: "CPF" | "CNPJ";
+  number: string;
+}
+
 export async function createPixTransaction(params: {
   amountCents: number;
   currency: string;
   externalRef: string;
-  buyer: { id?: string; name: string; email: string };
+  buyer: { id?: string; name: string; email: string; document: DocumentoBuyer };
   produto: { name: string; price: number };
   metadata?: string;
 }): Promise<PagouTransaction> {

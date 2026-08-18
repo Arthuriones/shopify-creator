@@ -9,6 +9,44 @@ import {
 } from "@/lib/billing/pagou";
 import { CREDIT_PACKS, CURRENCY, getCreditPack } from "@/lib/billing/plans";
 
+// A Pagou exige CPF/CNPJ do pagador em cobranca Pix. Validamos o digito
+// verificador aqui: um CPF invalido so seria rejeitado la, com 422 generico.
+function digitos(v: string): string {
+  return (v || "").replace(/\D/g, "");
+}
+
+function cpfValido(cpf: string): boolean {
+  // O guard de digitos repetidos nao e detalhe: 11111111111 PASSA no digito
+  // verificador. Sem ele, CPF falso so seria barrado la na Pagou, com 422.
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (const [ate, pos] of [[9, 10], [10, 11]] as const) {
+    let soma = 0;
+    for (let i = 0; i < ate; i++) soma += Number(cpf[i]) * (pos - i);
+    let d = (soma * 10) % 11;
+    if (d === 10) d = 0;
+    if (d !== Number(cpf[ate])) return false;
+  }
+  return true;
+}
+
+function cnpjValido(cnpj: string): boolean {
+  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const calc = (base: string) => {
+    let peso = base.length - 7;
+    let soma = 0;
+    for (let i = 0; i < base.length; i++) {
+      soma += Number(base[i]) * peso--;
+      if (peso < 2) peso = 9;
+    }
+    const r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return (
+    calc(cnpj.slice(0, 12)) === Number(cnpj[12]) &&
+    calc(cnpj.slice(0, 13)) === Number(cnpj[13])
+  );
+}
+
 export const runtime = "nodejs";
 
 // GET -> lista os pacotes disponiveis (para a UI).
@@ -40,8 +78,43 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
+  // CPF: usa o que ja esta salvo; se vier um novo no corpo, valida e guarda.
+  const { data: perfil } = await admin
+    .from("profiles")
+    .select("document_number, document_type")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const informado = digitos(typeof body.document === "string" ? body.document : "");
+  const documento = informado || digitos(perfil?.document_number || "");
+
+  if (!documento) {
+    // O front usa isto para abrir o campo de CPF em vez de mostrar erro cru.
+    return NextResponse.json(
+      { error: "Informe seu CPF para gerar a cobrança Pix.", needsDocument: true },
+      { status: 400 }
+    );
+  }
+  const tipo: "CPF" | "CNPJ" = documento.length > 11 ? "CNPJ" : "CPF";
+  const ok = tipo === "CPF" ? cpfValido(documento) : cnpjValido(documento);
+  if (!ok) {
+    return NextResponse.json(
+      { error: `${tipo} inválido. Confira os números.`, needsDocument: true },
+      { status: 400 }
+    );
+  }
+  if (informado && informado !== digitos(perfil?.document_number || "")) {
+    await admin
+      .from("profiles")
+      .update({ document_number: documento, document_type: tipo })
+      .eq("id", user.id);
+  }
+
   try {
-    const customerId = await getOrCreateCustomer(user.id, user.email, null);
+    const customerId = await getOrCreateCustomer(user.id, user.email, null, {
+      type: tipo,
+      number: documento,
+    });
 
     // Referencia unica: a Pagou devolve 409 DUPLICATE_EXTERNAL_REF se repetir,
     // o que impede cobrar duas vezes o mesmo clique.
@@ -55,6 +128,7 @@ export async function POST(request: NextRequest) {
         id: customerId,
         name: user.email?.split("@")[0] || "Cliente xcart",
         email: user.email || `${user.id}@sem-email.xcart`,
+        document: { type: tipo, number: documento },
       },
       produto: {
         name: `xcart — ${pack.label}`,

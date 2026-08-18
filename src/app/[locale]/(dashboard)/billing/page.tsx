@@ -63,6 +63,9 @@ function BillingInner() {
   const [busy, setBusy] = useState<string | null>(null);
   const [mostrarCartao, setMostrarCartao] = useState(false);
   const [pix, setPix] = useState<CobrancaPix | null>(null);
+  // A Pagou exige CPF do pagador no Pix. Pedimos uma vez e o backend guarda.
+  const [cpf, setCpf] = useState("");
+  const [pedirCpf, setPedirCpf] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -135,10 +138,22 @@ function BillingInner() {
       const res = await fetch("/api/billing/credits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packId: pack.id }),
+        body: JSON.stringify({
+          packId: pack.id,
+          ...(cpf.trim() ? { document: cpf } : {}),
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || tc("fail"));
+      if (!res.ok) {
+        // Primeira compra: em vez de erro cru, abre o campo de CPF no pacote.
+        if (data.needsDocument) {
+          setPedirCpf(pack.id);
+          toast.error(data.error);
+          return;
+        }
+        throw new Error(data.error || tc("fail"));
+      }
+      setPedirCpf(null);
       setPix({
         transactionId: data.transactionId,
         credits: data.credits,
@@ -150,6 +165,15 @@ function BillingInner() {
     } finally {
       setBusy(null);
     }
+  }
+
+  // 000.000.000-00 enquanto digita
+  function mascaraCpf(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    return d
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
   }
 
   const isPro = info?.plan === "pro";
@@ -319,6 +343,17 @@ function BillingInner() {
                     <p className="text-sm text-muted-foreground">
                       {brl(pack.amountCents)}
                     </p>
+                    {pedirCpf === pack.id && (
+                      <input
+                        autoFocus
+                        inputMode="numeric"
+                        placeholder="CPF do pagador"
+                        value={mascaraCpf(cpf)}
+                        onChange={(e) => setCpf(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && comprarPack(pack)}
+                        className="rounded-lg border border-border/60 bg-background/45 px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                    )}
                     <Button
                       variant="outline"
                       className="mt-1"
@@ -337,7 +372,8 @@ function BillingInner() {
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
                 O Pix cai na hora. Os créditos entram assim que o pagamento é
-                confirmado.
+                confirmado. O CPF é exigido pelo banco emissor da cobrança e
+                fica salvo para as próximas.
               </p>
             </CardContent>
           </Card>
