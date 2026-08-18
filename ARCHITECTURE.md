@@ -27,7 +27,7 @@ Beyond routing, xcart also: imports/clones products from many sources, AI-optimi
 - **Next.js 16.2.4** (App Router, `output: "standalone"`, `runtime = "nodejs"` on API routes), **React 19.2.4**, TypeScript, Tailwind v4 + shadcn/ui, `zustand`, `sonner`.
 - **Supabase** — Auth (`@supabase/ssr`), Postgres (RLS on every table), Storage (public buckets). Project id `hvfwjlwydmcstarfjtko`.
 - **Google Gemini** — two SDKs: `@google/generative-ai` (text, `gemini-2.5-flash`) and `@google/genai` (per-call config + images, `gemini-2.5-flash-image`). Requires `GEMINI_API_KEY`.
-- **Stripe** — subscriptions + one-time credit packs.
+- **Pagou.ai** — subscriptions (card or Pix automatico) + one-time credit packs (Pix). Base `https://api.pagou.ai`, `Authorization: Bearer`.
 - **Scraping** — `cheerio`, `playwright-core` + `@sparticuz/chromium` (headless Chromium on Vercel), `undici` proxy, Bright Data fallback. `sharp` for image transcoding.
 - **Shopify** — Admin GraphQL API, version pinned `2024-10`.
 - **Deploy**: Vercel (primary; `vercel.json` sets `maxDuration` per route + an hourly cron) and Docker (`Dockerfile` multi-stage `node:20-alpine`, `docker-compose.yml` for VPS). `AGENTS.md` warns Next.js 16 has breaking changes — read `node_modules/next/dist/docs/` before writing Next code.
@@ -77,7 +77,7 @@ All tables have RLS (owner-scoped via `auth.uid()`); service-role bypasses. Shar
 | **routed_checkout_fallbacks** | Loader fallback telemetry (`route_config_id`, `reason`, `detail`, `page_url`). |
 | **ai_product_reviews** | AI-generated synthetic reviews (product ref, rating, body, disclosure, image_url, `published`). |
 | **instagram_connections / instagram_posts** | IG business-account tokens + published carousels. |
-| **profiles** | One per user. `is_admin`, `plan` (free/pro), Stripe ids, `subscription_status`, `current_period_end`, **`ai_credits`**, `access_granted`, `free_clone_store_id` (trial; NULL = available). |
+| **profiles** | One per user. `is_admin`, `plan` (free/pro), `pagou_customer_id`/`pagou_subscription_id`, `payment_provider` (pagou\|stripe), `cancel_at_period_end`, `subscription_status`, `current_period_end`, **`ai_credits`**, `access_granted`, `free_clone_store_id` (trial; NULL = available). |
 | **ai_usage_log** | Every AI action + `cost_usd` + `credits_used` (metering; service-role insert only). |
 | **credit_purchases** | One-time credit-pack purchases. |
 
@@ -164,7 +164,7 @@ Files: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/**`, `sr
 Two env flags, both **default OFF** (measure-only): `BILLING_ENFORCED` (credit debiting), `ACCESS_CONTROL_ENABLED` (entry + free-clone trial gate).
 
 - **1 credit = 1 product image neutralized** — the only credit-debiting action (debited before Gemini, refunded on failure). Pro plan (`PRO_PRICE_USD = 17`) resets to `PRO_INCLUDED_CREDITS = 20` each paid invoice; packs `pack_50/200/500`.
-- Stripe: subscription checkout, credit-pack checkout (dynamic price), customer portal, webhook (`invoice.paid` → `reset_ai_credits`, `checkout.session.completed` credit_pack → `add_ai_credits`). Credit RPCs are `SECURITY DEFINER` (`consume_ai_credits`/`add_ai_credits`/`reset_ai_credits`).
+- Pagou.ai: `POST /v2/customers`, `POST /v2/transactions` (Pix avulso -> recarga), `POST /v2/subscriptions` (token `pgct_` do Payment Element **ou** `pix_automatic`), `POST /v2/subscriptions/{id}/cancel` (**so no fim do periodo**). Nao ha checkout hospedado nem portal do cliente: o cartao e tokenizado no browser via `js.pagou.ai/payments/v3.js` e a tela de gerenciar assinatura e nossa (`/api/billing/subscription`). Webhook em `/api/billing/pagou/webhook`: a Pagou nao documenta assinatura HMAC, entao o handler **nunca confia no corpo** — exige token secreto na `notify_url`, deduplica pelo id do evento em `payment_events` e confirma o estado via `GET` autenticado antes de creditar. Recarga Pix nasce `pending` em `credit_purchases` e so vira credito em `credit_pending_purchase()` (atomica e idempotente). Creditos do plano sao repostos por `reset_ai_credits` quando o periodo vira. `/api/billing/webhook` e o webhook **legado** do Stripe, mantido so para as assinaturas antigas.
 - Free-clone trial: first clone consumes `free_clone_store_id`; a second different store → 402 `subscribe_required`.
 
 ---
@@ -173,7 +173,7 @@ Two env flags, both **default OFF** (measure-only): `BILLING_ENFORCED` (credit d
 
 Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, proxy vars (`IMPORT_FETCH_PROXY_URL`, `GLOBAL_FETCH_PROXY_URL`, `ALIEXPRESS_FETCH_PROXY_URL`, `BRIGHTDATA_*`), Instagram/Meta (`INSTAGRAM_*`, `META_*`, `META_GRAPH_VERSION`).
 
-**Used in code but MISSING from `.env.example`** (add these when deploying): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `BILLING_ENFORCED`, `ACCESS_CONTROL_ENABLED`, `BULK_IMPORT_CRON_SECRET`.
+**Used in code but MISSING from `.env.example`** (add these when deploying): `PAGOU_SECRET_KEY`, `PAGOU_WEBHOOK_TOKEN`, `NEXT_PUBLIC_PAGOU_PUBLIC_KEY`, `NEXT_PUBLIC_PAGOU_ENV`, `STRIPE_WEBHOOK_SECRET` (legado), `BILLING_ENFORCED`, `ACCESS_CONTROL_ENABLED`, `BULK_IMPORT_CRON_SECRET`.
 
 ---
 

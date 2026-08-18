@@ -23,7 +23,7 @@ interface AdminUser {
 interface Purchase {
   email: string;
   credits: number;
-  amountUsd: number;
+  amountBrl: number;
   currency: string;
   createdAt: string;
 }
@@ -34,13 +34,13 @@ interface Overview {
     proUsers: number;
     withAccess: number;
     newUsersThisMonth: number;
-    mrrUsd: number;
+    mrrBrl: number;
     aiCostThisMonthUsd: number;
     totalStores: number;
-    creditRevenueMonthUsd: number;
-    creditRevenueTotalUsd: number;
+    creditRevenueMonthBrl: number;
+    creditRevenueTotalBrl: number;
     creditPurchasesTotal: number;
-    grossMarginMonthUsd: number;
+    grossMarginMonthBrl: number;
     payingUsers: number;
   };
   recentPurchases: Purchase[];
@@ -85,23 +85,23 @@ export default function AdminOverviewPage() {
   }
 
   const s = data?.summary;
-  const margem = s?.grossMarginMonthUsd ?? 0;
+  const margem = s?.grossMarginMonthBrl ?? 0;
 
   // Separado em dois blocos: dinheiro primeiro, base depois. Antes eram sete
   // cards na mesma fileira misturando receita, custo e contagem de usuario —
   // dava para olhar e nao saber se o mes tinha sido bom.
   const cardsDinheiro = [
-    { label: "MRR (assinaturas)", value: `$${(s?.mrrUsd ?? 0).toFixed(2)}` },
-    { label: "Créditos (mês)", value: `$${(s?.creditRevenueMonthUsd ?? 0).toFixed(2)}` },
+    { label: "MRR (assinaturas)", value: `R$ ${(s?.mrrBrl ?? 0).toFixed(2)}` },
+    { label: "Créditos (mês)", value: `R$ ${(s?.creditRevenueMonthBrl ?? 0).toFixed(2)}` },
     {
       label: "Receita do mês",
-      value: `$${((s?.mrrUsd ?? 0) + (s?.creditRevenueMonthUsd ?? 0)).toFixed(2)}`,
+      value: `R$ ${((s?.mrrBrl ?? 0) + (s?.creditRevenueMonthBrl ?? 0)).toFixed(2)}`,
       highlight: true,
     },
-    { label: "Custo de IA (mês)", value: `-$${(s?.aiCostThisMonthUsd ?? 0).toFixed(2)}` },
+    { label: "Custo de IA (mês)", value: `-US$ ${(s?.aiCostThisMonthUsd ?? 0).toFixed(2)}` },
     {
       label: "Margem do mês",
-      value: `${margem < 0 ? "-" : ""}$${Math.abs(margem).toFixed(2)}`,
+      value: `${margem < 0 ? "-" : ""}R$ ${Math.abs(margem).toFixed(2)}`,
       tone: margem < 0 ? "ruim" : "bom",
     },
   ];
@@ -182,7 +182,7 @@ export default function AdminOverviewPage() {
           <CardHeader>
             <CardTitle>Vendas de crédito</CardTitle>
             <CardDescription>
-              {s?.creditPurchasesTotal ?? 0} compras, ${(s?.creditRevenueTotalUsd ?? 0).toFixed(2)} no total
+              {s?.creditPurchasesTotal ?? 0} compras, R$ ${(s?.creditRevenueTotalBrl ?? 0).toFixed(2)} no total
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -204,7 +204,7 @@ export default function AdminOverviewPage() {
                       <td className="py-2 pr-3 text-foreground">{c.email}</td>
                       <td className="py-2 pr-3 text-muted-foreground">{c.credits}</td>
                       <td className="py-2 pr-3 font-medium text-foreground">
-                        ${c.amountUsd.toFixed(2)}
+                        R$ ${c.amountBrl.toFixed(2)}
                       </td>
                       <td className="py-2 text-muted-foreground">{fmt(c.createdAt)}</td>
                     </tr>

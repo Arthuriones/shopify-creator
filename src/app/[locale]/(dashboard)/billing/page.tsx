@@ -1,9 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
-import { CreditCard, Loader2, Sparkles, Zap } from "lucide-react";
+import { CreditCard, Loader2, QrCode, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PagouCardForm } from "@/components/billing/pagou-card-form";
+import { PixDialog, type CobrancaPix } from "@/components/billing/pix-dialog";
 
 interface BillingInfo {
   email: string;
@@ -32,68 +33,135 @@ interface Pack {
   label: string;
 }
 
+interface Assinatura {
+  provider: "pagou" | "stripe";
+  legacy?: boolean;
+  manageable?: boolean;
+  subscription?: {
+    id: string;
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    cardLast4?: string | null;
+  } | null;
+  status?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+}
+
+const brl = (cents: number) =>
+  (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 function BillingInner() {
   const t = useTranslations("billing");
   const tc = useTranslations("common");
-  const params = useSearchParams();
+
   const [info, setInfo] = useState<BillingInfo | null>(null);
   const [packs, setPacks] = useState<Pack[]>([]);
+  const [assinatura, setAssinatura] = useState<Assinatura | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [mostrarCartao, setMostrarCartao] = useState(false);
+  const [pix, setPix] = useState<CobrancaPix | null>(null);
 
-  useEffect(() => {
-    const status = params.get("status");
-    if (status === "success") toast.success(t("subscribed"));
-    if (status === "credits_success") toast.success(t("creditsAdded"));
-    if (status === "cancel") toast(t("paymentCanceled"));
-  }, [params, t]);
-
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      const [meRes, packsRes] = await Promise.all([
+      const [meRes, packsRes, subRes] = await Promise.all([
         fetch("/api/billing/me"),
         fetch("/api/billing/credits"),
+        fetch("/api/billing/subscription"),
       ]);
-      const me = await meRes.json();
-      const pk = await packsRes.json();
-      if (meRes.ok) setInfo(me);
-      if (packsRes.ok) setPacks(pk.packs || []);
+      if (meRes.ok) setInfo(await meRes.json());
+      if (packsRes.ok) setPacks((await packsRes.json()).packs || []);
+      if (subRes.ok) setAssinatura(await subRes.json());
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
-  async function redirectTo(url: string, key: string, body?: object) {
-    setBusy(key);
+  // --- assinatura ---------------------------------------------------------
+  async function assinarPix() {
+    setBusy("pix_sub");
     try {
-      const res = await fetch(url, {
+      const res = await fetch("/api/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
+        body: JSON.stringify({ method: "pix_automatic" }),
       });
       const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error || tc("fail"));
-      window.location.href = data.url;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : tc("fail"));
+      if (!res.ok) throw new Error(data.error || tc("fail"));
+      toast.success("Assinatura criada. A cobrança recorrente vai pelo Pix.");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : tc("fail"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelar() {
+    if (
+      !confirm(
+        "Cancelar a assinatura? O acesso continua até o fim do período já pago."
+      )
+    )
+      return;
+    setBusy("cancel");
+    try {
+      const res = await fetch("/api/billing/subscription", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || tc("fail"));
+      toast.success(
+        data.accessUntil
+          ? `Cancelada. Acesso até ${new Date(data.accessUntil).toLocaleDateString("pt-BR")}.`
+          : "Cancelamento agendado para o fim do período."
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : tc("fail"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // --- recarga ------------------------------------------------------------
+  async function comprarPack(pack: Pack) {
+    setBusy(pack.id);
+    try {
+      const res = await fetch("/api/billing/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packId: pack.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || tc("fail"));
+      setPix({
+        transactionId: data.transactionId,
+        credits: data.credits,
+        amountCents: data.amountCents,
+        pix: data.pix,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : tc("fail"));
+    } finally {
       setBusy(null);
     }
   }
 
   const isPro = info?.plan === "pro";
-  const usd = (cents: number) => (cents / 100).toFixed(0);
+  const sub = assinatura?.subscription;
+  const cancelada = sub?.cancelAtPeriodEnd || assinatura?.cancelAtPeriodEnd;
+  const fimPeriodo = sub?.currentPeriodEnd || info?.currentPeriodEnd;
 
   return (
     <div className="space-y-6 p-1">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("subtitle")}
-        </p>
+        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {loading ? (
@@ -105,47 +173,45 @@ function BillingInner() {
           {/* Plano atual */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     {t("planTitle", { name: isPro ? "Pro" : "Free" })}
-                    <Badge variant={isPro ? "default" : "secondary"} className="rounded-md">
-                      {isPro ? info?.subscriptionStatus || t("statusActive") : t("statusNone")}
+                    <Badge
+                      variant={isPro ? "default" : "secondary"}
+                      className="rounded-md"
+                    >
+                      {isPro
+                        ? info?.subscriptionStatus || t("statusActive")
+                        : t("statusNone")}
                     </Badge>
+                    {cancelada && (
+                      <Badge variant="outline" className="rounded-md">
+                        cancelamento agendado
+                      </Badge>
+                    )}
                   </CardTitle>
                   <CardDescription>
                     {isPro ? t("proDesc") : t("freeDesc")}
                   </CardDescription>
                 </div>
-                {isPro ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => redirectTo("/api/billing/portal", "portal")}
-                    disabled={busy === "portal"}
-                  >
-                    {busy === "portal" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4" />
-                    )}
-                    {t("manage")}
+
+                {isPro && assinatura?.manageable && !cancelada && (
+                  <Button variant="outline" onClick={cancelar} disabled={busy === "cancel"}>
+                    {busy === "cancel" && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Cancelar assinatura
                   </Button>
-                ) : (
-                  <Button
-                    onClick={() => redirectTo("/api/billing/checkout", "checkout")}
-                    disabled={busy === "checkout"}
-                  >
-                    {busy === "checkout" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
+                )}
+                {!isPro && !mostrarCartao && (
+                  <Button onClick={() => setMostrarCartao(true)}>
+                    <Sparkles className="h-4 w-4" />
                     {t("subscribe")}
                   </Button>
                 )}
               </div>
             </CardHeader>
-            <CardContent>
+
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <div className="rounded-lg border border-border/60 bg-background/45 p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -164,16 +230,72 @@ function BillingInner() {
                 <div className="rounded-lg border border-border/60 bg-background/45 p-3">
                   <div className="text-xs text-muted-foreground">{t("estimatedCost")}</div>
                   <p className="mt-1 text-2xl font-semibold text-foreground">
-                    US${info?.usageThisMonth.costUsd?.toFixed(2) ?? "0.00"}
+                    US$ {info?.usageThisMonth.costUsd?.toFixed(2) ?? "0.00"}
                   </p>
                 </div>
               </div>
-              {info?.currentPeriodEnd && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {t("renewsOn", {
-                    date: new Date(info.currentPeriodEnd).toLocaleDateString(),
-                  })}
+
+              {fimPeriodo && (
+                <p className="text-xs text-muted-foreground">
+                  {cancelada
+                    ? `Acesso até ${new Date(fimPeriodo).toLocaleDateString("pt-BR")}.`
+                    : t("renewsOn", {
+                        date: new Date(fimPeriodo).toLocaleDateString("pt-BR"),
+                      })}
                 </p>
+              )}
+
+              {assinatura?.legacy && (
+                <p className="rounded-lg border border-border/60 bg-background/45 p-3 text-xs text-muted-foreground">
+                  Esta assinatura foi criada no provedor anterior e continua
+                  sendo cobrada normalmente. Para trocar a forma de pagamento ou
+                  cancelar, fale com o suporte.
+                </p>
+              )}
+
+              {/* Assinar: cartao ou Pix automatico */}
+              {!isPro && mostrarCartao && (
+                <div className="space-y-4 rounded-xl border border-border/60 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CreditCard className="h-4 w-4 text-primary" /> Cartão de crédito
+                  </div>
+                  <PagouCardForm
+                    labelBotao={t("subscribe")}
+                    onSuccess={async (dados) => {
+                      const d = dados as { pending?: boolean };
+                      toast.success(
+                        d?.pending
+                          ? "Assinatura criada. Estamos confirmando o pagamento."
+                          : "Assinatura ativa!"
+                      );
+                      setMostrarCartao(false);
+                      await load();
+                    }}
+                  />
+
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="h-px flex-1 bg-border/60" /> ou{" "}
+                    <span className="h-px flex-1 bg-border/60" />
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={assinarPix}
+                    disabled={busy === "pix_sub"}
+                  >
+                    {busy === "pix_sub" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <QrCode className="h-4 w-4" />
+                    )}
+                    Assinar com Pix automático
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    No Pix automático a cobrança é autorizada uma vez e repetida
+                    todo mês pelo seu banco, sem cartão.
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -195,27 +317,42 @@ function BillingInner() {
                       {t("creditsCount", { n: pack.credits })}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      ${usd(pack.amountCents)}
+                      {brl(pack.amountCents)}
                     </p>
                     <Button
                       variant="outline"
                       className="mt-1"
-                      onClick={() =>
-                        redirectTo("/api/billing/credits", pack.id, { packId: pack.id })
-                      }
+                      onClick={() => comprarPack(pack)}
                       disabled={busy === pack.id}
                     >
                       {busy === pack.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : null}
-                      {t("buy")}
+                      ) : (
+                        <QrCode className="h-4 w-4" />
+                      )}
+                      Pagar no Pix
                     </Button>
                   </div>
                 ))}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                O Pix cai na hora. Os créditos entram assim que o pagamento é
+                confirmado.
+              </p>
             </CardContent>
           </Card>
         </>
+      )}
+
+      {pix && (
+        <PixDialog
+          cobranca={pix}
+          onPago={load}
+          onFechar={() => {
+            setPix(null);
+            load();
+          }}
+        />
       )}
     </div>
   );

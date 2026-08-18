@@ -13,8 +13,8 @@ import {
 interface Analytics {
   byAction: { action: string; costUsd: number; count: number; credits: number }[];
   byDay: { date: string; costUsd: number }[];
-  byMonth: { month: string; revenueUsd: number; newUsers: number }[];
-  revenue: { mrrUsd: number; creditSalesThisMonthUsd: number; revenueThisMonthUsd: number };
+  byMonth: { month: string; revenueBrl: number; newUsers: number }[];
+  revenue: { mrrBrl: number; creditSalesThisMonthBrl: number; revenueThisMonthBrl: number };
   cost: { thisMonthUsd: number };
   marginUsd: number;
 }
@@ -61,7 +61,7 @@ export default function AdminUsagePage() {
 
   const maxDay = Math.max(...(data?.byDay.map((d) => d.costUsd) || [0]), 0.0001);
   const maxAction = Math.max(...(data?.byAction.map((a) => a.costUsd) || [0]), 0.0001);
-  const maxMonthRevenue = Math.max(...(data?.byMonth.map((m) => m.revenueUsd) || [0]), 0.0001);
+  const maxMonthRevenue = Math.max(...(data?.byMonth.map((m) => m.revenueBrl) || [0]), 0.0001);
   const margin = data?.marginUsd ?? 0;
 
   return (
@@ -79,10 +79,10 @@ export default function AdminUsagePage() {
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Revenue (month)</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
-              ${data?.revenue.revenueThisMonthUsd.toFixed(2)}
+              ${data?.revenue.revenueThisMonthBrl.toFixed(2)}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              MRR ${data?.revenue.mrrUsd} + credits ${data?.revenue.creditSalesThisMonthUsd.toFixed(2)}
+              MRR R$ ${data?.revenue.mrrBrl} + créditos R$ ${data?.revenue.creditSalesThisMonthBrl.toFixed(2)}
             </p>
           </CardContent>
         </Card>
@@ -126,8 +126,8 @@ export default function AdminUsagePage() {
                 <div className="w-full flex-1 flex items-end">
                   <div
                     className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary"
-                    style={{ height: `${Math.max(4, (m.revenueUsd / maxMonthRevenue) * 130)}px` }}
-                    title={`${m.month}: $${m.revenueUsd}`}
+                    style={{ height: `${Math.max(4, (m.revenueBrl / maxMonthRevenue) * 130)}px` }}
+                    title={`${m.month}: R$ ${m.revenueBrl}`}
                   />
                 </div>
                 <span className="text-[10px] text-muted-foreground">{m.month.slice(5)}</span>
@@ -155,7 +155,7 @@ export default function AdminUsagePage() {
               <div
                 key={d.date}
                 className="group relative flex-1"
-                title={`${d.date}: $${d.costUsd.toFixed(3)}`}
+                title={`${d.date}: US$ ${d.costUsd.toFixed(3)}`}
               >
                 <div
                   className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary"

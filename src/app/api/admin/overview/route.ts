@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_PRICE_USD } from "@/lib/billing/plans";
+import { PRO_PRICE_BRL, USD_BRL_REPORTING } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -116,15 +116,16 @@ export async function GET() {
   const soma = (lista: typeof todasCompras) =>
     lista.reduce((t, c) => t + Number(c.amount_cents || 0), 0) / 100;
 
-  const creditoMesUsd = soma(noMes);
-  const creditoTotalUsd = soma(todasCompras);
-  const mrrUsd = proUsers * PRO_PRICE_USD;
+  const creditoMesBrl = soma(noMes);
+  const creditoTotalBrl = soma(todasCompras);
+  // Receita em BRL (Pagou); custo de IA em USD (Gemini). Nao somar.
+  const mrrBrl = proUsers * PRO_PRICE_BRL;
   const custoMes = Number(totalCostUsd.toFixed(2));
 
   const recentPurchases = todasCompras.slice(0, 12).map((c) => ({
     email: emailById.get(c.user_id) || c.user_id.slice(0, 8),
     credits: c.credits,
-    amountUsd: Number((Number(c.amount_cents || 0) / 100).toFixed(2)),
+    amountBrl: Number((Number(c.amount_cents || 0) / 100).toFixed(2)),
     currency: String(c.currency || "usd").toUpperCase(),
     createdAt: c.created_at,
   }));
@@ -150,15 +151,19 @@ export async function GET() {
       proUsers,
       withAccess,
       newUsersThisMonth,
-      mrrUsd,
+      mrrBrl,
       aiCostThisMonthUsd: custoMes,
       totalStores: stores?.length || 0,
-      creditRevenueMonthUsd: Number(creditoMesUsd.toFixed(2)),
-      creditRevenueTotalUsd: Number(creditoTotalUsd.toFixed(2)),
+      creditRevenueMonthBrl: Number(creditoMesBrl.toFixed(2)),
+      creditRevenueTotalBrl: Number(creditoTotalBrl.toFixed(2)),
       creditPurchasesTotal: todasCompras.length,
       // O numero que responde "isso da lucro?": tudo que entra no mes menos o
       // que a Gemini custou no mes.
-      grossMarginMonthUsd: Number((mrrUsd + creditoMesUsd - custoMes).toFixed(2)),
+      // custoMes vem do Gemini, em USD. Converte para BRL antes de subtrair,
+      // senao a margem soma moedas diferentes.
+      grossMarginMonthBrl: Number(
+        (mrrBrl + creditoMesBrl - custoMes * USD_BRL_REPORTING).toFixed(2)
+      ),
       payingUsers: new Set([
         ...users.filter((u) => u.plan === "pro").map((u) => u.id),
         ...todasCompras.map((c) => c.user_id),

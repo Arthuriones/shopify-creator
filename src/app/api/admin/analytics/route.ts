@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_PRICE_USD } from "@/lib/billing/plans";
+import { PRO_PRICE_BRL } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -88,20 +88,22 @@ export async function GET() {
     .sort((a, b) => b.costUsd - a.costUsd);
 
   const proUsers = (profiles || []).filter((p) => p.plan === "pro").length;
-  const mrrUsd = proUsers * PRO_PRICE_USD;
+  // Receita em BRL (Pagou). O custo de IA fica em USD: o Gemini cobra em
+  // dolar. Sao moedas diferentes e nao devem ser somadas.
+  const mrrBrl = proUsers * PRO_PRICE_BRL;
 
   // Credit sales + new signups grouped by month (last 6 months)
-  const monthlyMap = new Map<string, { revenueUsd: number; newUsers: number }>();
+  const monthlyMap = new Map<string, { revenueBrl: number; newUsers: number }>();
   for (let i = 0; i < 6; i++) {
     const d = new Date(now);
     d.setUTCMonth(d.getUTCMonth() - (5 - i));
     d.setUTCDate(1);
-    monthlyMap.set(d.toISOString().slice(0, 7), { revenueUsd: 0, newUsers: 0 });
+    monthlyMap.set(d.toISOString().slice(0, 7), { revenueBrl: 0, newUsers: 0 });
   }
   for (const p of purchases || []) {
     const month = String(p.created_at).slice(0, 7);
     const entry = monthlyMap.get(month);
-    if (entry) entry.revenueUsd += Number(p.amount_cents || 0) / 100;
+    if (entry) entry.revenueBrl += Number(p.amount_cents || 0) / 100;
   }
   for (const p of newProfiles || []) {
     const month = String(p.created_at).slice(0, 7);
@@ -111,30 +113,30 @@ export async function GET() {
   // Add MRR to current month
   const currentMonth = now.toISOString().slice(0, 7);
   const currentEntry = monthlyMap.get(currentMonth);
-  if (currentEntry) currentEntry.revenueUsd += mrrUsd;
+  if (currentEntry) currentEntry.revenueBrl += mrrBrl;
 
   const byMonth = [...monthlyMap.entries()].map(([month, v]) => ({
     month,
-    revenueUsd: Number(v.revenueUsd.toFixed(2)),
+    revenueBrl: Number(v.revenueBrl.toFixed(2)),
     newUsers: v.newUsers,
   }));
 
-  const creditSalesThisMonthUsd =
+  const creditSalesThisMonthBrl =
     (purchases || [])
       .filter((p) => String(p.created_at).slice(0, 7) === currentMonth)
       .reduce((s, p) => s + Number(p.amount_cents || 0), 0) / 100;
 
-  const revenueThisMonthUsd = mrrUsd + creditSalesThisMonthUsd;
-  const marginUsd = revenueThisMonthUsd - costThisMonthUsd;
+  const revenueThisMonthBrl = mrrBrl + creditSalesThisMonthBrl;
+  const marginUsd = revenueThisMonthBrl - costThisMonthUsd;
 
   return NextResponse.json({
     byAction,
     byDay,
     byMonth,
     revenue: {
-      mrrUsd,
-      creditSalesThisMonthUsd: Number(creditSalesThisMonthUsd.toFixed(2)),
-      revenueThisMonthUsd: Number(revenueThisMonthUsd.toFixed(2)),
+      mrrBrl,
+      creditSalesThisMonthBrl: Number(creditSalesThisMonthBrl.toFixed(2)),
+      revenueThisMonthBrl: Number(revenueThisMonthBrl.toFixed(2)),
     },
     cost: { thisMonthUsd: Number(costThisMonthUsd.toFixed(2)) },
     marginUsd: Number(marginUsd.toFixed(2)),
