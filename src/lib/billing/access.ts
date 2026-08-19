@@ -11,16 +11,34 @@ interface AccessProfile {
   plan?: string | null;
   access_granted?: boolean | null;
   free_clone_store_id?: string | null;
+  // Usados so para expirar quem pagou Pro por Pix avulso.
+  payment_provider?: string | null;
+  pagou_subscription_id?: string | null;
+  current_period_end?: string | null;
+}
+
+// Pro pago por Pix nao renova sozinho: nao ha assinatura na Pagou, so uma
+// cobranca que concedeu 30 dias. Se o prazo venceu, o plano no banco ainda diz
+// "pro" ate a faxina rodar — entao a validade e conferida aqui, na porta.
+//
+// A checagem NAO vale para assinatura de cartao: ali o current_period_end so
+// avanca quando o webhook chega, e um atraso da Pagou tiraria o acesso de quem
+// esta pagando em dia.
+function proPorPixVencido(p: AccessProfile): boolean {
+  const pagoPorPix =
+    p.plan === "pro" &&
+    p.payment_provider === "pagou" &&
+    !p.pagou_subscription_id;
+  if (!pagoPorPix) return false;
+  if (!p.current_period_end) return false;
+  return new Date(p.current_period_end).getTime() < Date.now();
 }
 
 // Acesso total: admin OU plano pro OU liberado manualmente. Sem limites.
 export function profileHasAccess(profile: AccessProfile | null): boolean {
   if (!profile) return false;
-  return (
-    profile.is_admin === true ||
-    profile.plan === "pro" ||
-    profile.access_granted === true
-  );
+  if (profile.is_admin === true || profile.access_granted === true) return true;
+  return profile.plan === "pro" && !proPorPixVencido(profile);
 }
 
 // Pode ENTRAR no app: tem acesso total, OU ainda nao usou a clonagem gratuita
@@ -39,7 +57,7 @@ export async function userHasAccess(userId: string): Promise<boolean> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("is_admin, plan, access_granted, free_clone_store_id")
+    .select("is_admin, plan, access_granted, free_clone_store_id, payment_provider, pagou_subscription_id, current_period_end")
     .eq("id", userId)
     .maybeSingle();
 
@@ -70,7 +88,7 @@ export async function checkAndConsumeFreeClone(
   const supabase = createAdminClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, plan, access_granted, free_clone_store_id")
+    .select("is_admin, plan, access_granted, free_clone_store_id, payment_provider, pagou_subscription_id, current_period_end")
     .eq("id", userId)
     .single();
 

@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { PagouCardForm } from "@/components/billing/pagou-card-form";
+import { AssinarPro } from "@/components/billing/assinar-pro";
 import { PixDialog, type CobrancaPix } from "@/components/billing/pix-dialog";
 
 interface BillingInfo {
@@ -258,30 +258,15 @@ function BillingInner() {
                 </p>
               )}
 
-              {/* Assinar: cartao ou Pix automatico */}
+              {/* Assinar: cartao (recorrente) ou Pix (30 dias) */}
               {!isPro && mostrarCartao && (
-                <div className="space-y-4 rounded-xl border border-border/60 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <CreditCard className="h-4 w-4 text-primary" /> Cartão de crédito
-                  </div>
-                  <PagouCardForm
-                    labelBotao={t("subscribe")}
-                    onSuccess={async (dados) => {
-                      const d = dados as { pending?: boolean };
-                      toast.success(
-                        d?.pending
-                          ? "Assinatura criada. Estamos confirmando o pagamento."
-                          : "Assinatura ativa!"
-                      );
+                <div className="rounded-xl border border-border/60 p-4">
+                  <AssinarPro
+                    onPronto={async () => {
                       setMostrarCartao(false);
                       await load();
                     }}
                   />
-
-                  <p className="text-[11px] text-muted-foreground">
-                    Cobrança mensal recorrente. Cancele quando quiser — o acesso
-                    segue até o fim do período já pago.
-                  </p>
                 </div>
               )}
             </CardContent>

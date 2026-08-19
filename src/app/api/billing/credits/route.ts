@@ -7,59 +7,55 @@ import {
   getTransaction,
   PagouError,
 } from "@/lib/billing/pagou";
-import { CREDIT_PACKS, CURRENCY, getCreditPack } from "@/lib/billing/plans";
-
-// A Pagou exige CPF/CNPJ do pagador em cobranca Pix. Validamos o digito
-// verificador aqui: um CPF invalido so seria rejeitado la, com 422 generico.
-function digitos(v: string): string {
-  return (v || "").replace(/\D/g, "");
-}
-
-function cpfValido(cpf: string): boolean {
-  // O guard de digitos repetidos nao e detalhe: 11111111111 PASSA no digito
-  // verificador. Sem ele, CPF falso so seria barrado la na Pagou, com 422.
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
-  for (const [ate, pos] of [[9, 10], [10, 11]] as const) {
-    let soma = 0;
-    for (let i = 0; i < ate; i++) soma += Number(cpf[i]) * (pos - i);
-    let d = (soma * 10) % 11;
-    if (d === 10) d = 0;
-    if (d !== Number(cpf[ate])) return false;
-  }
-  return true;
-}
-
-function cnpjValido(cnpj: string): boolean {
-  if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
-  const calc = (base: string) => {
-    let peso = base.length - 7;
-    let soma = 0;
-    for (let i = 0; i < base.length; i++) {
-      soma += Number(base[i]) * peso--;
-      if (peso < 2) peso = 9;
-    }
-    const r = soma % 11;
-    return r < 2 ? 0 : 11 - r;
-  };
-  return (
-    calc(cnpj.slice(0, 12)) === Number(cnpj[12]) &&
-    calc(cnpj.slice(0, 13)) === Number(cnpj[13])
-  );
-}
+import {
+  CREDIT_PACKS,
+  CURRENCY,
+  getCreditPack,
+  PRO_INCLUDED_CREDITS,
+  PRO_PRICE_CENTS,
+} from "@/lib/billing/plans";
+import { digitos, normalizarDocumento } from "@/lib/billing/documento";
 
 export const runtime = "nodejs";
 
-// GET -> lista os pacotes disponiveis (para a UI).
+// Um mes de Pro pago por Pix, tratado como se fosse um pacote. A Pagou so faz
+// recorrencia por cartao (pix_automatic vem UNSUPPORTED nesta conta), entao
+// este e o caminho para quem nao quer usar cartao. Nao renova sozinho.
+export const PRO_PIX_ID = "pro_month";
+
+function itemDe(packId: string) {
+  if (packId === PRO_PIX_ID) {
+    return {
+      id: PRO_PIX_ID,
+      kind: "pro_month" as const,
+      credits: PRO_INCLUDED_CREDITS,
+      amountCents: PRO_PRICE_CENTS,
+      nome: "xcart Pro — 30 dias",
+    };
+  }
+  const pack = getCreditPack(packId);
+  if (!pack) return null;
+  return {
+    id: pack.id,
+    kind: "credits" as const,
+    credits: pack.credits,
+    amountCents: pack.amountCents,
+    nome: `xcart — ${pack.label}`,
+  };
+}
+
+// GET -> pacotes disponiveis (para a UI).
 export async function GET() {
   return NextResponse.json({ packs: CREDIT_PACKS, currency: CURRENCY });
 }
 
 /**
- * POST { packId } -> gera uma cobranca Pix para recarregar creditos.
+ * POST { packId, document? } -> gera uma cobranca Pix.
  *
- * O Pix e assincrono: a recarga nasce PENDENTE e so vira credito quando a
- * Pagou confirmar o pagamento (webhook ou o polling de GET abaixo). Nunca
- * creditamos na criacao da cobranca.
+ * packId pode ser um pacote de creditos ou "pro_month" (30 dias de Pro).
+ *
+ * O Pix e assincrono: a compra nasce PENDENTE e so e aplicada quando a Pagou
+ * confirmar (webhook ou o PATCH abaixo). Nunca creditamos na criacao.
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -71,8 +67,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const pack = getCreditPack(typeof body.packId === "string" ? body.packId : "");
-  if (!pack) {
+  const item = itemDe(typeof body.packId === "string" ? body.packId : "");
+  if (!item) {
     return NextResponse.json({ error: "Pacote inválido." }, { status: 400 });
   }
 
@@ -81,71 +77,68 @@ export async function POST(request: NextRequest) {
   // CPF: usa o que ja esta salvo; se vier um novo no corpo, valida e guarda.
   const { data: perfil } = await admin
     .from("profiles")
-    .select("document_number, document_type")
+    .select("document_number")
     .eq("id", user.id)
     .maybeSingle();
 
   const informado = digitos(typeof body.document === "string" ? body.document : "");
-  const documento = informado || digitos(perfil?.document_number || "");
+  const bruto = informado || digitos(perfil?.document_number || "");
 
-  if (!documento) {
-    // O front usa isto para abrir o campo de CPF em vez de mostrar erro cru.
+  if (!bruto) {
+    // O front usa needsDocument para abrir o campo em vez de mostrar erro cru.
     return NextResponse.json(
       { error: "Informe seu CPF para gerar a cobrança Pix.", needsDocument: true },
       { status: 400 }
     );
   }
-  const tipo: "CPF" | "CNPJ" = documento.length > 11 ? "CNPJ" : "CPF";
-  const ok = tipo === "CPF" ? cpfValido(documento) : cnpjValido(documento);
-  if (!ok) {
+  const doc = normalizarDocumento(bruto);
+  if (!doc) {
     return NextResponse.json(
-      { error: `${tipo} inválido. Confira os números.`, needsDocument: true },
+      {
+        error: `${bruto.length > 11 ? "CNPJ" : "CPF"} inválido. Confira os números.`,
+        needsDocument: true,
+      },
       { status: 400 }
     );
   }
   if (informado && informado !== digitos(perfil?.document_number || "")) {
     await admin
       .from("profiles")
-      .update({ document_number: documento, document_type: tipo })
+      .update({ document_number: doc.number, document_type: doc.type })
       .eq("id", user.id);
   }
 
   try {
-    const customerId = await getOrCreateCustomer(user.id, user.email, null, {
-      type: tipo,
-      number: documento,
-    });
+    const customerId = await getOrCreateCustomer(user.id, user.email, null, doc);
 
     // Referencia unica: a Pagou devolve 409 DUPLICATE_EXTERNAL_REF se repetir,
     // o que impede cobrar duas vezes o mesmo clique.
-    const externalRef = `credits_${user.id}_${pack.id}_${Date.now()}`;
+    const externalRef = `${item.kind}_${user.id}_${item.id}_${Date.now()}`;
 
     const tx = await createPixTransaction({
-      amountCents: pack.amountCents,
+      amountCents: item.amountCents,
       currency: CURRENCY,
       externalRef,
       buyer: {
         id: customerId,
         name: user.email?.split("@")[0] || "Cliente xcart",
         email: user.email || `${user.id}@sem-email.xcart`,
-        document: { type: tipo, number: documento },
+        document: doc,
       },
-      produto: {
-        name: `xcart — ${pack.label}`,
-        price: pack.amountCents,
-      },
+      produto: { name: item.nome, price: item.amountCents },
       metadata: externalRef,
     });
 
-    // Registro pendente. O credito so entra em credit_pending_purchase().
+    // Registro pendente. A aplicacao acontece em apply_paid_purchase().
     const { error: insErr } = await admin.from("credit_purchases").insert({
       user_id: user.id,
       pagou_transaction_id: tx.id,
       provider: "pagou",
       method: "pix",
-      pack_id: pack.id,
-      credits: pack.credits,
-      amount_cents: pack.amountCents,
+      kind: item.kind,
+      pack_id: item.id,
+      credits: item.credits,
+      amount_cents: item.amountCents,
       currency: CURRENCY.toLowerCase(),
       status: "pending",
     });
@@ -160,8 +153,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       transactionId: tx.id,
       status: tx.status,
-      credits: pack.credits,
-      amountCents: pack.amountCents,
+      kind: item.kind,
+      credits: item.credits,
+      amountCents: item.amountCents,
       pix: {
         qrCode: tx.pix?.qr_code || null,
         expiresAt: tx.pix?.expiration_date || null,
@@ -176,7 +170,7 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("[billing/credits]", error);
-    return NextResponse.json({ error: "Falha ao gerar recarga." }, { status: 500 });
+    return NextResponse.json({ error: "Falha ao gerar cobrança." }, { status: 500 });
   }
 }
 
@@ -196,7 +190,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const transactionId = typeof body.transactionId === "string" ? body.transactionId : "";
+  const transactionId =
+    typeof body.transactionId === "string" ? body.transactionId : "";
   if (!transactionId) {
     return NextResponse.json({ error: "transactionId obrigatório." }, { status: 400 });
   }
@@ -206,7 +201,7 @@ export async function PATCH(request: NextRequest) {
   // A cobranca tem que ser deste usuario.
   const { data: compra } = await admin
     .from("credit_purchases")
-    .select("id, user_id, status, credits")
+    .select("id, user_id, status, kind")
     .eq("pagou_transaction_id", transactionId)
     .maybeSingle();
 
@@ -214,7 +209,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Cobrança não encontrada." }, { status: 404 });
   }
   if (compra.status === "paid") {
-    return NextResponse.json({ status: "paid", credited: true });
+    return NextResponse.json({ status: "paid", credited: true, kind: compra.kind });
   }
 
   try {
@@ -222,11 +217,15 @@ export async function PATCH(request: NextRequest) {
     if (tx.status !== "paid") {
       return NextResponse.json({ status: tx.status, credited: false });
     }
-    // Atomica e idempotente: se o webhook creditou antes, devolve false.
-    const { data: creditou } = await admin.rpc("credit_pending_purchase", {
+    // Atomica e idempotente: se o webhook aplicou antes, devolve false.
+    const { data: aplicou } = await admin.rpc("apply_paid_purchase", {
       p_transaction_id: transactionId,
     });
-    return NextResponse.json({ status: "paid", credited: creditou === true });
+    return NextResponse.json({
+      status: "paid",
+      credited: aplicou === true,
+      kind: compra.kind,
+    });
   } catch (error) {
     console.error("[billing/credits] PATCH", error);
     return NextResponse.json({ error: "Falha ao consultar." }, { status: 502 });

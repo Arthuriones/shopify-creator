@@ -15,7 +15,10 @@ import { Button } from "@/components/ui/button";
 const SCRIPT = "https://js.pagou.ai/payments/v3.js";
 
 interface PagouElements {
-  create(tipo: "card", opts?: Record<string, unknown>): { mount(seletor: string): void };
+  create(
+    tipo: "card",
+    opts?: { theme?: string; locale?: string; style?: Record<string, string> }
+  ): { mount(seletor: string): void };
   submit(opts: {
     createTransaction: (tokenData: { token: string }) => Promise<unknown>;
   }): Promise<
@@ -88,7 +91,25 @@ export function PagouCardForm({
           locale: "pt",
           origin: window.location.origin,
         });
-        elements.create("card", { theme: "default" }).mount("#pagou-card-element");
+        // O app forca tema escuro; o iframe do cartao vinha com o tema claro
+        // e destoava completamente. theme/style viram querystring do iframe.
+        elements
+          .create("card", {
+            theme: "dark",
+            style: {
+              colorBackground: "transparent",
+              colorText: "#fafafa",
+              colorTextPlaceholder: "#8b8b8b",
+              colorBorder: "#2e2e2e",
+              colorPrimary: "#7c5cff",
+              colorDanger: "#ef4444",
+              borderRadius: "10px",
+              fontFamily:
+                "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
+              fontSize: "15px",
+            },
+          })
+          .mount("#pagou-card-element");
         elementsRef.current = elements;
         setPronto(true);
       })
@@ -138,10 +159,9 @@ export function PagouCardForm({
 
   return (
     <div className="space-y-3">
-      <div
-        id="pagou-card-element"
-        className="min-h-[52px] rounded-lg border border-border/60 bg-background/45 p-3"
-      />
+      {/* O iframe tem altura fixa de 320px e desenha a propria moldura;
+          um border aqui viraria caixa dentro de caixa. */}
+      <div id="pagou-card-element" className="min-h-[320px] w-full" />
       {!pronto && !erro && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando formulário seguro…

@@ -140,7 +140,7 @@ async function tratarTransacao(id: string | null) {
   if (!compra) return; // transacao que nao e recarga de credito
 
   if (tx.status === "paid") {
-    await admin.rpc("credit_pending_purchase", { p_transaction_id: id });
+    await admin.rpc("apply_paid_purchase", { p_transaction_id: id });
     return;
   }
 

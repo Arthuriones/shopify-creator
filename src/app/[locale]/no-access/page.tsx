@@ -3,11 +3,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Lock, Sparkles } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { PagouCardForm } from "@/components/billing/pagou-card-form";
-import { PRO_PRICE_BRL } from "@/lib/billing/plans";
+import { AssinarPro } from "@/components/billing/assinar-pro";
 
 /**
  * Paywall. O layout do dashboard manda todo mundo sem acesso para ca, entao
@@ -42,25 +40,16 @@ export default function NoAccessPage() {
         </div>
 
         {mostrarCartao ? (
-          <div className="mt-6 space-y-3">
-            <div className="rounded-lg border border-border/60 bg-background/45 p-3 text-center">
-              <p className="text-sm text-muted-foreground">Plano Pro</p>
-              <p className="text-2xl font-semibold text-foreground">
-                R$ {PRO_PRICE_BRL}
-                <span className="text-sm font-normal text-muted-foreground">/mês</span>
-              </p>
-            </div>
-            <PagouCardForm
-              labelBotao="Assinar agora"
-              onSuccess={() => {
-                toast.success("Assinatura confirmada!");
+          <div className="mt-6">
+            <AssinarPro
+              onPronto={() =>
                 // Recarrega para o layout reavaliar o acesso e liberar o app.
-                setTimeout(() => window.location.replace("/dashboard"), 900);
-              }}
+                setTimeout(() => window.location.replace("/dashboard"), 900)
+              }
             />
             <button
               onClick={() => setMostrarCartao(false)}
-              className="w-full text-xs text-muted-foreground underline hover:text-foreground"
+              className="mt-3 w-full text-xs text-muted-foreground underline hover:text-foreground"
             >
               Voltar
             </button>
