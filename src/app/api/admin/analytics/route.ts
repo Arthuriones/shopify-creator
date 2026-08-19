@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRO_PRICE_BRL } from "@/lib/billing/plans";
+import { PRO_PRICE_BRL, USD_BRL_REPORTING } from "@/lib/billing/plans";
 
 export const runtime = "nodejs";
 
@@ -127,7 +127,10 @@ export async function GET() {
       .reduce((s, p) => s + Number(p.amount_cents || 0), 0) / 100;
 
   const revenueThisMonthBrl = mrrBrl + creditSalesThisMonthBrl;
-  const marginUsd = revenueThisMonthBrl - costThisMonthUsd;
+  // Receita entra em BRL (Pagou), custo sai em USD (Gemini). Converter antes
+  // de subtrair — senao a margem soma moedas diferentes.
+  const costThisMonthBrl = costThisMonthUsd * USD_BRL_REPORTING;
+  const marginBrl = revenueThisMonthBrl - costThisMonthBrl;
 
   return NextResponse.json({
     byAction,
@@ -138,7 +141,11 @@ export async function GET() {
       creditSalesThisMonthBrl: Number(creditSalesThisMonthBrl.toFixed(2)),
       revenueThisMonthBrl: Number(revenueThisMonthBrl.toFixed(2)),
     },
-    cost: { thisMonthUsd: Number(costThisMonthUsd.toFixed(2)) },
-    marginUsd: Number(marginUsd.toFixed(2)),
+    cost: {
+      thisMonthUsd: Number(costThisMonthUsd.toFixed(2)),
+      thisMonthBrl: Number(costThisMonthBrl.toFixed(2)),
+    },
+    marginBrl: Number(marginBrl.toFixed(2)),
+    usdBrlRate: USD_BRL_REPORTING,
   });
 }

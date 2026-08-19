@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { Check, Loader2, Lock, Settings2, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -35,13 +36,16 @@ interface AdminUser {
   hasAccess: boolean;
   createdAt: string | null;
   stores: { domain: string; name: string }[];
-  usageThisMonth: { costUsd: number; credits: number };
+  usageThisMonth: { costUsd: number; costBrl?: number; credits: number };
 }
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+
+const brlAdmin = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -187,13 +191,32 @@ export default function AdminUsersPage() {
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <div className="flex flex-col gap-0.5">
+                          {/* Eram spans: dava para ver a loja, nao para abrir.
+                              O nome leva a vitrine; o icone, ao admin dela. */}
                           {u.stores.slice(0, 3).map((store) => (
                             <span
                               key={store.domain}
-                              className="flex items-center gap-1 text-xs text-muted-foreground"
+                              className="flex items-center gap-1.5 text-xs"
                             >
-                              <StoreIcon className="h-3 w-3" />
-                              {store.name}
+                              <StoreIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <a
+                                href={`https://${store.domain}`}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                title={store.domain}
+                                className="truncate text-foreground hover:text-primary hover:underline"
+                              >
+                                {store.name}
+                              </a>
+                              <a
+                                href={`https://${store.domain}/admin`}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                title="Abrir admin da Shopify"
+                                className="shrink-0 text-muted-foreground hover:text-primary"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
                             </span>
                           ))}
                           {u.stores.length > 3 && (
@@ -205,7 +228,7 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="py-2.5 pr-3 text-foreground">
-                      ${u.usageThisMonth.costUsd.toFixed(2)}
+                      {brlAdmin(u.usageThisMonth.costBrl ?? 0)}
                     </td>
                     <td className="py-2.5 pr-3 text-muted-foreground text-xs">
                       {fmtDate(u.createdAt)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -17,7 +17,8 @@ interface AdminUser {
   plan: string;
   hasAccess: boolean;
   createdAt: string | null;
-  usageThisMonth: { costUsd: number; credits: number };
+  usageThisMonth: { costUsd: number; costBrl: number; credits: number };
+  stores: { domain: string; name: string }[];
 }
 
 interface Purchase {
@@ -36,6 +37,8 @@ interface Overview {
     newUsersThisMonth: number;
     mrrBrl: number;
     aiCostThisMonthUsd: number;
+    aiCostThisMonthBrl: number;
+    usdBrlRate: number;
     totalStores: number;
     creditRevenueMonthBrl: number;
     creditRevenueTotalBrl: number;
@@ -44,13 +47,52 @@ interface Overview {
     payingUsers: number;
   };
   recentPurchases: Purchase[];
-  revenueByMonth: { mes: string; creditoUsd: number; compras: number }[];
+  revenueByMonth: { mes: string; creditoBrl: number; compras: number }[];
   users: AdminUser[];
+}
+
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Antes o nome da loja era texto puro: dava para ver que o cliente tinha loja,
+// mas nao para abrir. Agora vai direto para a vitrine, e o icone ao lado leva
+// ao admin da Shopify daquela loja.
+function LojasDoUsuario({ lojas }: { lojas: { domain: string; name: string }[] }) {
+  if (!lojas?.length) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {lojas.slice(0, 3).map((loja) => (
+        <span key={loja.domain} className="flex items-center gap-1.5 text-xs">
+          <a
+            href={`https://${loja.domain}`}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={loja.domain}
+            className="truncate text-foreground hover:text-primary hover:underline"
+          >
+            {loja.name}
+          </a>
+          <a
+            href={`https://${loja.domain}/admin`}
+            target="_blank"
+            rel="noreferrer noopener"
+            title="Abrir admin da Shopify"
+            className="shrink-0 text-muted-foreground hover:text-primary"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </span>
+      ))}
+      {lojas.length > 3 && (
+        <span className="text-xs text-muted-foreground">+{lojas.length - 3}</span>
+      )}
+    </div>
+  );
 }
 
 function fmt(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export default function AdminOverviewPage() {
@@ -91,17 +133,22 @@ export default function AdminOverviewPage() {
   // cards na mesma fileira misturando receita, custo e contagem de usuario —
   // dava para olhar e nao saber se o mes tinha sido bom.
   const cardsDinheiro = [
-    { label: "MRR (assinaturas)", value: `R$ ${(s?.mrrBrl ?? 0).toFixed(2)}` },
-    { label: "Créditos (mês)", value: `R$ ${(s?.creditRevenueMonthBrl ?? 0).toFixed(2)}` },
+    { label: "MRR (assinaturas)", value: brl(s?.mrrBrl ?? 0) },
+    { label: "Créditos (mês)", value: brl(s?.creditRevenueMonthBrl ?? 0) },
     {
       label: "Receita do mês",
-      value: `R$ ${((s?.mrrBrl ?? 0) + (s?.creditRevenueMonthBrl ?? 0)).toFixed(2)}`,
+      value: brl((s?.mrrBrl ?? 0) + (s?.creditRevenueMonthBrl ?? 0)),
       highlight: true,
     },
-    { label: "Custo de IA (mês)", value: `-US$ ${(s?.aiCostThisMonthUsd ?? 0).toFixed(2)}` },
+    {
+      label: "Custo de IA (mês)",
+      value: `-${brl(s?.aiCostThisMonthBrl ?? 0)}`,
+      // O Gemini cobra em dolar; convertemos para o painel nao misturar moeda.
+      nota: `US$ ${(s?.aiCostThisMonthUsd ?? 0).toFixed(2)} · câmbio ${(s?.usdBrlRate ?? 0).toFixed(2)}`,
+    },
     {
       label: "Margem do mês",
-      value: `${margem < 0 ? "-" : ""}R$ ${Math.abs(margem).toFixed(2)}`,
+      value: `${margem < 0 ? "-" : ""}${brl(Math.abs(margem))}`,
       tone: margem < 0 ? "ruim" : "bom",
     },
   ];
@@ -117,7 +164,7 @@ export default function AdminOverviewPage() {
 
   const compras = data?.recentPurchases ?? [];
   const porMes = data?.revenueByMonth ?? [];
-  const maxMes = Math.max(1, ...porMes.map((m) => m.creditoUsd));
+  const maxMes = Math.max(1, ...porMes.map((m) => m.creditoBrl));
 
   const topUsers = (data?.users || [])
     .filter((u) => u.usageThisMonth.costUsd > 0)
@@ -131,9 +178,9 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Overview</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Visão geral</h1>
         <p className="text-sm text-muted-foreground">
-          Users, revenue and AI cost metrics.
+          Usuários, receita e custo de IA. Tudo em reais.
         </p>
       </div>
 
@@ -157,6 +204,9 @@ export default function AdminOverviewPage() {
                 >
                   {c.value}
                 </p>
+                {"nota" in c && c.nota ? (
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{c.nota}</p>
+                ) : null}
               </CardContent>
             </Card>
           ))}
@@ -182,7 +232,7 @@ export default function AdminOverviewPage() {
           <CardHeader>
             <CardTitle>Vendas de crédito</CardTitle>
             <CardDescription>
-              {s?.creditPurchasesTotal ?? 0} compras, R$ ${(s?.creditRevenueTotalBrl ?? 0).toFixed(2)} no total
+              {s?.creditPurchasesTotal ?? 0} compras, {brl(s?.creditRevenueTotalBrl ?? 0)} no total
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -204,7 +254,7 @@ export default function AdminOverviewPage() {
                       <td className="py-2 pr-3 text-foreground">{c.email}</td>
                       <td className="py-2 pr-3 text-muted-foreground">{c.credits}</td>
                       <td className="py-2 pr-3 font-medium text-foreground">
-                        R$ ${c.amountBrl.toFixed(2)}
+                        {brl(c.amountBrl)}
                       </td>
                       <td className="py-2 text-muted-foreground">{fmt(c.createdAt)}</td>
                     </tr>
@@ -227,11 +277,11 @@ export default function AdminOverviewPage() {
                 <div className="h-5 flex-1 overflow-hidden rounded bg-muted/40">
                   <div
                     className="h-full rounded bg-primary/70"
-                    style={{ width: `${Math.max(m.creditoUsd > 0 ? 4 : 0, (m.creditoUsd / maxMes) * 100)}%` }}
+                    style={{ width: `${Math.max(m.creditoBrl > 0 ? 4 : 0, (m.creditoBrl / maxMes) * 100)}%` }}
                   />
                 </div>
                 <span className="w-24 shrink-0 text-right text-xs text-foreground">
-                  ${m.creditoUsd.toFixed(2)}
+                  {brl(m.creditoBrl)}
                   <span className="ml-1 text-muted-foreground">({m.compras})</span>
                 </span>
               </div>
@@ -259,9 +309,10 @@ export default function AdminOverviewPage() {
                 <thead>
                   <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3">Email</th>
-                    <th className="py-2 pr-3">Plan</th>
-                    <th className="py-2 pr-3">Credits</th>
-                    <th className="py-2 pr-3">AI cost</th>
+                    <th className="py-2 pr-3">Plano</th>
+                    <th className="py-2 pr-3">Lojas</th>
+                    <th className="py-2 pr-3">Créditos</th>
+                    <th className="py-2 pr-3">Custo de IA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -273,9 +324,12 @@ export default function AdminOverviewPage() {
                         </Link>
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground">{u.plan}</td>
+                      <td className="py-2 pr-3">
+                        <LojasDoUsuario lojas={u.stores} />
+                      </td>
                       <td className="py-2 pr-3 text-foreground">{u.usageThisMonth.credits}</td>
                       <td className="py-2 pr-3 text-foreground">
-                        ${u.usageThisMonth.costUsd.toFixed(2)}
+                        {brl(u.usageThisMonth.costBrl)}
                       </td>
                     </tr>
                   ))}
@@ -299,8 +353,8 @@ export default function AdminOverviewPage() {
                 <thead>
                   <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-3">Email</th>
-                    <th className="py-2 pr-3">Plan</th>
-                    <th className="py-2 pr-3">Signed up</th>
+                    <th className="py-2 pr-3">Plano</th>
+                    <th className="py-2 pr-3">Cadastro</th>
                   </tr>
                 </thead>
                 <tbody>

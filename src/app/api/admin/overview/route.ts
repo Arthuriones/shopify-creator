@@ -97,6 +97,9 @@ export async function GET() {
         stores: storesByUser.get(p.id) || [],
         usageThisMonth: {
           costUsd: Number(usageAgg.costUsd.toFixed(4)),
+          // O Gemini cobra em dolar; o painel mostra tudo em real para nao
+          // obrigar o Arthur a converter de cabeca.
+          costBrl: Number((usageAgg.costUsd * USD_BRL_REPORTING).toFixed(2)),
           credits: usageAgg.credits,
         },
         createdAt: p.created_at,
@@ -131,17 +134,17 @@ export async function GET() {
   }));
 
   // Receita por mes, ultimos 6, para enxergar tendencia em vez de um numero solto.
-  const porMes = new Map<string, { creditoUsd: number; compras: number }>();
+  const porMes = new Map<string, { creditoBrl: number; compras: number }>();
   for (let i = 5; i >= 0; i--) {
     const d = new Date(startOfMonth);
     d.setUTCMonth(d.getUTCMonth() - i);
-    porMes.set(d.toISOString().slice(0, 7), { creditoUsd: 0, compras: 0 });
+    porMes.set(d.toISOString().slice(0, 7), { creditoBrl: 0, compras: 0 });
   }
   for (const c of todasCompras) {
     const k = String(c.created_at).slice(0, 7);
     const agg = porMes.get(k);
     if (!agg) continue;
-    agg.creditoUsd += Number(c.amount_cents || 0) / 100;
+    agg.creditoBrl += Number(c.amount_cents || 0) / 100;
     agg.compras += 1;
   }
 
@@ -153,6 +156,8 @@ export async function GET() {
       newUsersThisMonth,
       mrrBrl,
       aiCostThisMonthUsd: custoMes,
+      aiCostThisMonthBrl: Number((custoMes * USD_BRL_REPORTING).toFixed(2)),
+      usdBrlRate: USD_BRL_REPORTING,
       totalStores: stores?.length || 0,
       creditRevenueMonthBrl: Number(creditoMesBrl.toFixed(2)),
       creditRevenueTotalBrl: Number(creditoTotalBrl.toFixed(2)),
@@ -172,7 +177,7 @@ export async function GET() {
     recentPurchases,
     revenueByMonth: [...porMes.entries()].map(([mes, v]) => ({
       mes,
-      creditoUsd: Number(v.creditoUsd.toFixed(2)),
+      creditoBrl: Number(v.creditoBrl.toFixed(2)),
       compras: v.compras,
     })),
     users,

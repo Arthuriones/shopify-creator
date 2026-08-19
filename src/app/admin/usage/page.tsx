@@ -15,8 +15,9 @@ interface Analytics {
   byDay: { date: string; costUsd: number }[];
   byMonth: { month: string; revenueBrl: number; newUsers: number }[];
   revenue: { mrrBrl: number; creditSalesThisMonthBrl: number; revenueThisMonthBrl: number };
-  cost: { thisMonthUsd: number };
-  marginUsd: number;
+  cost: { thisMonthUsd: number; thisMonthBrl: number };
+  marginBrl: number;
+  usdBrlRate: number;
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -27,6 +28,9 @@ const ACTION_LABEL: Record<string, string> = {
   optimize: "Optimization",
   other: "Other",
 };
+
+const brlU = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function AdminUsagePage() {
   const [data, setData] = useState<Analytics | null>(null);
@@ -62,7 +66,7 @@ export default function AdminUsagePage() {
   const maxDay = Math.max(...(data?.byDay.map((d) => d.costUsd) || [0]), 0.0001);
   const maxAction = Math.max(...(data?.byAction.map((a) => a.costUsd) || [0]), 0.0001);
   const maxMonthRevenue = Math.max(...(data?.byMonth.map((m) => m.revenueBrl) || [0]), 0.0001);
-  const margin = data?.marginUsd ?? 0;
+  const margin = data?.marginBrl ?? 0;
 
   return (
     <div className="space-y-6">
@@ -77,26 +81,31 @@ export default function AdminUsagePage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Revenue (month)</p>
+            <p className="text-xs text-muted-foreground">Receita (mês)</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
-              ${data?.revenue.revenueThisMonthBrl.toFixed(2)}
+              {brlU(data?.revenue.revenueThisMonthBrl ?? 0)}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              MRR R$ ${data?.revenue.mrrBrl} + créditos R$ ${data?.revenue.creditSalesThisMonthBrl.toFixed(2)}
+              MRR {brlU(data?.revenue.mrrBrl ?? 0)} + créditos{" "}
+              {brlU(data?.revenue.creditSalesThisMonthBrl ?? 0)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">AI cost (month)</p>
+            <p className="text-xs text-muted-foreground">Custo de IA (mês)</p>
             <p className="mt-1 text-2xl font-semibold text-foreground">
-              ${data?.cost.thisMonthUsd.toFixed(2)}
+              {brlU(data?.cost.thisMonthBrl ?? 0)}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              US$ {(data?.cost.thisMonthUsd ?? 0).toFixed(2)} · câmbio{" "}
+              {(data?.usdBrlRate ?? 0).toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Margin (month)</p>
+            <p className="text-xs text-muted-foreground">Margem (mês)</p>
             <p className={`mt-1 text-2xl font-semibold ${margin >= 0 ? "text-primary" : "text-destructive"}`}>
               ${margin.toFixed(2)}
             </p>
