@@ -103,6 +103,9 @@ export async function POST(request: NextRequest) {
       status: sub.status,
       currentPeriodEnd: sub.currentPeriodEnd || null,
       cardLast4: sub.cardLast4 || null,
+      // Devolvida ao Payment Element: e o objeto que ele sabe resolver
+      // (inclusive 3DS na primeira cobranca).
+      transaction: sub.transactions?.[0] || null,
       // incomplete = a Pagou ainda esta processando a primeira cobranca;
       // o webhook confirma depois.
       pending: sub.status === "incomplete",

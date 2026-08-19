@@ -18,7 +18,15 @@ interface PagouElements {
   create(tipo: "card", opts?: Record<string, unknown>): { mount(seletor: string): void };
   submit(opts: {
     createTransaction: (tokenData: { token: string }) => Promise<unknown>;
-  }): Promise<{ error?: { message?: string } } | undefined>;
+  }): Promise<
+    | {
+        // O SDK devolve status terminal ou requires_action; error vem como
+        // string em erro de tokenizacao e como objeto vindo da API.
+        status?: string;
+        error?: string | { message?: string };
+      }
+    | undefined
+  >;
 }
 interface PagouGlobal {
   setEnvironment(env: "sandbox" | "production"): void;
@@ -108,10 +116,19 @@ export function PagouCardForm({
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "Falha ao assinar.");
           onSuccess(data);
-          return data;
+          // O SDK passa este retorno para resolvePayment(), que espera uma
+          // TRANSACAO (le id/status/next_action). Devolver a assinatura faria
+          // ele tratar 3DS com o objeto errado.
+          return data.transaction || { id: data.subscriptionId, status: data.status };
         },
       });
-      if (resultado?.error?.message) setErro(resultado.error.message);
+      // O SDK devolve { status, error } — error pode ser string ou objeto.
+      const err = resultado?.error as unknown;
+      const msg =
+        typeof err === "string" ? err : (err as { message?: string })?.message;
+      if (msg) setErro(msg);
+      else if (resultado?.status === "requires_action")
+        setErro("O banco pediu autenticação adicional. Tente outro cartão.");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Falha ao processar o cartão.");
     } finally {

@@ -87,25 +87,6 @@ function BillingInner() {
   }, [load]);
 
   // --- assinatura ---------------------------------------------------------
-  async function assinarPix() {
-    setBusy("pix_sub");
-    try {
-      const res = await fetch("/api/billing/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method: "pix_automatic" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || tc("fail"));
-      toast.success("Assinatura criada. A cobrança recorrente vai pelo Pix.");
-      await load();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : tc("fail"));
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function cancelar() {
     if (
       !confirm(
@@ -297,27 +278,9 @@ function BillingInner() {
                     }}
                   />
 
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="h-px flex-1 bg-border/60" /> ou{" "}
-                    <span className="h-px flex-1 bg-border/60" />
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={assinarPix}
-                    disabled={busy === "pix_sub"}
-                  >
-                    {busy === "pix_sub" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <QrCode className="h-4 w-4" />
-                    )}
-                    Assinar com Pix automático
-                  </Button>
                   <p className="text-[11px] text-muted-foreground">
-                    No Pix automático a cobrança é autorizada uma vez e repetida
-                    todo mês pelo seu banco, sem cartão.
+                    Cobrança mensal recorrente. Cancele quando quiser — o acesso
+                    segue até o fim do período já pago.
                   </p>
                 </div>
               )}

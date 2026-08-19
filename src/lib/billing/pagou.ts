@@ -248,6 +248,9 @@ export interface PagouSubscription {
   canceledAt?: string | null;
   cardLast4?: string | null;
   metadata?: Record<string, unknown> | null;
+  // O Payment Element espera uma TRANSACAO de volta do callback, nao a
+  // assinatura: e por ela que ele resolve 3DS e o desfecho da 1a cobranca.
+  transactions?: Array<{ id?: string; status?: string; next_action?: unknown }> | null;
 }
 
 // Cartao: precisa do token pgct_ vindo do Payment Element.
