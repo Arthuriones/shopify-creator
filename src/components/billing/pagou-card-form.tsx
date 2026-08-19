@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // ============================================================================
@@ -17,7 +17,11 @@ const SCRIPT = "https://js.pagou.ai/payments/v3.js";
 interface PagouElements {
   create(
     tipo: "card",
-    opts?: { theme?: string; locale?: string; style?: Record<string, string> }
+    opts?: {
+      theme?: "default" | "night" | "flat" | "soft";
+      locale?: string;
+      style?: Record<string, string | Record<string, string>>;
+    }
   ): { mount(seletor: string): void };
   submit(opts: {
     createTransaction: (tokenData: { token: string }) => Promise<unknown>;
@@ -91,22 +95,35 @@ export function PagouCardForm({
           locale: "pt",
           origin: window.location.origin,
         });
-        // O app forca tema escuro; o iframe do cartao vinha com o tema claro
-        // e destoava completamente. theme/style viram querystring do iframe.
+        // Os temas aceitos sao default, night, flat e soft — NAO existe
+        // "dark": qualquer valor desconhecido cai em "default", que e claro.
+        // Era por isso que o formulario aparecia branco dentro do app escuro.
+        //
+        // As chaves de style abaixo sao as que o elemento realmente le
+        // (base/focus/invalid/placeholder/cellBackground/labelColor/
+        // defaultBorder). Os valores vem da paleta do app, convertidos de
+        // oklch para hex porque o iframe aplica as cores inline.
         elements
           .create("card", {
-            theme: "dark",
+            theme: "night",
+            locale: "pt",
             style: {
-              colorBackground: "transparent",
-              colorText: "#fafafa",
-              colorTextPlaceholder: "#8b8b8b",
-              colorBorder: "#2e2e2e",
-              colorPrimary: "#7c5cff",
-              colorDanger: "#ef4444",
-              borderRadius: "10px",
-              fontFamily:
-                "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
-              fontSize: "15px",
+              base: {
+                color: "#eff2f6",
+                fontFamily:
+                  "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+                fontSize: "15px",
+                letterSpacing: "0",
+              },
+              placeholder: { color: "#8b93a0" },
+              focus: { borderColor: "#566be9" },
+              invalid: { color: "#ea3c3f" },
+              // Campo um tom acima da superficie do cartao: em UI escura e o
+              // que faz o input parecer clicavel.
+              cellBackground: "#1a1e27",
+              focusBackground: "#1a1e27",
+              labelColor: "#8b93a0",
+              defaultBorder: "#282e39",
             },
           })
           .mount("#pagou-card-element");
@@ -158,23 +175,40 @@ export function PagouCardForm({
   }
 
   return (
-    <div className="space-y-3">
-      {/* O iframe tem altura fixa de 320px e desenha a propria moldura;
-          um border aqui viraria caixa dentro de caixa. */}
-      <div id="pagou-card-element" className="min-h-[320px] w-full" />
+    <div className="space-y-4">
+      {/* O iframe tem 320px fixos e desenha os proprios campos. O respiro
+          precisa vir daqui: sem ele o formulario encostava nas bordas. */}
+      <div className="rounded-xl border border-border/60 bg-background/40 px-3 py-1">
+        <div id="pagou-card-element" className="min-h-[320px] w-full" />
+      </div>
+
       {!pronto && !erro && (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando formulário seguro…
+        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Carregando formulário seguro…
         </p>
       )}
-      {erro && <p className="text-xs text-destructive">{erro}</p>}
-      <Button onClick={enviar} disabled={!pronto || enviando} className="w-full">
+
+      {erro && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <p className="text-xs leading-relaxed text-destructive">{erro}</p>
+        </div>
+      )}
+
+      <Button
+        onClick={enviar}
+        disabled={!pronto || enviando}
+        size="lg"
+        className="w-full"
+      >
         {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
         {labelBotao}
       </Button>
-      <p className="text-[11px] text-muted-foreground">
-        Os dados do cartão são digitados em um campo da Pagou e não passam pelos
-        nossos servidores.
+
+      <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Dados processados pela Pagou — não passam pelos nossos servidores
       </p>
     </div>
   );
