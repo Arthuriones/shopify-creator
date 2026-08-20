@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Copy,
@@ -60,6 +61,19 @@ interface DestinationResult {
   failedDetails?: { sourceHandle: string; error: string }[];
 }
 
+// Diagnostico devolvido por connect-by-sku. Sem isto o usuario ligava uma
+// rota com 27% de cobertura sem ver nada de errado: o wizard so mostrava
+// "X conexoes", que parece sucesso mesmo quando 3 de cada 4 clientes caem no
+// checkout errado.
+interface DiagnosticoRota {
+  coveragePercent: number;
+  missingSkuCount: number;
+  duplicateSkuCount: number;
+  duplicateSkus: string[];
+  warnings: string[];
+  safeToEnable: boolean;
+}
+
 interface ConnectStoresWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -93,6 +107,9 @@ export function ConnectStoresWizard({
   );
   const [reuseFromStoreId, setReuseFromStoreId] = useState("");
   const [reuseMatched, setReuseMatched] = useState<number | null>(null);
+  const [diagnostico, setDiagnostico] = useState<DiagnosticoRota | null>(null);
+  const [routeId, setRouteId] = useState("");
+  const [ligando, setLigando] = useState(false);
 
   // Passo 1
   const [sourceStoreId, setSourceStoreId] = useState("");
@@ -545,12 +562,28 @@ export function ConnectStoresWizard({
           );
         }
         setReuseMatched(data.matchedCount || 0);
+        setDiagnostico({
+          coveragePercent: data.coveragePercent ?? 100,
+          missingSkuCount: data.missingSkuCount ?? 0,
+          duplicateSkuCount: data.duplicateSkuCount ?? 0,
+          duplicateSkus: data.duplicateSkus || [],
+          warnings: data.warnings || [],
+          safeToEnable: data.safeToEnable !== false,
+        });
         setRouteName(name);
+        setRouteId(data.route.id || "");
         setRouteToken(data.route.public_token);
         onRouteCreated?.();
-        toast.success(
-          `${data.matchedCount || 0} variantes conectadas por SKU.`
-        );
+        // Rota incompleta nao e "sucesso": avisa com o tom certo.
+        if (data.safeToEnable === false) {
+          toast.warning(
+            `Rota criada DESLIGADA — só ${data.coveragePercent ?? 0}% das variantes casaram.`
+          );
+        } else {
+          toast.success(
+            `${data.matchedCount || 0} variantes conectadas por SKU.`
+          );
+        }
         return;
       }
 
@@ -583,6 +616,31 @@ export function ConnectStoresWizard({
       setStep(wizardMode === "connect" ? 1 : 2);
     } finally {
       setCreatingRoute(false);
+    }
+  }
+
+  // O usuario pode discordar do diagnostico e ligar assim mesmo — o que nao
+  // pode e ligar sem ter visto o aviso.
+  async function ligarMesmoAssim() {
+    if (!routeId || ligando) return;
+    setLigando(true);
+    try {
+      const res = await fetch("/api/checkout-routes/toggle", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: routeId, enabled: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao ligar a rota.");
+      setDiagnostico((d) => (d ? { ...d, safeToEnable: true } : d));
+      onRouteCreated?.();
+      toast.success("Rota ligada.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao ligar a rota."
+      );
+    } finally {
+      setLigando(false);
     }
   }
 
@@ -1340,12 +1398,77 @@ export function ConnectStoresWizard({
                     Rota <span className="font-semibold">{routeName}</span> criada
                   </span>
                   <Badge variant="secondary" className="ml-auto rounded-md">
-                    {wizardMode === "reuse"
+                    {wizardMode === "reuse" || wizardMode === "connect"
                       ? reuseMatched ?? 0
                       : Object.keys(destinationResult?.variantMap || {}).length}{" "}
                     conexões
                   </Badge>
                 </div>
+
+                {diagnostico && diagnostico.warnings.length > 0 && (
+                  <div
+                    className={cn(
+                      "space-y-2 rounded-lg border p-3",
+                      diagnostico.safeToEnable
+                        ? "border-amber-500/30 bg-amber-500/8"
+                        : "border-destructive/40 bg-destructive/10"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle
+                        className={cn(
+                          "h-4 w-4 shrink-0",
+                          diagnostico.safeToEnable
+                            ? "text-amber-500"
+                            : "text-destructive"
+                        )}
+                      />
+                      <p className="text-sm font-semibold text-foreground">
+                        {diagnostico.safeToEnable
+                          ? `Rota ligada, mas com ${diagnostico.coveragePercent}% de cobertura`
+                          : `Rota criada DESLIGADA — ${diagnostico.coveragePercent}% de cobertura`}
+                      </p>
+                    </div>
+                    <ul className="space-y-1 pl-6 text-xs leading-relaxed text-muted-foreground">
+                      {diagnostico.warnings.map((aviso) => (
+                        <li key={aviso} className="list-disc">
+                          {aviso}
+                        </li>
+                      ))}
+                    </ul>
+                    {diagnostico.duplicateSkus.length > 0 && (
+                      <p className="pl-6 font-mono text-[11px] text-muted-foreground">
+                        SKUs repetidos: {diagnostico.duplicateSkus.join(", ")}
+                        {diagnostico.duplicateSkuCount >
+                          diagnostico.duplicateSkus.length &&
+                          ` (+${
+                            diagnostico.duplicateSkuCount -
+                            diagnostico.duplicateSkus.length
+                          })`}
+                      </p>
+                    )}
+                    <p className="pl-6 text-xs text-foreground">
+                      {diagnostico.missingSkuCount > 0
+                        ? "Preencha o SKU das variantes da vitrine e rode o assistente de novo — o roteamento casa só por SKU."
+                        : "Confira os produtos apontados acima antes de mandar tráfego."}
+                    </p>
+                    {!diagnostico.safeToEnable && routeId && (
+                      <div className="pl-6">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={ligarMesmoAssim}
+                          disabled={ligando}
+                        >
+                          {ligando && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          )}
+                          Ligar mesmo assim
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

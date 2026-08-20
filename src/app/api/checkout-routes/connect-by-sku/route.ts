@@ -23,6 +23,9 @@ interface FlatVariant {
   id: string;
   sku: string | null;
   label: string;
+  // Usado para detectar o mesmo SKU em produtos DIFERENTES, que faz o cliente
+  // ser roteado para o produto errado.
+  productId: string;
 }
 
 function normalizeKey(value: string) {
@@ -41,6 +44,7 @@ function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
         id: variant.id,
         sku: variant.sku?.trim() || null,
         label: `${product.title} ${optionLabel}`.trim(),
+        productId: product.id || product.title,
       });
     }
   }
@@ -169,6 +173,61 @@ export async function POST(request: NextRequest) {
       else matchedByLabel += 1;
     }
 
+    // ------------------------------------------------------------------
+    // Diagnostico antes de ligar a rota.
+    //
+    // Um usuario ligou uma rota com 27% de cobertura e o app nao avisou nada:
+    // 3 em cada 4 clientes dele nao eram redirecionados e ninguem sabia por
+    // que. Estes tres numeros explicam praticamente todos os casos.
+    // ------------------------------------------------------------------
+    const semSku = sourceVariants.filter((v) => !v.sku).length;
+
+    // SKU repetido entre produtos DIFERENTES da vitrine e o pior caso: nao e
+    // "nao roteia", e "roteia para o produto errado" — o cliente paga por um
+    // item e recebe outro.
+    const produtosPorSku = new Map<string, Set<string>>();
+    for (const v of sourceVariants) {
+      if (!v.sku) continue;
+      const chave = v.sku.toLowerCase();
+      if (!produtosPorSku.has(chave)) produtosPorSku.set(chave, new Set());
+      produtosPorSku.get(chave)!.add(v.productId);
+    }
+    const skusDuplicados = [...produtosPorSku.entries()]
+      .filter(([, produtos]) => produtos.size > 1)
+      .map(([sku]) => sku);
+
+    const cobertura =
+      sourceVariants.length > 0
+        ? Object.keys(variantMap).length / sourceVariants.length
+        : 0;
+
+    const avisos: string[] = [];
+    if (semSku > 0) {
+      avisos.push(
+        `${semSku} variante(s) da vitrine estao sem SKU e nunca vao rotear. O roteamento casa exclusivamente por SKU.`
+      );
+    }
+    if (skusDuplicados.length > 0) {
+      avisos.push(
+        `${skusDuplicados.length} SKU(s) se repetem em produtos diferentes da vitrine. Isso manda o cliente para o produto ERRADO no checkout. Corrija antes de usar.`
+      );
+    }
+    if (cobertura < 1 && sourceVariants.length > 0) {
+      avisos.push(
+        `Apenas ${Math.round(cobertura * 100)}% das variantes tem destino. O resto cai no checkout da vitrine.`
+      );
+    }
+    if (matchedByLabel > 0) {
+      avisos.push(
+        `${matchedByLabel} variante(s) casaram pelo nome, nao pelo SKU. Se um titulo mudar, essas param de rotear.`
+      );
+    }
+
+    // Abaixo deste patamar a rota nasce DESLIGADA: ligar do jeito que esta
+    // manda a maior parte do trafego para o checkout errado, em silencio.
+    const COBERTURA_MINIMA = 0.9;
+    const seguro = cobertura >= COBERTURA_MINIMA && skusDuplicados.length === 0;
+
     let route: { id?: string; public_token?: string } | null = null;
     if (createRoute && Object.keys(variantMap).length > 0) {
       const { data, error } = await supabase
@@ -180,7 +239,9 @@ export async function POST(request: NextRequest) {
           name,
           mode: "enterprise_static",
           public_token: randomUUID(),
-          enabled: true,
+          // Rota ruim nasce desligada, para o usuario ver o aviso antes de
+          // colocar trafego em cima.
+          enabled: seguro,
           sku_map: skuMap,
           variant_map: variantMap,
           settings: { generatedBy: "connect_by_sku" },
@@ -203,6 +264,14 @@ export async function POST(request: NextRequest) {
       matchedBySku,
       matchedByLabel,
       unmatchedCount: unmatched.length,
+      // --- diagnostico ---
+      coveragePercent: Math.round(cobertura * 100),
+      missingSkuCount: semSku,
+      duplicateSkus: skusDuplicados.slice(0, 20),
+      duplicateSkuCount: skusDuplicados.length,
+      warnings: avisos,
+      safeToEnable: seguro,
+      enabled: seguro,
       skuMap,
       variantMap,
       route,
