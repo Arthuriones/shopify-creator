@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getProducts, type ShopifyCredentials } from "@/lib/shopify/client";
+import {
+  getProducts,
+  updateVariantSkus,
+  type ShopifyCredentials,
+} from "@/lib/shopify/client";
+import { normalizarSkus } from "@/lib/shopify/sku-stamp";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -142,6 +147,22 @@ export async function POST(request: NextRequest) {
       getAllProducts(targetCreds),
     ]);
 
+    // ------------------------------------------------------------------
+    // Antes de casar: garante que a vitrine tem SKU unico em toda variante.
+    //
+    // Produto criado na mao no Shopify vem sem SKU e nunca rotearia. Em vez
+    // de acusar o problema e mandar o lojista preencher tudo na mao, o app
+    // carimba um SKU neutro e segue. SKU repetido tambem e corrigido aqui:
+    // repetido nao e "nao roteia", e "roteia pro produto errado".
+    // ------------------------------------------------------------------
+    const carimbo = await normalizarSkus(sourceCreds, sourceProducts);
+    for (const product of sourceProducts) {
+      for (const variant of product.variants?.nodes || []) {
+        const final = carimbo.skuPorVariante.get(variant.id);
+        if (final) variant.sku = final;
+      }
+    }
+
     const sourceVariants = flattenVariants(sourceProducts);
     const targetVariants = flattenVariants(targetProducts);
 
@@ -158,6 +179,11 @@ export async function POST(request: NextRequest) {
     let matchedByLabel = 0;
     const unmatched: string[] = [];
 
+    // Par casado pelo NOME cujo destino esta sem SKU: grava o SKU da vitrine
+    // no destino. Da proxima vez o par casa por SKU e para de depender do
+    // titulo — que a neutralizacao reescreve.
+    const propagar = new Map<string, { variantId: string; sku: string }[]>();
+
     for (const variant of sourceVariants) {
       const bySku = variant.sku
         ? targetBySku.get(variant.sku.toLowerCase())
@@ -169,8 +195,27 @@ export async function POST(request: NextRequest) {
       }
       variantMap[variant.id] = target.id;
       if (variant.sku) skuMap[variant.sku] = target.id;
-      if (bySku) matchedBySku += 1;
-      else matchedByLabel += 1;
+      if (bySku) {
+        matchedBySku += 1;
+      } else {
+        matchedByLabel += 1;
+        if (variant.sku && !target.sku) {
+          const lista = propagar.get(target.productId) || [];
+          lista.push({ variantId: target.id, sku: variant.sku });
+          propagar.set(target.productId, lista);
+        }
+      }
+    }
+
+    let skusPropagados = 0;
+    for (const [productId, updates] of propagar) {
+      try {
+        await updateVariantSkus(targetCreds, productId, updates);
+        skusPropagados += updates.length;
+      } catch {
+        // Best-effort: a rota ja funciona pelo variant_map. Falhar aqui so
+        // significa que o par continua dependendo do titulo.
+      }
     }
 
     // ------------------------------------------------------------------
@@ -202,15 +247,20 @@ export async function POST(request: NextRequest) {
         : 0;
 
     const avisos: string[] = [];
+    // carimbadas/desduplicadas nao entram aqui: sao conserto, nao problema.
+    // O wizard mostra os dois num painel proprio.
     if (semSku > 0) {
       avisos.push(
-        `${semSku} variante(s) da vitrine estao sem SKU e nunca vao rotear. O roteamento casa exclusivamente por SKU.`
+        `${semSku} variante(s) continuam sem SKU (falha ao gravar na vitrine). O roteamento casa exclusivamente por SKU.`
       );
     }
     if (skusDuplicados.length > 0) {
       avisos.push(
-        `${skusDuplicados.length} SKU(s) se repetem em produtos diferentes da vitrine. Isso manda o cliente para o produto ERRADO no checkout. Corrija antes de usar.`
+        `${skusDuplicados.length} SKU(s) ainda se repetem em produtos diferentes da vitrine. Isso manda o cliente para o produto ERRADO no checkout.`
       );
+    }
+    for (const falha of carimbo.falhas.slice(0, 5)) {
+      avisos.push(`Falha ao gravar SKU — ${falha}`);
     }
     if (cobertura < 1 && sourceVariants.length > 0) {
       avisos.push(
@@ -270,6 +320,11 @@ export async function POST(request: NextRequest) {
       duplicateSkus: skusDuplicados.slice(0, 20),
       duplicateSkuCount: skusDuplicados.length,
       warnings: avisos,
+      // O que o app consertou sozinho, para o wizard mostrar em vez de so
+      // reclamar do estado da loja.
+      stampedSkuCount: carimbo.carimbadas,
+      dedupedSkuCount: carimbo.desduplicadas,
+      propagatedSkuCount: skusPropagados,
       safeToEnable: seguro,
       enabled: seguro,
       skuMap,

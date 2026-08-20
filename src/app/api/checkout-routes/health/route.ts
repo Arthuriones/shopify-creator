@@ -210,8 +210,16 @@ export async function POST(request: NextRequest) {
     const wrongSkus: { sku: string; expectedVariantId: string | null; mappedVariantId: string }[] = [];
     let checkedCount = 0;
 
+    // Variante sem SKU nunca entra no mapa e nunca roteia. Antes ela era
+    // simplesmente pulada, e a rota aparecia como 100% saudavel enquanto a
+    // maior parte do trafego caia no checkout da vitrine.
+    let noSkuCount = 0;
+
     for (const variant of sourceVariants) {
-      if (!variant.sku) continue;
+      if (!variant.sku) {
+        noSkuCount += 1;
+        continue;
+      }
       checkedCount += 1;
       const mapped = skuMap[variant.sku];
       if (mapped === undefined) {
@@ -253,13 +261,24 @@ export async function POST(request: NextRequest) {
     const shipping = await checkShipping(targetCreds, marketCountry);
 
     const ok =
-      missingSkus.length === 0 && wrongSkus.length === 0 && shipping.ok;
+      missingSkus.length === 0 &&
+      wrongSkus.length === 0 &&
+      noSkuCount === 0 &&
+      shipping.ok;
 
     return NextResponse.json({
       ok,
       shipping,
       checkedAt: new Date().toISOString(),
       totalSourceSkus: checkedCount,
+      noSkuCount,
+      sourceVariantCount: sourceVariants.length,
+      coveragePercent:
+        sourceVariants.length > 0
+          ? Math.round(
+              ((checkedCount - missingSkus.length) / sourceVariants.length) * 100
+            )
+          : 100,
       mappedCount: checkedCount - missingSkus.length,
       missingCount: missingSkus.length,
       missingSkus: missingSkus.slice(0, 50),

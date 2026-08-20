@@ -10,6 +10,7 @@ import {
   toShopifyCreateProductInput,
   type PublicShopifyProduct,
 } from "@/lib/shopify/public-store";
+import { normalizarSkus } from "@/lib/shopify/sku-stamp";
 import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
 import {
   enqueueImageNeutralizeJobs,
@@ -107,11 +108,33 @@ export async function POST(request: NextRequest) {
     accessToken: targetStore.access_token,
   };
 
+  const sourceCreds: ShopifyCredentials = {
+    shopDomain: sourceStore.shop_domain,
+    clientId: sourceStore.client_id,
+    clientSecret: sourceStore.client_secret,
+    accessToken: sourceStore.access_token,
+  };
+
   try {
     const [targetIndex, { products: sourceProducts }] = await Promise.all([
       getAllTargetVariants(targetCreds),
       fetchPublicShopifyProducts(sourceStore.shop_domain, { limit: 5000 }),
     ]);
+
+    // Toda variante da vitrine precisa de um SKU unico antes de qualquer
+    // comparacao: o loop abaixo pula quem esta sem SKU, entao produto criado
+    // na mao no Shopify ficava invisivel para o conserto e continuava fora da
+    // rota para sempre. Aqui o app carimba (e desduplica) sozinho.
+    const carimbo = await normalizarSkus(sourceCreds, sourceProducts);
+    for (const product of sourceProducts) {
+      for (const variant of product.variants) {
+        const final = carimbo.skuPorVariante.get(
+          `gid://shopify/ProductVariant/${variant.id}`
+        );
+        if (final) variant.sku = final;
+      }
+    }
+    const warningsCarimbo = carimbo.falhas.slice(0, 5);
 
     const correctSkuMap: Record<string, string> = {};
     const correctVariantMap: Record<string, string> = {};
@@ -154,7 +177,7 @@ export async function POST(request: NextRequest) {
     let createdProductCount = 0;
     let createdVariantCount = 0;
     const imageQueueItems: { productId: string; imageUrl: string; title: string }[] = [];
-    const warnings: string[] = [];
+    const warnings: string[] = [...warningsCarimbo];
 
     for (const [handle, items] of missingVariantsByHandle) {
       const product = missingByHandle.get(handle);
@@ -331,6 +354,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      stampedSkuCount: carimbo.carimbadas,
+      dedupedSkuCount: carimbo.desduplicadas,
       fixedWrongCount,
       extendedCount,
       createdProductCount,

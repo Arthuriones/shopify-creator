@@ -71,6 +71,8 @@ interface DiagnosticoRota {
   duplicateSkuCount: number;
   duplicateSkus: string[];
   warnings: string[];
+  stampedSkuCount: number;
+  dedupedSkuCount: number;
   safeToEnable: boolean;
 }
 
@@ -568,12 +570,20 @@ export function ConnectStoresWizard({
           duplicateSkuCount: data.duplicateSkuCount ?? 0,
           duplicateSkus: data.duplicateSkus || [],
           warnings: data.warnings || [],
+          stampedSkuCount: data.stampedSkuCount ?? 0,
+          dedupedSkuCount: data.dedupedSkuCount ?? 0,
           safeToEnable: data.safeToEnable !== false,
         });
         setRouteName(name);
         setRouteId(data.route.id || "");
         setRouteToken(data.route.public_token);
         onRouteCreated?.();
+        const consertos = (data.stampedSkuCount ?? 0) + (data.dedupedSkuCount ?? 0);
+        if (consertos > 0) {
+          toast.info(
+            `${consertos} SKU(s) corrigidos automaticamente na vitrine.`
+          );
+        }
         // Rota incompleta nao e "sucesso": avisa com o tom certo.
         if (data.safeToEnable === false) {
           toast.warning(
@@ -1405,6 +1415,33 @@ export function ConnectStoresWizard({
                   </Badge>
                 </div>
 
+                {diagnostico &&
+                  (diagnostico.stampedSkuCount > 0 ||
+                    diagnostico.dedupedSkuCount > 0) && (
+                    <div className="flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
+                      <WandSparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <div className="space-y-0.5 text-xs leading-relaxed text-muted-foreground">
+                        <p className="text-sm font-medium text-foreground">
+                          SKUs corrigidos automaticamente
+                        </p>
+                        {diagnostico.stampedSkuCount > 0 && (
+                          <p>
+                            {diagnostico.stampedSkuCount} variante(s) estavam sem
+                            SKU — produto criado à mão no Shopify. O app gerou e
+                            gravou o SKU na vitrine.
+                          </p>
+                        )}
+                        {diagnostico.dedupedSkuCount > 0 && (
+                          <p>
+                            {diagnostico.dedupedSkuCount} variante(s) usavam um
+                            SKU já ocupado, o que mandaria o cliente para o
+                            produto errado. Cada uma recebeu um SKU próprio.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                 {diagnostico && diagnostico.warnings.length > 0 && (
                   <div
                     className={cn(
@@ -1424,9 +1461,11 @@ export function ConnectStoresWizard({
                         )}
                       />
                       <p className="text-sm font-semibold text-foreground">
-                        {diagnostico.safeToEnable
-                          ? `Rota ligada, mas com ${diagnostico.coveragePercent}% de cobertura`
-                          : `Rota criada DESLIGADA — ${diagnostico.coveragePercent}% de cobertura`}
+                        {!diagnostico.safeToEnable
+                          ? `Rota criada DESLIGADA — ${diagnostico.coveragePercent}% de cobertura`
+                          : diagnostico.coveragePercent < 100
+                            ? `Rota ligada, mas com ${diagnostico.coveragePercent}% de cobertura`
+                            : "Rota ligada — confira os pontos abaixo"}
                       </p>
                     </div>
                     <ul className="space-y-1 pl-6 text-xs leading-relaxed text-muted-foreground">

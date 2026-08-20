@@ -632,6 +632,9 @@ export default function ClonePage() {
       {
         ok: boolean;
         totalSourceSkus: number;
+        noSkuCount: number;
+        sourceVariantCount: number;
+        coveragePercent: number;
         missingCount: number;
         missingSkus: string[];
         wrongCount: number;
@@ -661,8 +664,13 @@ export default function ClonePage() {
       if (data.ok) {
         toast.success("Rota 100% saudavel: todos os produtos roteando certo.");
       } else {
+        const partes: string[] = [];
+        if (data.noSkuCount > 0) partes.push(`${data.noSkuCount} sem SKU`);
+        if (data.missingCount > 0) partes.push(`${data.missingCount} sem mapa`);
+        if (data.wrongCount > 0)
+          partes.push(`${data.wrongCount} apontando pro produto errado`);
         toast.error(
-          `Rota com problemas: ${data.missingCount} sem mapa, ${data.wrongCount} apontando pro produto errado.`
+          `Rota em ${data.coveragePercent}%: ${partes.join(", ")}. Clique em Corrigir.`
         );
       }
     } catch {
@@ -692,8 +700,21 @@ export default function ClonePage() {
         toast.error(data.error || "Falha ao corrigir a rota.");
         return;
       }
+      const feito: string[] = [];
+      if (data.stampedSkuCount > 0)
+        feito.push(`${data.stampedSkuCount} SKU(s) gerados na vitrine`);
+      if (data.dedupedSkuCount > 0)
+        feito.push(`${data.dedupedSkuCount} SKU(s) duplicados separados`);
+      if (data.fixedWrongCount > 0)
+        feito.push(`${data.fixedWrongCount} mapas errados`);
+      if (data.extendedCount > 0)
+        feito.push(`${data.extendedCount} variantes adicionadas`);
+      if (data.createdProductCount > 0)
+        feito.push(`${data.createdProductCount} produto(s) criado(s)`);
       toast.success(
-        `Corrigido: ${data.fixedWrongCount} mapas errados, ${data.extendedCount} variantes adicionadas, ${data.createdProductCount} produto(s) criado(s).`
+        feito.length > 0
+          ? `Corrigido: ${feito.join(", ")}.`
+          : "Nada para corrigir — a rota ja estava completa."
       );
       if (data.warnings?.length) {
         toast.warning(`${data.warnings.length} aviso(s) durante a correção — veja o console.`);
@@ -3228,9 +3249,24 @@ export default function ClonePage() {
                           <div className="mt-3 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
                             <div className="flex items-center gap-2 font-medium">
                               <AlertTriangle className="h-3.5 w-3.5" />
-                              {health.missingCount} produto(s) sem mapa e {health.wrongCount}{" "}
-                              apontando pro produto errado na loja checkout.
+                              Rota em {health.coveragePercent}% — o resto do
+                              tráfego cai no checkout da vitrine.
                             </div>
+                            {health.noSkuCount > 0 && (
+                              <p className="text-muted-foreground">
+                                {health.noSkuCount} variante(s) da vitrine sem
+                                SKU (produto criado à mão no Shopify). Clique em
+                                Corrigir: o app gera o SKU e cria o par na loja
+                                checkout.
+                              </p>
+                            )}
+                            {(health.missingCount > 0 || health.wrongCount > 0) && (
+                              <p className="text-muted-foreground">
+                                {health.missingCount} produto(s) sem mapa e{" "}
+                                {health.wrongCount} apontando pro produto errado
+                                na loja checkout.
+                              </p>
+                            )}
                             {health.missingSkus.length > 0 && (
                               <p className="text-muted-foreground">
                                 Sem mapa: {health.missingSkus.slice(0, 8).join(", ")}
