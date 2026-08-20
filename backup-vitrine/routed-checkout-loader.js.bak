@@ -260,40 +260,6 @@
     }
   }
 
-  // Sinal de vida e de sucesso. Usa o mesmo endpoint do fallback (a coluna
-  // reason distingue), entao nao precisa de tabela nova.
-  //
-  // Sem isto ficamos cegos: quando o loader nao roteia, nao ha codigo nosso
-  // rodando para contar. Comparando "loader_ready" com "routed_ok" da para
-  // saber se o problema e o loader nao carregar ou nao interceptar.
-  function report(reason, detail) {
-    try {
-      var payload = JSON.stringify({
-        token: token,
-        reason: reason,
-        detail: detail ? String(detail).slice(0, 500) : "",
-        pageUrl: window.location.href,
-      });
-      var url = appUrl.replace(/\/$/, "") + "/api/checkout-routes/track-fallback";
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-      } else {
-        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
-      }
-    } catch (e) {}
-  }
-
-  // Uma vez por sessao, so em pagina onde faz sentido comprar.
-  function reportarPresenca() {
-    try {
-      if (sessionStorage.getItem("rc_ready")) return;
-      var path = window.location.pathname;
-      if (!/\/cart|\/products\//.test(path)) return;
-      sessionStorage.setItem("rc_ready", "1");
-      report("loader_ready", path);
-    } catch (e) {}
-  }
-
   function showRoutingError() {
     try {
       var existing = document.getElementById("routed-checkout-error");
@@ -318,9 +284,7 @@
         return;
       }
 
-      var destino = await resolveCheckout(cart);
-      report("routed_ok", String(cart.item_count || "") + " itens");
-      window.location.href = destino;
+      window.location.href = await resolveCheckout(cart);
     } catch (error) {
       console.warn("[RoutedCheckout] erro ao rotear checkout", error);
       trackFallback("cart_checkout_error", error);
@@ -576,65 +540,9 @@
     });
   }
 
-  // ------------------------------------------------------------------------
-  // Redes de seguranca para os caminhos que NAO passam por evento de clique.
-  //
-  // Sem elas o loader falha em silencio: nao roteia e nao registra nada, que e
-  // exatamente o padrao que vimos (checkout na vitrine com zero fallback).
-  // ------------------------------------------------------------------------
-  function instalarRedesDeSeguranca() {
-    // (a) form.submit() por JS NAO dispara o evento "submit". Se o tema chama
-    //     isso no cart drawer, nosso listener nunca roda.
-    try {
-      var submitOriginal = HTMLFormElement.prototype.submit;
-      if (!submitOriginal.__routedCheckoutPatched) {
-        var patched = function () {
-          try {
-            if (isCheckoutForm(this)) {
-              report("bypass_form_submit", this.getAttribute("action") || "");
-              routeCartCheckout(true);
-              return;
-            }
-          } catch (e) {}
-          return submitOriginal.apply(this, arguments);
-        };
-        patched.__routedCheckoutPatched = true;
-        HTMLFormElement.prototype.submit = patched;
-      }
-    } catch (e) {}
-
-    // (b) navegacao programatica para o checkout desta loja.
-    try {
-      var ehCheckoutLocal = function (url) {
-        try {
-          var u = new URL(String(url), window.location.origin);
-          return u.origin === window.location.origin && /^\/checkouts?(\/|$)/.test(u.pathname);
-        } catch (e) { return false; }
-      };
-      ["assign", "replace"].forEach(function (metodo) {
-        var original = window.location[metodo];
-        if (typeof original !== "function" || original.__routedCheckoutPatched) return;
-        var novo = function (url) {
-          try {
-            if (ehCheckoutLocal(url) && !isRouting) {
-              report("bypass_location_" + metodo, String(url).slice(0, 200));
-              routeCartCheckout(true);
-              return;
-            }
-          } catch (e) {}
-          return original.call(window.location, url);
-        };
-        novo.__routedCheckoutPatched = true;
-        try { window.location[metodo] = novo; } catch (e) {}
-      });
-    } catch (e) {}
-  }
-
   function init() {
     if (initialized || !document.body) return;
     initialized = true;
-    instalarRedesDeSeguranca();
-    reportarPresenca();
     window.addEventListener("click", handleDocumentClick, true);
     document.addEventListener("click", handleDocumentClick, true);
     document.addEventListener(
