@@ -157,6 +157,15 @@ Files: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/**`, `sr
 
 **CRITICAL for anyone editing the checkout store**: routing resolves **only by SKU / variant ID**. You can freely rewrite the checkout products' **title, description, tags, SEO and images** (that's exactly what neutralization does) — routing is unaffected as long as you do **not** change/delete variants or SKUs. Never delete+recreate checkout products after a route exists (new variant IDs break `variant_map`; even if SKUs are re-copied and `sku_map` still resolves, prefer in-place `productUpdate`).
 
+### 10.1 Self-healing
+
+A route rots rather than breaking: the merchant adds a product by hand in Shopify, it lands with no SKU and outside `sku_map`, and nobody notices because the vitrine keeps selling — through the wrong checkout. One account reached **27% coverage** with no alarm.
+
+- `src/lib/checkout-routes/heal.ts` → `healRoute({ routeId })` — stamps/dedupes vitrine SKUs, remaps entries pointing at the wrong target variant, creates missing counterparts in the checkout store (text-neutralized, image queued), and writes `last_healed_at`.
+- Callers: the **Corrigir** button (`POST /api/checkout-routes/repair`, user-scoped) and the cron (`/api/jobs/routes/heal`, `30 * * * *`, `CRON_SECRET`). The cron takes 4 enabled routes per run, oldest `last_healed_at` first (NULL first).
+- `POST /api/checkout-routes/health` reports `coveragePercent` and `noSkuCount`, and **never returns `ok: true` while SKU-less variants exist** — that blind spot is what made a 27% route look healthy.
+- `PATCH /api/checkout-routes/toggle` flips `enabled` only; the general `PATCH /api/checkout-routes` overwrites `sku_map`/`variant_map` and must not be used to toggle.
+
 ---
 
 ## 11. Billing & credits
@@ -179,7 +188,7 @@ Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_
 
 ## 13. Known issues / gotchas
 
-1. **SKUs are load-bearing** for routing. AliExpress uses `skuId`; generic-site imports usually produce **no SKU** → routing falls back to fragile positional index matching or fails. Always ensure the vitrine has SKUs before routing.
+1. **SKUs are load-bearing** for routing — but the app now **stamps them itself**. `src/lib/shopify/sku-stamp.ts` (`normalizarSkus`) writes a neutral `xc-<base36 variant id>` onto any vitrine variant missing a SKU, and re-stamps SKUs duplicated across variants (a duplicate routes the buyer to the *wrong product*). It runs inside `connect-by-sku`, inside `healRoute`, and hourly via cron — so a product created by hand in Shopify still routes. See §10.1.
 2. **`create-destination` timeout + late dedup**: it AI-translates/neutralizes *before* checking for existing products, and processes the whole catalog in one request (concurrency 6, `maxDuration=300`). Large catalogs time out ("Failed to fetch") leaving partial/duplicate products. Prefer the **"Só conectar"** mode when the catalog already exists.
 3. **Bulk-import job queue** has no atomic claim / stale recovery (unlike the image queue) → possible double-processing and stuck `processing` jobs.
 4. **Woo/Shoplazza are clone-only**; the multi-site page advertises them but HTML-scrapes instead.
@@ -193,7 +202,7 @@ Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_
 ## 14. Operational playbook — set up a routed store correctly
 
 1. Connect both stores (vitrine + checkout) in `/stores` (OAuth-install each once).
-2. Import/build the vitrine catalog. **Ensure every variant has a SKU.** (If imported without SKUs, stamp them first — e.g. sequential `STORE-0001…`.)
+2. Import/build the vitrine catalog. SKUs no longer need to be prepared by hand — the wizard stamps whatever is missing (§10.1).
 3. Populate the checkout store with the SAME SKUs. Either let the wizard **generate** (AI-neutralized, but watch the timeout on big catalogs) or replicate products with matching SKUs and then neutralize.
 4. **Neutralize the checkout store** — generic brand-free titles/descriptions/tags + AI photos (via `neutralize-store-images`, needs `GEMINI_API_KEY` + credits). Titles/descriptions/images can be rewritten freely; **never touch SKUs/variants**.
 5. Connect via the wizard **"Só conectar"** mode → it builds `sku_map`/`variant_map` and outputs the loader `<script>`.

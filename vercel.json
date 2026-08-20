@@ -9,12 +9,25 @@
     },
     "src/app/api/jobs/bulk-import/process/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/jobs/routes/heal/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/checkout-routes/repair/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/checkout-routes/connect-by-sku/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/jobs/bulk-import/process",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/jobs/routes/heal",
+      "schedule": "30 * * * *"
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { createHash } from "crypto";
+
 // Geracao de SKU para produtos importados.
 //
 // O checkout roteado casa vitrine <-> loja checkout EXCLUSIVAMENTE por SKU
@@ -9,24 +11,36 @@
 //
 // Por isso, quando a origem nao fornece SKU, geramos um deterministico a partir
 // do handle + posicao da variante: rodar o mesmo import duas vezes produz os
-// mesmos SKUs, o que mantem a deduplicacao e o remapeamento da rota funcionando.
+// mesmos SKUs, o que mantem a deduplicacao e o remapeamento da rota
+// funcionando.
+//
+// O SKU e um HASH do handle, nao o handle legivel. A versao anterior gerava
+// "MEDICUBE-ZERO-PORE-PAD-001", o que levava o nome da marca para dentro da
+// loja de checkout — justamente o que a neutralizacao existe para evitar. SKU
+// aparece em confirmacao de pedido, nota e packing slip, e em alguns temas na
+// propria pagina de checkout: era um vazamento direto entre as duas lojas.
+//
+// A deduplicacao do import nao e afetada: ela compara o SKU que veio da ORIGEM
+// (e cai para o handle quando a origem nao tem SKU). Este gerador so decide o
+// que e gravado no destino.
 
-const MAX_HANDLE_PART = 40;
+const PREFIXO = "xc";
+const TAMANHO_HASH = 8;
 
-function slugifyHandle(handle: string) {
-  return (
+function hashDoHandle(handle: string) {
+  const base =
     handle
       .normalize("NFD")
       .replace(/[̀-ͯ]/g, "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, MAX_HANDLE_PART) || "ITEM"
-  );
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "item";
+  return createHash("sha1").update(base).digest("hex").slice(0, TAMANHO_HASH);
 }
 
 /**
- * Devolve o SKU da variante, gerando um estavel quando a origem nao tem.
+ * Devolve o SKU da variante, gerando um estavel e sem marca quando a origem
+ * nao tem.
  *
  * @param existingSku SKU vindo da origem (pode ser null/vazio)
  * @param productHandle handle do produto na origem
@@ -39,8 +53,7 @@ export function ensureVariantSku(
 ): string {
   const trimmed = (existingSku || "").trim();
   if (trimmed) return trimmed;
-  return `${slugifyHandle(productHandle)}-${String(variantIndex + 1).padStart(
-    3,
-    "0"
-  )}`;
+  return `${PREFIXO}-${hashDoHandle(productHandle)}-${String(
+    variantIndex + 1
+  ).padStart(3, "0")}`;
 }

@@ -1,0 +1,445 @@
+import {
+  addProductVariants,
+  createProduct,
+  getProducts,
+  type ShopifyCredentials,
+} from "@/lib/shopify/client";
+import {
+  fetchPublicShopifyProducts,
+  toShopifyCreateProductInput,
+  type PublicShopifyProduct,
+} from "@/lib/shopify/public-store";
+import { normalizarSkus } from "@/lib/shopify/sku-stamp";
+import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
+import {
+  enqueueImageNeutralizeJobs,
+  requestImageQueueDrain,
+} from "@/lib/jobs/image-neutralize-processor";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { AI_COST, logAiUsage } from "@/lib/billing/usage";
+
+// ============================================================================
+// Conserto de uma rota de checkout.
+//
+// Antes isto morava dentro de /api/checkout-routes/repair e so rodava quando
+// alguem clicava. Mas uma rota se degrada sozinha: basta o lojista cadastrar um
+// produto na mao no Shopify e ele nasce fora da rota — sem SKU, sem par na loja
+// de checkout — e o dono so descobre pelo funil, semanas depois.
+//
+// Extraido para lib para o cron rodar o mesmo conserto sem sessao de usuario.
+// ============================================================================
+
+function numericId(gid: string | number | undefined | null): string | null {
+  if (gid === undefined || gid === null) return null;
+  return String(gid).match(/(\d+)$/)?.[1] || null;
+}
+
+interface TargetVariantInfo {
+  variantId: string; // numerico
+  productId: string;
+  productTitle: string;
+  options: string[];
+}
+
+async function getAllTargetVariants(creds: ShopifyCredentials) {
+  const bySku = new Map<string, TargetVariantInfo>();
+  let after: string | null = null;
+  for (let page = 0; page < 60; page += 1) {
+    const data = await getProducts(creds, { first: 250, after });
+    const nodes = data?.products?.nodes || [];
+    for (const product of nodes) {
+      const options = (product.options || []).map(
+        (option: { name: string }) => option.name
+      );
+      for (const variant of product.variants?.nodes || []) {
+        if (!variant.sku) continue;
+        const key = variant.sku.trim().toLowerCase();
+        if (!bySku.has(key)) {
+          bySku.set(key, {
+            variantId: numericId(variant.id) as string,
+            productId: product.id,
+            productTitle: product.title,
+            options,
+          });
+        }
+      }
+    }
+    const pageInfo = data?.products?.pageInfo;
+    if (!pageInfo?.hasNextPage || !pageInfo?.endCursor) break;
+    after = pageInfo.endCursor;
+  }
+  return bySku;
+}
+
+export interface HealRouteResult {
+  ok: true;
+  routeId: string;
+  stampedSkuCount: number;
+  dedupedSkuCount: number;
+  fixedWrongCount: number;
+  extendedCount: number;
+  createdProductCount: number;
+  createdVariantCount: number;
+  imageQueueCount: number;
+  finalMappedCount: number;
+  warnings: string[];
+  /** true quando nada precisou mudar — o cron usa para nao poluir o log. */
+  noop: boolean;
+}
+
+export class HealRouteError extends Error {
+  status: number;
+  constructor(message: string, status = 500) {
+    super(message);
+    this.status = status;
+  }
+}
+
+interface HealRouteInput {
+  routeId: string;
+  /** Restringe ao dono. Omitido no cron, que ja seleciona as rotas. */
+  userId?: string;
+  /** Origem da app, para acordar a fila de imagens. */
+  origin?: string;
+  cookie?: string;
+  /**
+   * Gera imagem sem marca para os produtos criados. Consome 1 credito por
+   * imagem — a fila ja bloqueia e devolve o credito quando falta saldo.
+   * Deixar o produto novo com a foto de marca na loja de checkout e pior do
+   * que gastar o credito, entao o padrao e ligado.
+   */
+  neutralizeImages?: boolean;
+}
+
+export async function healRoute(
+  input: HealRouteInput
+): Promise<HealRouteResult> {
+  const admin = createAdminClient();
+
+  let query = admin
+    .from("routed_checkout_configs")
+    .select(
+      "id, user_id, name, sku_map, variant_map, source_store_id, target_store_id"
+    )
+    .eq("id", input.routeId);
+  if (input.userId) query = query.eq("user_id", input.userId);
+
+  const { data: config, error: configError } = await query.single();
+  if (configError || !config) {
+    throw new HealRouteError("Rota nao encontrada.", 404);
+  }
+
+  const userId = config.user_id as string;
+
+  const { data: stores } = await admin
+    .from("stores")
+    .select(
+      "id, shop_domain, client_id, client_secret, access_token, niche, target_language"
+    )
+    .in("id", [config.source_store_id, config.target_store_id]);
+
+  const sourceStore = stores?.find((s) => s.id === config.source_store_id);
+  const targetStore = stores?.find((s) => s.id === config.target_store_id);
+  if (!sourceStore || !targetStore) {
+    throw new HealRouteError("Vitrine ou loja checkout nao encontrada.", 404);
+  }
+
+  const sourceCreds: ShopifyCredentials = {
+    shopDomain: sourceStore.shop_domain,
+    clientId: sourceStore.client_id,
+    clientSecret: sourceStore.client_secret,
+    accessToken: sourceStore.access_token,
+  };
+  const targetCreds: ShopifyCredentials = {
+    shopDomain: targetStore.shop_domain,
+    clientId: targetStore.client_id,
+    clientSecret: targetStore.client_secret,
+    accessToken: targetStore.access_token,
+  };
+
+  const [targetIndex, { products: sourceProducts }] = await Promise.all([
+    getAllTargetVariants(targetCreds),
+    fetchPublicShopifyProducts(sourceStore.shop_domain, { limit: 5000 }),
+  ]);
+
+  // Toda variante da vitrine precisa de SKU unico antes de qualquer comparacao.
+  // O loop abaixo ignora quem esta sem SKU, entao produto criado na mao ficava
+  // invisivel para o conserto e fora da rota para sempre.
+  const carimbo = await normalizarSkus(sourceCreds, sourceProducts);
+  for (const product of sourceProducts) {
+    for (const variant of product.variants) {
+      const final = carimbo.skuPorVariante.get(
+        `gid://shopify/ProductVariant/${variant.id}`
+      );
+      if (final) variant.sku = final;
+    }
+  }
+
+  const correctSkuMap: Record<string, string> = {};
+  const correctVariantMap: Record<string, string> = {};
+  let fixedWrongCount = 0;
+
+  function recordCorrect(
+    sku: string,
+    sourceVariantId: number,
+    targetVariantId: string
+  ) {
+    correctSkuMap[sku] = targetVariantId;
+    correctVariantMap[String(sourceVariantId)] = targetVariantId;
+    correctVariantMap[`gid://shopify/ProductVariant/${sourceVariantId}`] =
+      targetVariantId;
+  }
+
+  const oldSkuMap = (config.sku_map || {}) as Record<string, string | number>;
+  const missingByHandle = new Map<string, PublicShopifyProduct>();
+  const missingVariantsByHandle = new Map<
+    string,
+    { variant: PublicShopifyProduct["variants"][number] }[]
+  >();
+
+  for (const product of sourceProducts) {
+    for (const variant of product.variants) {
+      if (!variant.sku) continue;
+      const key = variant.sku.trim().toLowerCase();
+      const found = targetIndex.get(key);
+      if (found) {
+        if (String(oldSkuMap[variant.sku] ?? "") !== found.variantId) {
+          fixedWrongCount += 1;
+        }
+        recordCorrect(variant.sku, variant.id, found.variantId);
+      } else {
+        if (!missingByHandle.has(product.handle)) {
+          missingByHandle.set(product.handle, product);
+        }
+        if (!missingVariantsByHandle.has(product.handle)) {
+          missingVariantsByHandle.set(product.handle, []);
+        }
+        missingVariantsByHandle.get(product.handle)?.push({ variant });
+      }
+    }
+  }
+
+  let extendedCount = 0;
+  let createdProductCount = 0;
+  let createdVariantCount = 0;
+  const imageQueueItems: {
+    productId: string;
+    imageUrl: string;
+    title: string;
+  }[] = [];
+  const warnings: string[] = [...carimbo.falhas.slice(0, 5)];
+
+  for (const [handle, items] of missingVariantsByHandle) {
+    const product = missingByHandle.get(handle);
+    if (!product) continue;
+
+    const prefix = product.variants[0]?.sku?.split("-")[0] || "";
+    let existingTarget: TargetVariantInfo | null = null;
+    for (const sku of Object.keys(correctSkuMap)) {
+      if (sku.split("-")[0] === prefix) {
+        const info = targetIndex.get(sku.toLowerCase());
+        if (info) {
+          existingTarget = info;
+          break;
+        }
+      }
+    }
+
+    if (existingTarget) {
+      // Produto ja existe no destino: so faltam variantes.
+      try {
+        const created = await addProductVariants(
+          targetCreds,
+          existingTarget.productId,
+          existingTarget.options,
+          items.map(({ variant }) => ({
+            price: variant.price,
+            sku: variant.sku || undefined,
+            optionValues: variant.optionValues,
+          }))
+        );
+        for (let i = 0; i < created.length; i++) {
+          const sourceVariant = items[i]?.variant;
+          if (sourceVariant?.sku) {
+            recordCorrect(
+              sourceVariant.sku,
+              sourceVariant.id,
+              numericId(created[i].id) as string
+            );
+          }
+        }
+        extendedCount += created.length;
+      } catch (error) {
+        warnings.push(
+          `${handle}: falha ao estender produto existente - ${
+            error instanceof Error ? error.message : "erro desconhecido"
+          }`
+        );
+      }
+      continue;
+    }
+
+    // Produto novo: neutraliza so o texto (barato) e usa a imagem original como
+    // placeholder — a fila de imagens troca depois.
+    try {
+      let title = product.title;
+      let descriptionHtml = product.descriptionHtml;
+      let tags = product.tags;
+      let seoTitle = product.title.slice(0, 70);
+      let seoDescription = "";
+
+      if (process.env.GEMINI_API_KEY) {
+        try {
+          const neutralized = await neutralizeProductForDestination({
+            userId,
+            title: product.title,
+            descriptionHtml: product.descriptionHtml,
+            tags: product.tags,
+            seo: { title: product.title, description: "" },
+            images: [],
+            maxImages: 0,
+            targetLanguage: targetStore.target_language || "pt-BR",
+            genericizeText: true,
+            storageClient: admin,
+          });
+          title = neutralized.title;
+          descriptionHtml = neutralized.descriptionHtml;
+          tags = neutralized.tags;
+          seoTitle = neutralized.seo.title;
+          seoDescription = neutralized.seo.description;
+          await logAiUsage({
+            userId,
+            storeId: targetStore.id,
+            action: "neutralize_text",
+            costUsd: AI_COST.text,
+            metadata: { handle, repair: true },
+          });
+        } catch (neutralizeError) {
+          warnings.push(
+            `${handle}: neutralizacao de texto falhou (${
+              neutralizeError instanceof Error
+                ? neutralizeError.message
+                : "erro desconhecido"
+            }), criando com titulo original.`
+          );
+        }
+      }
+
+      const baseInput = toShopifyCreateProductInput(product);
+      const result = await createProduct(targetCreds, {
+        ...baseInput,
+        title,
+        descriptionHtml,
+        tags,
+        seo: { title: seoTitle, description: seoDescription },
+        images: product.images.slice(0, 1),
+        variants: product.variants.map((variant) => ({
+          price: variant.price,
+          compareAtPrice: variant.compareAtPrice || undefined,
+          options: variant.optionValues,
+          sku: variant.sku || undefined,
+        })),
+        publishToStorefront: true,
+      });
+
+      const syncedVariants = result.syncedProduct?.variants?.nodes || [];
+      for (const variant of syncedVariants) {
+        const sourceVariant = product.variants.find((v) =>
+          v.optionValues.every(
+            (value, index) => value === variant.selectedOptions?.[index]?.value
+          )
+        );
+        if (sourceVariant?.sku) {
+          recordCorrect(
+            sourceVariant.sku,
+            sourceVariant.id,
+            numericId(variant.id) as string
+          );
+          createdVariantCount += 1;
+        }
+      }
+      createdProductCount += 1;
+
+      const heroUrl = product.images[0]?.src;
+      const createdProductId = result.syncedProduct?.id;
+      if (heroUrl && createdProductId) {
+        imageQueueItems.push({
+          productId: createdProductId,
+          imageUrl: heroUrl,
+          title,
+        });
+      }
+    } catch (error) {
+      warnings.push(
+        `${handle}: falha ao criar produto - ${
+          error instanceof Error ? error.message : "erro desconhecido"
+        }`
+      );
+    }
+  }
+
+  let imageQueueCount = 0;
+  if (input.neutralizeImages !== false && imageQueueItems.length > 0) {
+    const { queued } = await enqueueImageNeutralizeJobs({
+      userId,
+      storeId: targetStore.id,
+      items: imageQueueItems.map((item) => ({
+        productId: item.productId,
+        imageUrl: item.imageUrl,
+        title: item.title,
+        mode: "stock-neutralize",
+        targetLanguage: targetStore.target_language || "pt-BR",
+      })),
+    });
+    imageQueueCount = queued;
+    if (input.origin) {
+      await requestImageQueueDrain({
+        origin: input.origin,
+        cookie: input.cookie || "",
+        storeId: targetStore.id,
+      });
+    }
+  }
+
+  const finalSkuMap = { ...oldSkuMap, ...correctSkuMap };
+  const finalVariantMap = {
+    ...(config.variant_map || {}),
+    ...correctVariantMap,
+  };
+
+  const { error: updateError } = await admin
+    .from("routed_checkout_configs")
+    .update({
+      sku_map: finalSkuMap,
+      variant_map: finalVariantMap,
+      last_healed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", config.id);
+
+  if (updateError) {
+    throw new HealRouteError("Falha ao salvar a rota corrigida.");
+  }
+
+  const mudou =
+    carimbo.carimbadas > 0 ||
+    carimbo.desduplicadas > 0 ||
+    fixedWrongCount > 0 ||
+    extendedCount > 0 ||
+    createdProductCount > 0;
+
+  return {
+    ok: true,
+    routeId: config.id,
+    stampedSkuCount: carimbo.carimbadas,
+    dedupedSkuCount: carimbo.desduplicadas,
+    fixedWrongCount,
+    extendedCount,
+    createdProductCount,
+    createdVariantCount,
+    imageQueueCount,
+    finalMappedCount: Object.keys(finalSkuMap).length,
+    warnings,
+    noop: !mudou,
+  };
+}

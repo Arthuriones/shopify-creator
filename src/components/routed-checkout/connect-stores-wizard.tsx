@@ -112,6 +112,7 @@ export function ConnectStoresWizard({
   const [diagnostico, setDiagnostico] = useState<DiagnosticoRota | null>(null);
   const [routeId, setRouteId] = useState("");
   const [ligando, setLigando] = useState(false);
+  const [completando, setCompletando] = useState(false);
 
   // Passo 1
   const [sourceStoreId, setSourceStoreId] = useState("");
@@ -578,6 +579,19 @@ export function ConnectStoresWizard({
         setRouteId(data.route.id || "");
         setRouteToken(data.route.public_token);
         onRouteCreated?.();
+        // Sobrou produto sem par na loja de checkout: em vez de reportar
+        // "X% de cobertura" e deixar o lojista se virar, cria os que faltam
+        // agora — e o mesmo conserto do botao "Corrigir".
+        if ((data.unmatchedCount ?? 0) > 0 && data.route?.id) {
+          const completado = await completarDestino(data.route.id);
+          if (completado) {
+            data.coveragePercent = completado.coveragePercent;
+            data.warnings = completado.warnings;
+            data.safeToEnable = completado.safeToEnable;
+            data.matchedCount = completado.matchedCount;
+          }
+        }
+
         const consertos = (data.stampedSkuCount ?? 0) + (data.dedupedSkuCount ?? 0);
         if (consertos > 0) {
           toast.info(
@@ -626,6 +640,81 @@ export function ConnectStoresWizard({
       setStep(wizardMode === "connect" ? 1 : 2);
     } finally {
       setCreatingRoute(false);
+    }
+  }
+
+  // Cria na loja de checkout os produtos que so existem na vitrine e devolve
+  // a cobertura ja recalculada. Best-effort: falhar aqui nao derruba a rota,
+  // so mantem o aviso de cobertura baixa.
+  async function completarDestino(id: string) {
+    setCompletando(true);
+    try {
+      const res = await fetch("/api/checkout-routes/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const reparo = await res.json();
+      if (!res.ok) return null;
+
+      const criados =
+        (reparo.createdProductCount || 0) + (reparo.extendedCount || 0);
+      if (criados > 0) {
+        toast.info(
+          `${reparo.createdProductCount || 0} produto(s) e ${
+            reparo.extendedCount || 0
+          } variante(s) criados na loja de checkout.`
+        );
+      }
+
+      const saude = await fetch("/api/checkout-routes/health", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const h = await saude.json();
+      if (!saude.ok) return null;
+
+      const avisos: string[] = [];
+      if (h.noSkuCount > 0) {
+        avisos.push(`${h.noSkuCount} variante(s) da vitrine continuam sem SKU.`);
+      }
+      if (h.missingCount > 0) {
+        avisos.push(
+          `${h.missingCount} produto(s) ainda sem par na loja de checkout.`
+        );
+      }
+      if (h.wrongCount > 0) {
+        avisos.push(
+          `${h.wrongCount} produto(s) apontando para o item errado no checkout.`
+        );
+      }
+      if (h.shipping && h.shipping.ok === false) {
+        avisos.push(
+          "A loja de checkout nao entrega no pais desta rota — o cliente trava no frete."
+        );
+      }
+
+      // A rota so fica ligada de verdade quando o conserto fechou tudo.
+      const seguro = avisos.length === 0;
+      if (seguro) {
+        await fetch("/api/checkout-routes/toggle", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, enabled: true }),
+        });
+      }
+
+      return {
+        coveragePercent: h.coveragePercent ?? 100,
+        warnings: avisos,
+        safeToEnable: seguro,
+        matchedCount: h.mappedCount ?? 0,
+      };
+    } catch {
+      return null;
+    } finally {
+      setCompletando(false);
     }
   }
 
@@ -1396,7 +1485,18 @@ export function ConnectStoresWizard({
             {creatingRoute && (
               <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/45 p-4 text-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <p className="font-medium text-foreground">Criando rota…</p>
+                <div>
+                  <p className="font-medium text-foreground">
+                    {completando
+                      ? "Completando a loja de checkout…"
+                      : "Criando rota…"}
+                  </p>
+                  {completando && (
+                    <p className="text-xs text-muted-foreground">
+                      Criando os produtos que faltavam para a rota fechar 100%.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
