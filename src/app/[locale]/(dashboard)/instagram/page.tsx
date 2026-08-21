@@ -322,6 +322,10 @@ export default function InstagramPage() {
             {status?.connected ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
             ) : (
+              // Endpoint OAuth: responde com redirect para o Instagram. Tem
+              // que ser navegacao do browser — <Link> faria roteamento
+              // client-side do Next e o fluxo nao sairia do app.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a
                 href="/api/instagram/connect"
                 className={cn(buttonVariants({ size: "sm" }), "shrink-0")}

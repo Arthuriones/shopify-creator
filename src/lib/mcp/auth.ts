@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ShopifyCredentials } from "@/lib/shopify/client";
 

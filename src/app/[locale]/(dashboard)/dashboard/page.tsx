@@ -89,8 +89,18 @@ export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const tStatus = useTranslations("status");
   const tTime = useTranslations("time");
+  // "agora" fica no estado em vez de vir de Date.now() no meio do render.
+  // Ler o relogio durante o render e impuro: dois renders do mesmo estado
+  // produzem telas diferentes. De quebra, o intervalo faz "ha 2 minutos"
+  // virar "ha 3 minutos" sozinho, sem precisar recarregar a pagina.
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const fmtTime = (iso: string): string => {
-    const diff = Date.now() - new Date(iso).getTime();
+    const diff = agora - new Date(iso).getTime();
     const min = Math.floor(diff / 60000);
     if (min < 1) return tTime("now");
     if (min < 60) return tTime("minsAgo", { n: min });

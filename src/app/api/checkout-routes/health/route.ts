@@ -4,6 +4,7 @@ import {
   shopifyRestGet,
   type ShopifyCredentials,
 } from "@/lib/shopify/client";
+import { verificarParDaRota } from "@/lib/shopify/store-health";
 import { createClient } from "@/lib/supabase/server";
 import { marketProfileFor } from "@/lib/gemini/market-profile";
 
@@ -187,6 +188,39 @@ export async function POST(request: NextRequest) {
     accessToken: targetStore.access_token,
   };
 
+  // Antes de qualquer coisa: as duas lojas respondem?
+  //
+  // Rota apontando para loja congelada/desinstalada e o pior estado possivel —
+  // o painel mostrava tudo verde enquanto todo cliente que clicava em
+  // finalizar caia num checkout que nao carrega. Sem esta checagem, a leitura
+  // do catalogo abaixo explodiria com um erro cru de API.
+  const lojas = await verificarParDaRota(sourceCreds, targetCreds);
+  if (!lojas.ok) {
+    return NextResponse.json({
+      ok: false,
+      checkedAt: new Date().toISOString(),
+      storeIssue: {
+        message: lojas.mensagem,
+        source: lojas.source.ok ? null : lojas.source,
+        target: lojas.target.ok ? null : lojas.target,
+      },
+      totalSourceSkus: 0,
+      noSkuCount: 0,
+      sourceVariantCount: 0,
+      coveragePercent: 0,
+      mappedCount: 0,
+      missingCount: 0,
+      missingSkus: [],
+      wrongCount: 0,
+      wrongSkus: [],
+      fallbackCount7d: 0,
+      loaderReady7d: 0,
+      routedOk7d: 0,
+      fallbackByReason: {},
+      recentFallbacks: [],
+    });
+  }
+
   try {
     const [sourceVariants, targetVariants] = await Promise.all([
       getAllVariants(sourceCreds),
@@ -245,10 +279,22 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(200);
 
+    // O loader usa a mesma tabela para sinal de vida e sucesso; so a coluna
+    // reason distingue. Contar tudo como "fallback" mostrava 43 falhas numa
+    // rota que nao tinha falhado nenhuma vez.
+    const EVENTOS_DE_SUCESSO = new Set(["loader_ready", "routed_ok"]);
+
     const fallbackByReason: Record<string, number> = {};
+    let loaderReady = 0;
+    let routedOk = 0;
     for (const item of fallbacks || []) {
-      fallbackByReason[item.reason] = (fallbackByReason[item.reason] || 0) + 1;
+      if (item.reason === "loader_ready") loaderReady += 1;
+      else if (item.reason === "routed_ok") routedOk += 1;
+      else fallbackByReason[item.reason] = (fallbackByReason[item.reason] || 0) + 1;
     }
+    const falhasReais = (fallbacks || []).filter(
+      (f) => !EVENTOS_DE_SUCESSO.has(f.reason)
+    );
 
     // Pais efetivo do checkout: override da rota, senao derivado do idioma da
     // loja de destino.
@@ -284,9 +330,14 @@ export async function POST(request: NextRequest) {
       missingSkus: missingSkus.slice(0, 50),
       wrongCount: wrongSkus.length,
       wrongSkus: wrongSkus.slice(0, 50),
-      fallbackCount7d: fallbacks?.length || 0,
+      fallbackCount7d: falhasReais.length,
       fallbackByReason,
-      recentFallbacks: (fallbacks || []).slice(0, 10),
+      recentFallbacks: falhasReais.slice(0, 10),
+      // Funil do loader: quantas sessoes viram o script e quantas chegaram a
+      // rotear. A diferenca e o vazamento — cliente que clicou em finalizar e
+      // nao foi redirecionado.
+      loaderReady7d: loaderReady,
+      routedOk7d: routedOk,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao verificar a rota.";

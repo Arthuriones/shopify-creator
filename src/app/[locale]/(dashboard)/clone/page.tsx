@@ -136,6 +136,14 @@ interface CheckoutConfig {
     checkout_domain?: string;
     checkout_country?: string;
     checkout_locale?: string;
+    // Escrito pelo auto-conserto de hora em hora. Deixa o card dizer o estado
+    // da rota sem o usuario precisar clicar em Verificar.
+    last_heal?: {
+      at: string;
+      ok: boolean;
+      message?: string;
+      mappedCount?: number;
+    };
   };
 }
 
@@ -631,6 +639,11 @@ export default function ClonePage() {
       string,
       {
         ok: boolean;
+        storeIssue?: {
+          message?: string;
+          source?: { motivo?: string; mensagem?: string } | null;
+          target?: { motivo?: string; mensagem?: string } | null;
+        };
         totalSourceSkus: number;
         noSkuCount: number;
         sourceVariantCount: number;
@@ -641,6 +654,8 @@ export default function ClonePage() {
         wrongSkus: { sku: string }[];
         checkedAt: string;
         fallbackCount7d: number;
+        loaderReady7d: number;
+        routedOk7d: number;
         fallbackByReason: Record<string, number>;
         recentFallbacks: { reason: string; detail: string | null; created_at: string }[];
       } | { error: string }
@@ -3039,6 +3054,7 @@ export default function ClonePage() {
                   const routeSnippet = buildRoutedInstallSnippet(
                     config.public_token
                   );
+                  const ultimo = config.settings?.last_heal;
                   return (
                     <div
                       key={config.id}
@@ -3064,6 +3080,33 @@ export default function ClonePage() {
                             {" - "}
                             {config.enabled ? "ativo" : "pausado"}
                           </p>
+                          {/* Estado vindo da ultima passada automatica. Rota
+                              quebrada precisa gritar na lista, nao esperar
+                              alguem clicar em Verificar. */}
+                          {ultimo && !ultimo.ok && (
+                            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-destructive">
+                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{ultimo.message || "Rota com problema."}</span>
+                            </p>
+                          )}
+                          {ultimo && ultimo.ok && (
+                            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                              Verificada automaticamente{" "}
+                              {new Date(ultimo.at).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          )}
+                          {!ultimo && (
+                            <p className="mt-1.5 text-xs text-muted-foreground/70">
+                              Ainda não verificada — a checagem automática roda
+                              a cada hora.
+                            </p>
+                          )}
                         </div>
                         <Badge
                           variant={config.enabled ? "secondary" : "outline"}
@@ -3216,8 +3259,52 @@ export default function ClonePage() {
                             </div>
                           );
                         }
-                        const fallbackNote = health.fallbackCount7d > 0 && (
+                        // Funil real do loader nos ultimos 7 dias. A conta que
+                        // interessa nao e "quantos erros", e "de quem viu o
+                        // script, quantos foram redirecionados".
+                        const funil = health.loaderReady7d > 0 && (
+                          <p className="text-muted-foreground">
+                            Últimos 7 dias: {health.loaderReady7d} sessão(ões)
+                            com o script ativo, {health.routedOk7d} roteada(s)
+                            {health.loaderReady7d > 0 && (
+                              <>
+                                {" "}
+                                (
+                                {Math.round(
+                                  (health.routedOk7d / health.loaderReady7d) * 100
+                                )}
+                                %)
+                              </>
+                            )}
+                            .
+                          </p>
+                        );
+                        // Loja fora do ar e mais grave que qualquer numero de
+                        // cobertura: nao adianta falar de SKU se o checkout nem
+                        // abre. Entao esta checagem vem antes de tudo.
+                        if (health.storeIssue?.message) {
+                          return (
+                            <div className="mt-3 space-y-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs">
+                              <div className="flex items-center gap-2 font-medium text-destructive">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Esta rota não consegue rotear.
+                              </div>
+                              <p className="text-muted-foreground">
+                                {health.storeIssue.message}
+                              </p>
+                              <p className="text-muted-foreground/80">
+                                Todo cliente que clicar em finalizar cai num
+                                checkout que não abre. Resolva a loja ou desligue
+                                a rota.
+                              </p>
+                            </div>
+                          );
+                        }
+                        const fallbackNote = (health.fallbackCount7d > 0 ||
+                          health.loaderReady7d > 0) && (
                           <div className="space-y-1">
+                            {funil}
+                            {health.fallbackCount7d > 0 && (
                             <p className="text-muted-foreground">
                               {health.fallbackCount7d} checkout(s) caíram pro nativo da vitrine nos
                               últimos 7 dias (
@@ -3226,6 +3313,7 @@ export default function ClonePage() {
                                 .join(", ")}
                               ).
                             </p>
+                            )}
                             {health.recentFallbacks?.slice(0, 3).map((fb, i) => (
                               <p key={i} className="text-muted-foreground/80 truncate">
                                 {new Date(fb.created_at).toLocaleDateString()} — {fb.reason}{fb.detail ? `: ${fb.detail}` : ""}

@@ -10,6 +10,7 @@ import {
   type PublicShopifyProduct,
 } from "@/lib/shopify/public-store";
 import { normalizarSkus } from "@/lib/shopify/sku-stamp";
+import { verificarParDaRota } from "@/lib/shopify/store-health";
 import { neutralizeProductForDestination } from "@/lib/ai/product-neutralizer";
 import {
   enqueueImageNeutralizeJobs,
@@ -111,6 +112,33 @@ interface HealRouteInput {
   neutralizeImages?: boolean;
 }
 
+// O painel so dizia a verdade sobre uma rota se o usuario clicasse
+// "Verificar" nela. Com o conserto rodando de hora em hora, o resultado fica
+// guardado e o card mostra o estado sozinho.
+//
+// Vive em settings (jsonb que ja existe) de proposito: e dado derivado. Se
+// algo sobrescrever, a proxima passada do cron reconstroi em ate uma hora —
+// nao vale uma coluna e uma migration.
+export interface UltimoConserto {
+  at: string;
+  ok: boolean;
+  /** Motivo curto quando ok=false, pronto para o card. */
+  message?: string;
+  mappedCount?: number;
+}
+
+async function gravarStatus(
+  admin: ReturnType<typeof createAdminClient>,
+  routeId: string,
+  settings: Record<string, unknown> | null,
+  status: UltimoConserto
+) {
+  await admin
+    .from("routed_checkout_configs")
+    .update({ settings: { ...(settings || {}), last_heal: status } })
+    .eq("id", routeId);
+}
+
 export async function healRoute(
   input: HealRouteInput
 ): Promise<HealRouteResult> {
@@ -119,7 +147,7 @@ export async function healRoute(
   let query = admin
     .from("routed_checkout_configs")
     .select(
-      "id, user_id, name, sku_map, variant_map, source_store_id, target_store_id"
+      "id, user_id, name, sku_map, variant_map, settings, source_store_id, target_store_id"
     )
     .eq("id", input.routeId);
   if (input.userId) query = query.eq("user_id", input.userId);
@@ -156,6 +184,21 @@ export async function healRoute(
     clientSecret: targetStore.client_secret,
     accessToken: targetStore.access_token,
   };
+
+  // Loja congelada/desinstalada nao tem conserto por aqui: seguir adiante so
+  // gastaria chamadas de API para falhar no meio e sujar o log do cron toda
+  // hora. Devolve o motivo para o painel mostrar o que o lojista precisa fazer.
+  const lojas = await verificarParDaRota(sourceCreds, targetCreds);
+  if (!lojas.ok) {
+    const mensagem = lojas.mensagem || "Loja inalcancavel.";
+    await gravarStatus(
+      admin,
+      config.id,
+      config.settings as Record<string, unknown> | null,
+      { at: new Date().toISOString(), ok: false, message: mensagem }
+    );
+    throw new HealRouteError(mensagem, 409);
+  }
 
   const [targetIndex, { products: sourceProducts }] = await Promise.all([
     getAllTargetVariants(targetCreds),
@@ -203,9 +246,14 @@ export async function healRoute(
       const key = variant.sku.trim().toLowerCase();
       const found = targetIndex.get(key);
       if (found) {
-        if (String(oldSkuMap[variant.sku] ?? "") !== found.variantId) {
-          fixedWrongCount += 1;
-        }
+        // Compara pelo id NUMERICO dos dois lados. O mapa antigo guarda uma
+        // mistura de formatos (numero cru e gid://shopify/ProductVariant/N) —
+        // comparar as strings cruas marcava toda entrada em gid como "errada"
+        // e inflava o relatorio: numa rota real, 29 de 3147 entradas eram so
+        // diferenca de formato, com o destino correto. O loader ja normaliza
+        // na leitura (numericVariantId), entao formato nao afeta o cliente.
+        const antes = numericId(oldSkuMap[variant.sku] as string | undefined);
+        if (antes !== found.variantId) fixedWrongCount += 1;
         recordCorrect(variant.sku, variant.id, found.variantId);
       } else {
         if (!missingByHandle.has(product.handle)) {
@@ -414,6 +462,17 @@ export async function healRoute(
       variant_map: finalVariantMap,
       last_healed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      settings: {
+        ...((config.settings as Record<string, unknown>) || {}),
+        last_heal: {
+          at: new Date().toISOString(),
+          // Aviso aqui e problema que o conserto NAO resolveu sozinho
+          // (produto que falhou ao criar, SKU que nao gravou).
+          ok: warnings.length === 0,
+          message: warnings[0],
+          mappedCount: Object.keys(finalSkuMap).length,
+        } satisfies UltimoConserto,
+      },
     })
     .eq("id", config.id);
 

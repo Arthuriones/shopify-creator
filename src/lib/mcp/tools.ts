@@ -8,6 +8,21 @@ import {
 import { getStore, listStores, credsOf, type McpIdentity } from "@/lib/mcp/auth";
 import { checkContent, guardError, assertReadOnlyQuery } from "@/lib/mcp/guards";
 
+
+// Shape minimo do produto devolvido pela Admin GraphQL — so os campos lidos
+// aqui. Evita `any` sem exigir o tipo gerado inteiro da Shopify.
+interface NoProduto {
+  id?: string;
+  handle?: string;
+  title?: string;
+  status?: string;
+  vendor?: string;
+  productType?: string;
+  tags?: string[];
+  variants?: { nodes?: { price?: string; sku?: string | null }[] };
+  images?: { nodes?: { url?: string }[] };
+}
+
 export interface Tool {
   name: string;
   description: string;
@@ -101,7 +116,7 @@ export const TOOLS: Tool[] = [
         total_retornado: nodes.length,
         tem_mais: p?.pageInfo?.hasNextPage ?? false,
         cursor: p?.pageInfo?.endCursor ?? null,
-        produtos: nodes.map((n: Record<string, any>) => ({
+        produtos: nodes.map((n: NoProduto) => ({
           id: n.id,
           handle: n.handle,
           titulo: n.title,

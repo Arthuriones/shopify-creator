@@ -238,26 +238,53 @@
     return resolveCheckoutLines(toRouteLines(cart));
   }
 
-  // Best-effort, nunca deve atrasar ou bloquear o redirect: so registra o
-  // motivo de ter caido pro checkout nativo (que nao tem como cobrar), pra
-  // dar visibilidade de onde a rota esta falhando.
-  function trackFallback(reason, error) {
+  // Envia um evento de telemetria. Best-effort: nunca atrasa nem bloqueia o
+  // redirect.
+  //
+  // O Content-Type PRECISA ser text/plain. Ele e um dos tres valores da lista
+  // segura do CORS; qualquer outro (inclusive application/json) obriga o
+  // browser a fazer um preflight OPTIONS antes do POST. Um beacon com
+  // preflight nao sobrevive a navegacao: o documento e descarregado antes do
+  // OPTIONS voltar e o POST nunca sai.
+  //
+  // Era exatamente o que acontecia aqui. "loader_ready" dispara com a pagina
+  // parada e chegava normal (43 registros); "routed_ok" e todos os
+  // "bypass_*" disparam no instante do redirect e chegavam ZERO — nao porque
+  // nao acontecessem, mas porque o browser descartava. Ficamos cegos
+  // justamente no evento que interessa.
+  //
+  // O servidor le o corpo como texto e faz o parse (ver track-fallback).
+  function enviarEvento(reason, detail) {
     try {
       var payload = JSON.stringify({
         token: token,
         reason: reason,
-        detail: error ? String(error && error.message ? error.message : error).slice(0, 500) : "",
+        detail: detail ? String(detail).slice(0, 500) : "",
         pageUrl: window.location.href,
       });
       var url = appUrl.replace(/\/$/, "") + "/api/checkout-routes/track-fallback";
+      var tipo = "text/plain;charset=UTF-8";
       if (navigator.sendBeacon) {
-        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-      } else {
-        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
+        if (navigator.sendBeacon(url, new Blob([payload], { type: tipo }))) return;
+        // sendBeacon devolve false quando a fila esta cheia: cai pro fetch.
       }
-    } catch (trackError) {
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": tipo },
+        body: payload,
+        keepalive: true,
+        mode: "cors",
+      }).catch(function () {});
+    } catch (e) {
       // nunca deixa o log de erro gerar outro erro
     }
+  }
+
+  function trackFallback(reason, error) {
+    enviarEvento(
+      reason,
+      error ? String(error && error.message ? error.message : error) : ""
+    );
   }
 
   // Sinal de vida e de sucesso. Usa o mesmo endpoint do fallback (a coluna
@@ -267,20 +294,7 @@
   // rodando para contar. Comparando "loader_ready" com "routed_ok" da para
   // saber se o problema e o loader nao carregar ou nao interceptar.
   function report(reason, detail) {
-    try {
-      var payload = JSON.stringify({
-        token: token,
-        reason: reason,
-        detail: detail ? String(detail).slice(0, 500) : "",
-        pageUrl: window.location.href,
-      });
-      var url = appUrl.replace(/\/$/, "") + "/api/checkout-routes/track-fallback";
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-      } else {
-        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
-      }
-    } catch (e) {}
+    enviarEvento(reason, detail);
   }
 
   // Uma vez por sessao, so em pagina onde faz sentido comprar.

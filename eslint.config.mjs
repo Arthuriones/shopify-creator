@@ -13,6 +13,11 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "tema/**",
+    // Worktrees de agente carregam uma copia inteira do repo (inclusive
+    // tema/assets com jquery vendorizado). Sem ignorar, o lint reporta 23
+    // erros que nao existem no codigo de verdade e ninguem olha mais o lint.
+    ".claude/**",
+    "**/.claude/**",
     "public/Combo bot/**",
     "failed_html.html",
     "herocart.html",
