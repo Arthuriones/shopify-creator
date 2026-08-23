@@ -915,6 +915,13 @@ export default function StoresPage() {
                     <strong className="text-foreground/90">Acesso &rarr; Selecionar escopos</strong>, cole:
                   </p>
                   <CopyField value={SHOPIFY_SCOPES_STRING} label="Escopos" />
+                  <p className="rounded-md border border-amber-500/30 bg-amber-500/8 px-2.5 py-2">
+                    A Shopify trata <strong className="text-foreground/90">envio, descontos, estoque e mercados</strong>{" "}
+                    como escopos protegidos: depois de colar a lista, ela pede
+                    sua aprovacao na propria tela. Aprove todos. Sem eles a loja
+                    conecta do mesmo jeito, mas voce vai ter que configurar zona
+                    de envio, desconto e estoque na mao no admin da Shopify.
+                  </p>
                   <p>
                     <strong className="text-foreground/90">3.</strong> Em{" "}
                     <strong className="text-foreground/90">URLs de redirecionamento</strong>, cole exatamente:

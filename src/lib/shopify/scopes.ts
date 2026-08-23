@@ -9,6 +9,15 @@
 //
 // `write_themes` fica na lista porque o app escreve assets de tema em
 // src/app/api/checkout-routes/[id]/update-theme/route.ts.
+//
+// O segundo bloco abaixo veio de bater a cabeca em producao: montando uma loja
+// de checkout do zero, cada um destes devolveu ACCESS_DENIED e virou trabalho
+// manual no admin da Shopify. Estao aqui para loja nova ja nascer completa.
+//
+// ATENCAO: alguns sao escopos protegidos e a Shopify pede aprovacao do lojista
+// ("This action requires merchant approval for write_shipping scope"). Colar a
+// lista no app customizado nao basta sozinho — o dono da loja precisa aprovar
+// no painel. Sem isso o app segue funcionando, so que sem essas capacidades.
 export const SHOPIFY_SCOPES = [
   "write_legal_policies",
   "write_online_store_navigation",
@@ -24,6 +33,30 @@ export const SHOPIFY_SCOPES = [
   "write_metaobjects",
   "read_metaobject_definitions",
   "write_metaobject_definitions",
+
+  // Zonas de envio. Sem isto nao da para incluir o pais de destino, e o cliente
+  // e redirecionado para um checkout que trava em "informe o endereco para ver
+  // os metodos de envio".
+  "read_shipping",
+  "write_shipping",
+
+  // Descontos automaticos (ex.: escada 5/10/15% por quantidade no carrinho).
+  "read_discounts",
+  "write_discounts",
+
+  // Estoque por localizacao. Sem read_locations nao ha como informar quantidade
+  // ao criar produto, e variante rastreada com 0 unidades bloqueia a compra.
+  "read_locations",
+  "write_inventory",
+
+  // Mercados: e o Market que decide quais paises aparecem no seletor do
+  // checkout, mesmo com a zona de envio correta.
+  "read_markets",
+  "write_markets",
+
+  // Diagnostico de publicacao (publishedOnCurrentPublication). Colecao ou
+  // produto fora do canal Online Store some da vitrine sem nenhum aviso.
+  "read_product_listings",
 ] as const;
 
 // String pronta para colar no painel da Shopify e para a URL de authorize.
