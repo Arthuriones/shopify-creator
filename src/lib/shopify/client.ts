@@ -492,11 +492,12 @@ async function applyInitialInventoryQuantities(
   productId: string,
   quantitiesByVariantIndex: (number | undefined)[]
 ) {
-  const hasQuantity = quantitiesByVariantIndex.some(
-    (quantity) => typeof quantity === "number"
-  );
-  if (!hasQuantity) return [] as string[];
-
+  // Antes esta funcao saia aqui quando nao vinha quantidade — e era o bug:
+  // o inventory item nascia sem vinculo com nenhuma location. A Shopify trata
+  // item orfao como indisponivel, entao a vitrine mostrava "esgotado" e o
+  // /cart/add.js recusava com 422, enquanto o Admin dizia availableForSale:true.
+  // Agora, sem quantidade, ativamos no local primario com 0 — que com
+  // tracked:false e o que produz "sempre disponivel" de verdade.
   const warnings: string[] = [];
 
   try {
@@ -506,6 +507,48 @@ async function applyInitialInventoryQuantities(
     }
 
     const variants = await getProductInventoryItems(creds, productId);
+
+    // Vincula toda variante ao local, com ou sem quantidade informada.
+    // inventoryActivate cria o vinculo; inventorySetQuantities sozinho falha
+    // quando o item ainda nao existe naquele local.
+    const ativar = `
+      mutation inventoryActivate($inventoryItemId: ID!, $locationId: ID!, $available: Int) {
+        inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId, available: $available) {
+          userErrors { field message }
+        }
+      }
+    `;
+    for (const [index, v] of variants.entries()) {
+      const inventoryItemId = v?.inventoryItem?.id;
+      if (!inventoryItemId) continue;
+      const quantidade = quantitiesByVariantIndex[index];
+      try {
+        const r = await shopifyGraphQL(creds, ativar, {
+          inventoryItemId,
+          locationId,
+          available: typeof quantidade === "number" ? quantidade : 0,
+        });
+        const ue = r?.inventoryActivate?.userErrors || [];
+        if (ue.length) {
+          warnings.push(
+            `Variante ${index + 1}: nao foi possivel vincular ao local (${ue[0].message}).`
+          );
+        }
+      } catch (error) {
+        warnings.push(
+          `Variante ${index + 1}: falha ao vincular ao local (${
+            error instanceof Error ? error.message.slice(0, 90) : "erro"
+          }).`
+        );
+      }
+    }
+
+    const hasQuantity = quantitiesByVariantIndex.some(
+      (quantity) => typeof quantity === "number"
+    );
+    // Sem quantidade informada, o inventoryActivate acima ja resolveu tudo.
+    if (!hasQuantity) return warnings;
+
     const quantities = quantitiesByVariantIndex
       .map((quantity, index) => {
         const inventoryItemId = variants[index]?.inventoryItem?.id;
