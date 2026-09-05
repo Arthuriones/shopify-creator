@@ -349,7 +349,6 @@ export function RouteInspector({
 
         <RotationPanel
           routeId={route.id}
-          routeName={route.name}
           sourceStoreId={route.sourceStoreId}
           stores={stores}
           onChanged={onChanged}

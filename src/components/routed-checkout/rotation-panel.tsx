@@ -5,13 +5,6 @@ import { AlertTriangle, CreditCard, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 export interface PanelTarget {
@@ -52,14 +45,12 @@ const FAIXAS = [
 
 export function RotationPanel({
   routeId,
-  routeName,
   sourceStoreId,
   stores = [],
   className,
   onChanged,
 }: {
   routeId: string;
-  routeName: string;
   sourceStoreId?: string;
   stores?: { id: string; name: string; shopDomain: string }[];
   className?: string;
@@ -69,8 +60,9 @@ export function RotationPanel({
   const [strategy, setStrategy] = useState<Strategy>("sticky");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [addStoreId, setAddStoreId] = useState("");
+  const [selecionadas, setSelecionadas] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+  const [progresso, setProgresso] = useState({ feito: 0, total: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -217,42 +209,73 @@ export function RotationPanel({
       store.id !== sourceStoreId && !targets.some((t) => t.storeId === store.id)
   );
 
+  /**
+   * Adiciona varias lojas de checkout numa tacada.
+   *
+   * Uma de cada vez no servidor de proposito: cada loja precisa do catalogo
+   * inteiro dela casado por SKU contra a vitrine, e disparar cinco dessas em
+   * paralelo estoura o limite de chamadas da Shopify. O que muda aqui e que o
+   * lojista escolhe as cinco de uma vez em vez de voltar no seletor cinco
+   * vezes.
+   */
   async function adicionar() {
-    if (!addStoreId || !sourceStoreId) return;
+    if (selecionadas.length === 0 || !sourceStoreId) return;
     setAdding(true);
-    try {
-      const response = await fetch("/api/checkout-routes/connect-by-sku", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          routeId,
-          sourceStoreId,
-          targetStoreId: addStoreId,
-          createRoute: false,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast.error(data.error || "Nao consegui adicionar a loja.");
-        return;
+    setProgresso({ feito: 0, total: selecionadas.length });
+
+    const problemas: string[] = [];
+    let ok = 0;
+
+    for (const [indice, storeId] of selecionadas.entries()) {
+      const loja = stores.find((item) => item.id === storeId);
+      const nome = loja?.name || loja?.shopDomain || "loja";
+      setProgresso({ feito: indice, total: selecionadas.length });
+      try {
+        const response = await fetch("/api/checkout-routes/connect-by-sku", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            routeId,
+            sourceStoreId,
+            targetStoreId: storeId,
+            createRoute: false,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          problemas.push(`${nome}: ${data.error || "falhou"}`);
+          continue;
+        }
+        if (data.safeToEnable === false) {
+          problemas.push(`${nome}: entrou com 0% (so ${data.coveragePercent}% dos produtos casaram)`);
+        }
+        ok += 1;
+      } catch {
+        problemas.push(`${nome}: falhou`);
       }
-      if (data.safeToEnable === false) {
-        toast.warning(
-          `Loja adicionada com 0% do trafego: so ${data.coveragePercent}% dos produtos casaram. Revise antes de mandar comprador.`
-        );
-      } else {
-        toast.success(`Loja adicionada. ${data.coveragePercent}% dos produtos casaram.`);
-      }
-      setAddStoreId("");
-      const atualizado = await fetch(`/api/checkout-routes/${routeId}/targets`);
-      const proximo = await atualizado.json().catch(() => null);
-      if (proximo?.targets) setTargets(proximo.targets);
-      onChanged?.();
-    } catch {
-      toast.error("Nao consegui adicionar a loja.");
-    } finally {
-      setAdding(false);
     }
+
+    setProgresso({ feito: selecionadas.length, total: selecionadas.length });
+    setSelecionadas([]);
+
+    const atualizado = await fetch(`/api/checkout-routes/${routeId}/targets`);
+    const proximo = await atualizado.json().catch(() => null);
+    if (proximo?.targets) setTargets(proximo.targets);
+    onChanged?.();
+
+    if (ok > 0) {
+      toast.success(
+        ok === 1 ? "1 loja de checkout entrou na rota." : `${ok} lojas de checkout entraram na rota.`
+      );
+    }
+    // Cada problema vira um aviso proprio: "3 de 5 falharam" nao diz qual nem
+    // por que, e e justamente isso que o lojista precisa para consertar.
+    for (const problema of problemas.slice(0, 5)) {
+      toast.warning(problema);
+    }
+
+    setAdding(false);
+    setProgresso({ feito: 0, total: 0 });
   }
 
   if (loading) {
@@ -431,41 +454,75 @@ export function RotationPanel({
       )}
 
       {sourceStoreId && disponiveis.length > 0 && (
-        <div className="flex gap-2 border-t border-border/60 pt-4">
-          <Select
-            value={addStoreId}
-            onValueChange={(valor) => setAddStoreId(valor ?? "")}
-            disabled={adding}
-          >
-            <SelectTrigger className="h-9 flex-1 text-xs">
-              <SelectValue placeholder="Adicionar outra loja de checkout" />
-            </SelectTrigger>
-            <SelectContent>
-              {disponiveis.map((store) => (
-                <SelectItem key={store.id} value={store.id} className="text-xs">
-                  {store.name || store.shopDomain}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-2 border-t border-border/60 pt-4">
+          <p className="text-xs font-medium text-foreground">
+            Adicionar lojas de checkout
+          </p>
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            Marque quantas quiser. O xcart casa o catalogo de cada uma por SKU
+            contra a vitrine, uma de cada vez, e avisa quando terminar.
+          </p>
+
+          <div className="max-h-44 space-y-1 overflow-y-auto">
+            {disponiveis.map((store) => {
+              const marcada = selecionadas.includes(store.id);
+              return (
+                <label
+                  key={store.id}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+                    marcada
+                      ? "border-foreground/25 bg-foreground/8"
+                      : "border-border/70 hover:border-border"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcada}
+                    disabled={adding}
+                    onChange={() =>
+                      setSelecionadas((atual) =>
+                        atual.includes(store.id)
+                          ? atual.filter((id) => id !== store.id)
+                          : [...atual, store.id]
+                      )
+                    }
+                    className="h-3.5 w-3.5 accent-[var(--action)]"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium text-foreground">
+                      {store.name || store.shopDomain}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {store.shopDomain}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
           <Button
             type="button"
             size="sm"
-            className="h-9"
-            disabled={!addStoreId || adding}
+            className="w-full"
+            disabled={selecionadas.length === 0 || adding}
             onClick={adicionar}
           >
             {adding ? (
               <>
                 <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                Ligando produtos
+                Ligando produtos ({progresso.feito + 1} de {progresso.total})
               </>
+            ) : selecionadas.length <= 1 ? (
+              "Adicionar loja"
             ) : (
-              "Adicionar"
+              `Adicionar ${selecionadas.length} lojas`
             )}
           </Button>
         </div>
       )}
+
     </div>
   );
 }

@@ -38,7 +38,6 @@ import {
   Upload,
   ImageIcon,
   Loader2,
-  AlertCircle,
   X,
   HelpCircle,
   ChevronDown,
@@ -177,11 +176,6 @@ function getAssetUrl(filePath: string): string {
   return `${supabaseUrl}/storage/v1/object/public/store-assets/${filePath}`;
 }
 
-function isProfileComplete(store: ConnectedStore): boolean {
-  // O nicho saiu do formulario, entao nao pode mais fazer parte do que
-  // significa 'configurada' -- ninguem conseguiria completar.
-  return !!store.logo_path;
-}
 
 async function ensureStorageBuckets() {
   const res = await fetch("/api/storage/ensure-buckets", { method: "POST" });
@@ -259,13 +253,10 @@ export default function StoresPage() {
   const [assetFiles, setAssetFiles] = useState<File[]>([]);
   const [assetUploading, setAssetUploading] = useState(false);
   const [materialsStoreId, setMaterialsStoreId] = useState("");
-  const [quickAssetFiles, setQuickAssetFiles] = useState<File[]>([]);
-  const [quickAssetsSaving, setQuickAssetsSaving] = useState(false);
   const [additionalLogoFiles, setAdditionalLogoFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const additionalLogoInputRef = useRef<HTMLInputElement>(null);
   const assetsInputRef = useRef<HTMLInputElement>(null);
-  const quickAssetsInputRef = useRef<HTMLInputElement>(null);
   const normalizedShopDomain = normalizeShopDomain(shopDomain);
   const isShopDomainValid =
     shopDomain.trim().length === 0 || normalizedShopDomain !== null;
@@ -302,9 +293,9 @@ export default function StoresPage() {
     if (loadingStores || !pendingProfileAfterInstallRef.current) return;
     if (stores.length === 0) return;
     pendingProfileAfterInstallRef.current = false;
-    // Prioriza a loja sem perfil completo (a que acabou de ser instalada);
-    // se todas estiverem completas, nao abre nada.
-    const target = stores.find((store) => !isProfileComplete(store));
+    // Abre a loja recem-instalada que ainda esta sem logo, que e a unica
+    // configuracao que o app nao consegue preencher sozinho.
+    const target = stores.find((store) => !store.logo_path);
     if (target) void openProfileEditor(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingStores, stores]);
@@ -612,97 +603,6 @@ export default function StoresPage() {
     });
   }
 
-  function handleQuickAssetsSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const allowedTypes = ["image/png", "image/webp", "image/jpeg", "image/jpg"];
-    const validFiles: File[] = [];
-
-    for (const file of files) {
-      if (!allowedTypes.includes(file.type)) {
-        toast.error(`Formato nao suportado: ${file.name}`);
-        continue;
-      }
-      if (file.size > 6 * 1024 * 1024) {
-        toast.error(`Arquivo muito grande (${file.name}). Max 6MB por imagem.`);
-        continue;
-      }
-      validFiles.push(file);
-    }
-
-    if (validFiles.length === 0) return;
-
-    setQuickAssetFiles((prev) => {
-      const next = [...prev, ...validFiles].slice(0, 12);
-      if (next.length < prev.length + validFiles.length) {
-        toast.error("Limite de 12 materiais por vez.");
-      }
-      return next;
-    });
-  }
-
-  async function handleSaveQuickAssets() {
-    if (!materialsStoreId) {
-      toast.error("Selecione uma loja para salvar os materiais.");
-      return;
-    }
-    if (quickAssetFiles.length === 0) {
-      toast.error("Adicione ao menos um material.");
-      return;
-    }
-
-    const supabase = createClient();
-    setQuickAssetsSaving(true);
-
-    try {
-      await ensureStorageBuckets();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Nao autenticado");
-
-      const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
-
-      for (const [index, file] of quickAssetFiles.entries()) {
-        const ext = file.name.split(".").pop() || "png";
-        const path = `${user.id}/${materialsStoreId}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("store-assets")
-          .upload(path, file, { upsert: false });
-
-        if (uploadError) {
-          throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
-        }
-
-        recordsToInsert.push({
-          store_id: materialsStoreId,
-          file_path: path,
-          label: file.name,
-        });
-      }
-
-      if (recordsToInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from("store_assets")
-          .insert(recordsToInsert);
-        if (insertError) {
-          throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
-        }
-      }
-
-      await loadStoreAssets(materialsStoreId);
-      setQuickAssetFiles([]);
-      toast.success("Materiais salvos na loja!");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao salvar materiais";
-      toast.error(msg);
-    } finally {
-      setQuickAssetsSaving(false);
-    }
-  }
 
   async function handleRemoveAsset(asset: StoreAsset) {
     if (!confirm("Remover este material da marca?")) return;
@@ -1099,130 +999,6 @@ export default function StoresPage() {
         </Dialog>
       </PageHeader>
 
-      {!loadingStores && stores.length > 0 && (
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle
-              className="text-[13px] font-medium uppercase text-muted-foreground"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              {t("brand_materials_title")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-              <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
-                  {t("store_label")}
-                </Label>
-                <Select value={materialsStoreId} onValueChange={(value) => setMaterialsStoreId(value ?? "")}>
-                  <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                    <SelectValue placeholder="Selecione a loja">
-                      {(value: string) => stores.find((store) => store.id === value)?.name ?? value}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 border-border/50"
-                  onClick={() => quickAssetsInputRef.current?.click()}
-                >
-                  <Upload className="mr-2 h-3.5 w-3.5" />
-                  {t("add_materials_btn")}
-                </Button>
-                <Button
-                  type="button"
-                  className="h-10"
-                  style={{
-                    background: quickAssetsSaving
-                      ? "color-mix(in oklch, var(--action) 40%, transparent)"
-                      : "var(--action)",
-                    color: "var(--action-foreground)",
-                  }}
-                  disabled={quickAssetsSaving || quickAssetFiles.length === 0 || !materialsStoreId}
-                  onClick={handleSaveQuickAssets}
-                >
-                  {quickAssetsSaving ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t("saving")}
-                    </span>
-                  ) : (
-                    t("save_materials_btn")
-                  )}
-                </Button>
-                <input
-                  ref={quickAssetsInputRef}
-                  type="file"
-                  accept="image/png,image/webp,image/jpeg,image/jpg"
-                  onChange={handleQuickAssetsSelect}
-                  multiple
-                  className="hidden"
-                />
-              </div>
-            </div>
-
-            {quickAssetFiles.length > 0 && (
-              <div className="rounded-lg border border-border/30 bg-background/50 p-2.5">
-                <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
-                  {t("ready_to_save", { count: quickAssetFiles.length })}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {quickAssetFiles.map((file, index) => (
-                    <Badge key={`${file.name}-${index}`} variant="outline" className="text-[10px] border-border/40">
-                      {file.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {materialsStoreId && (
-              storeAssets.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-                  {storeAssets.map((asset) => (
-                    <div key={asset.id} className="relative group">
-                      <div className="relative aspect-square overflow-hidden rounded-md border border-border/50 bg-background/40">
-                        <Image
-                          src={getAssetUrl(asset.file_path)}
-                          alt={asset.label || "Material da marca"}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleRemoveAsset(asset)}
-                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-card border border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Remover material"
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("no_materials")}
-                </p>
-              )
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {loadingStores ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <StoreSkeleton />
@@ -1311,79 +1087,39 @@ export default function StoresPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <CardTitle
-                        className="text-[15px] font-semibold truncate"
-                        style={{ letterSpacing: "-0.01em" }}
-                      >
-                        {store.name}
-                      </CardTitle>
-                      {isProfileComplete(store) ? (
-                        <Badge
-                          className="text-[10px] font-medium shrink-0"
-                          style={{
-                            background: "color-mix(in oklch, var(--action) 10%, transparent)",
-                            color: "var(--action)",
-                            border: "none",
-                          }}
-                        >
-                          {t("store_badge_configured")}
-                        </Badge>
-                      ) : (
-                        <Badge
-                          className="text-[10px] font-medium shrink-0"
-                          style={{
-                            background: "color-mix(in oklch, var(--warning) 10%, transparent)",
-                            color: "var(--warning)",
-                            border: "none",
-                          }}
-                        >
-                          <AlertCircle className="mr-1 h-3 w-3" />
-                          {t("store_badge_incomplete")}
-                        </Badge>
-                      )}
-                    </div>
+                    <CardTitle
+                      className="truncate text-[15px] font-semibold"
+                      style={{ letterSpacing: "-0.01em" }}
+                    >
+                      {store.name}
+                    </CardTitle>
                     <a
                       href={`https://${store.shop_domain}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors duration-200"
+                      className="flex items-center gap-1 text-[12px] text-muted-foreground transition-colors duration-200 hover:text-foreground"
                     >
                       {store.shop_domain}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
-                    {group.role !== "unassigned" && (
-                      <StoreRoleBadge role={group.role} className="mt-1.5" showHint />
-                    )}
                   </div>
                 </div>
-                {store.niche && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
-                      {store.niche}
-                    </Badge>
-                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
-                      {store.currency_code || "USD"}
-                    </Badge>
-                    <Badge variant="outline" className="w-fit text-[11px] border-border/30">
-                      {LANGUAGE_OPTIONS.find((option) => option.value === store.target_language)?.label ||
-                        store.target_language ||
-                        "Português do Brasil"}
-                    </Badge>
-                    {store.auto_convert_prices && (
-                      <Badge
-                        className="w-fit text-[10px] font-medium"
-                        style={{
-                          background: "color-mix(in oklch, var(--action) 10%, transparent)",
-                          color: "var(--action)",
-                          border: "none",
-                        }}
-                      >
-                        {t("auto_conversion")}
-                      </Badge>
-                    )}
-                  </div>
-                )}
+
+                {/* Uma linha, nao seis badges. O papel e a unica coisa aqui que
+                    muda o que a loja FAZ; moeda e idioma sao configuracao, e
+                    configuracao pode ser texto quieto. */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {group.role !== "unassigned" && <StoreRoleBadge role={group.role} />}
+                  <span className="text-[11px] text-muted-foreground">
+                    {store.currency_code || "USD"}
+                    {store.auto_convert_prices ? " convertido" : ""}
+                    {", "}
+                    {LANGUAGE_OPTIONS.find((option) => option.value === store.target_language)
+                      ?.label ||
+                      store.target_language ||
+                      "Português do Brasil"}
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="flex items-center justify-between pt-0">
                 <Button
@@ -1393,7 +1129,7 @@ export default function StoresPage() {
                   className="h-8 text-[12px] border-border/50 hover:border-border"
                 >
                   <Pencil className="mr-1.5 h-3 w-3" />
-                  {isProfileComplete(store) ? t("edit_profile_btn") : t("configure_profile_btn")}
+                  {t("edit_profile_btn")}
                 </Button>
                 <Button
                   variant="ghost"
