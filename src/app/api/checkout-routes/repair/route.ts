@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { healRoute, HealRouteError } from "@/lib/checkout-routes/heal";
+import {
+  healRoute,
+  HealRouteError,
+  type HealRouteResult,
+} from "@/lib/checkout-routes/heal";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -26,16 +30,59 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // O botao conserta a rota INTEIRA: com rodizio ela tem varias lojas de
+  // checkout, e consertar so a primeira deixaria o comprador sorteado para as
+  // outras caindo em mapa velho -- exatamente o problema que o botao existe
+  // para resolver.
+  const { data: alvos } = await supabase
+    .from("routed_checkout_targets")
+    .select("id")
+    .eq("route_id", routeId)
+    .eq("enabled", true)
+    .order("position", { ascending: true })
+    .order("id", { ascending: true });
+
+  // Sem linha de destino (rota legada): uma passada sem targetId, que cai nas
+  // colunas da propria rota.
+  const targetIds: (string | undefined)[] =
+    alvos && alvos.length > 0 ? alvos.map((alvo) => alvo.id) : [undefined];
+
   try {
-    const result = await healRoute({
-      routeId,
-      // Escopo do dono: healRoute filtra por user_id, entao rota de outro
-      // usuario devolve 404 em vez de ser consertada.
-      userId: user.id,
-      origin: request.nextUrl.origin,
-      cookie: request.headers.get("cookie") || "",
+    const results: HealRouteResult[] = [];
+    for (const targetId of targetIds) {
+      results.push(
+        await healRoute({
+          routeId,
+          targetId,
+          // Escopo do dono: healRoute filtra por user_id, entao rota de outro
+          // usuario devolve 404 em vez de ser consertada.
+          userId: user.id,
+          origin: request.nextUrl.origin,
+          cookie: request.headers.get("cookie") || "",
+        })
+      );
+    }
+
+    // O primeiro resultado continua no topo do payload para nao quebrar a UI
+    // que le r.stampedSkuCount e companhia direto da raiz.
+    const soma = (pick: (r: HealRouteResult) => number) =>
+      results.reduce((total, r) => total + (pick(r) || 0), 0);
+
+    return NextResponse.json({
+      ...results[0],
+      targetCount: results.length,
+      targets: results,
+      // Totais somados: com varios destinos, o numero de um so engana.
+      stampedSkuCount: soma((r) => r.stampedSkuCount),
+      dedupedSkuCount: soma((r) => r.dedupedSkuCount),
+      fixedWrongCount: soma((r) => r.fixedWrongCount),
+      extendedCount: soma((r) => r.extendedCount),
+      createdProductCount: soma((r) => r.createdProductCount),
+      createdVariantCount: soma((r) => r.createdVariantCount),
+      imageQueueCount: soma((r) => r.imageQueueCount),
+      warnings: results.flatMap((r) => r.warnings),
+      noop: results.every((r) => r.noop),
     });
-    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof HealRouteError) {
       return NextResponse.json(

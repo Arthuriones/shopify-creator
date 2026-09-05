@@ -13,6 +13,8 @@ xcart is a dropshipping tool built around a **two-store "routed checkout"** mode
 
 At checkout, the cart is **routed vitrine → checkout store, matched by SKU**, and the customer is redirected (Shopify cart permalink) to the checkout store's checkout in the right currency. The two stores never appear linked (`no-referrer`).
 
+A vitrine can point at **several checkout stores at once** and the traffic is split between them (rotation — see ARCHITECTURE.md §10.2), so one payment account going down doesn't take the vitrine with it. Each checkout store carries its own `sku_map` (`routed_checkout_targets`), because variant ids differ per store. The draw only ever happens between targets that cover the cart equally well — **rotation never costs a cart line**.
+
 **Everything hinges on SKU.** Neutralization rewrites titles/images, so SKU is the only stable join key between the two stores. No SKUs on the vitrine → routing can't work. When editing the checkout store, you may freely change title/description/tags/images but **never change or delete variants/SKUs** — that breaks the route.
 
 Also does: multi-source import/clone (AliExpress, Shopify, WooCommerce, Shoplazza, generic sites), AI optimize/translate/neutralize, AI store setup (policies/menus/pages/reviews/Instagram), Stripe billing + credits.
@@ -30,10 +32,10 @@ Also does: multi-source import/clone (AliExpress, Shopify, WooCommerce, Shoplazz
 `adm.*` = admin, `user.*` = app/dashboard, other host = marketing landing only. Logic in `src/proxy.ts` → `src/lib/supabase/middleware.ts`.
 
 ## Where things live
-- Routing: `src/app/api/checkout-routes/*`, `public/routed-checkout-loader.js`, `src/lib/shopify/cart-routing.ts`, `src/components/routed-checkout/*`
+- Routing: `src/app/api/checkout-routes/*`, `public/routed-checkout-loader.js`, `src/lib/shopify/cart-routing.ts`, `src/lib/checkout-routes/*` (rotation, targets, embed config, heal), `src/components/routed-checkout/*`
 - Shopify + AI: `src/lib/shopify/client.ts`, `src/lib/gemini/client.ts`, `src/lib/ai/product-neutralizer.ts`, `src/lib/store-context.ts`
 - Import/jobs: `src/lib/import/*`, `src/lib/aliexpress/*`, `src/lib/jobs/*`, `src/app/api/jobs/*`
-- Data: `supabase/migrations/001-018_*.sql` (see ARCHITECTURE.md §5 for every table)
+- Data: `supabase/migrations/001-025_*.sql` (see ARCHITECTURE.md §5 for every table)
 
 ## StoreContext drives all AI
 Every AI call receives `StoreContext` (name, niche, target_audience, brand_voice, store_description, **target_language**) from `getStoreContext(storeId, userId)`. API routes fetch it server-side by `storeId`; if `niche` is empty the AI route 400s. `target_language` forces the output language.
@@ -44,3 +46,5 @@ Every AI call receives `StoreContext` (name, niche, target_audience, brand_voice
 - Bulk-import queue has no atomic claim / stale recovery (image queue does).
 - `write_themes` needs Shopify CLI + Theme Access password, not this app.
 - Some prompts/strings still hardcode BR (CDC/LGPD, "R$89") — verify against `target_language`.
+- Changing rotation weights only reaches buyers after the theme config is pushed again (`update-theme`); until then the inline path routes on the old split.
+- The rotation draw is mirrored in the loader and on the server — the two hashes must stay identical or a buyer switches checkout store mid-purchase.

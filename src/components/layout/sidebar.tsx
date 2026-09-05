@@ -96,6 +96,7 @@ const navSections: NavSection[] = [
         icon: WorkflowIcon,
         children: [
           { href: "/clone/routed-checkout", label: "connectStores" },
+          { href: "/clone/routed-checkout/map", label: "routeMap" },
           { href: "/clone/routed-checkout/active-routes", label: "routesAndTokens" },
         ],
       },

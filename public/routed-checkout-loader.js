@@ -25,11 +25,39 @@
 
   // Configuracao inline: pode vir embutida no script tag (data-config)
   // ou como asset externo na CDN Shopify (data-config-url).
-  // Estrutura: { domain, skuMap, variantMap, country, locale }
+  // Estrutura atual: { rotation: {strategy}, targets: [{id, domain, weight,
+  // skuMap, variantMap, country, locale}] }.
+  // Estrutura antiga (um destino so): { domain, skuMap, variantMap, country,
+  // locale } -- ainda chega de tema que nao regerou o config, entao
+  // normalizeConfig converte para o formato novo com um destino.
   var inlineConfig = null;
+
+  function normalizeConfig(cfg) {
+    if (!cfg) return null;
+    var targets = [];
+    if (Array.isArray(cfg.targets) && cfg.targets.length > 0) {
+      targets = cfg.targets.filter(function (t) { return t && t.domain; });
+    } else if (cfg.domain) {
+      targets = [{
+        id: cfg.id || null,
+        domain: cfg.domain,
+        weight: 1,
+        skuMap: cfg.skuMap || {},
+        variantMap: cfg.variantMap || {},
+        country: cfg.country || "",
+        locale: cfg.locale || ""
+      }];
+    }
+    if (targets.length === 0) return null;
+    return {
+      strategy: (cfg.rotation && cfg.rotation.strategy) || "sticky",
+      targets: targets
+    };
+  }
+
   try {
     var configAttr = scriptTag.dataset.config || scriptTag.getAttribute("data-config");
-    if (configAttr) inlineConfig = JSON.parse(configAttr);
+    if (configAttr) inlineConfig = normalizeConfig(JSON.parse(configAttr));
   } catch (e) {
     console.warn("[RoutedCheckout] data-config invalido, ignorando.", e);
   }
@@ -39,12 +67,46 @@
   if (configUrl && !inlineConfig) {
     fetch(configUrl)
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (cfg) { if (cfg && cfg.domain) inlineConfig = cfg; })
+      .then(function (cfg) { inlineConfig = normalizeConfig(cfg) || inlineConfig; })
       .catch(function () {});
+  }
+
+  // Chave do comprador para o rodizio sticky: sorteia uma vez, guarda, e a
+  // partir dai ele cai sempre na mesma loja de checkout. Sem isso ele trocaria
+  // de dominio de checkout a cada visita -- ruim para quem abandona o carrinho
+  // e volta, e ruim para o pixel da loja de checkout.
+  var ROTATION_KEY_STORAGE = "xcart_rk";
+  var rotationKey = "";
+  try {
+    rotationKey = window.localStorage.getItem(ROTATION_KEY_STORAGE) || "";
+    if (!rotationKey) {
+      rotationKey = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
+      window.localStorage.setItem(ROTATION_KEY_STORAGE, rotationKey);
+    }
+  } catch (e) {
+    // Navegador com storage bloqueado (anonima, ITP): sem chave o sorteio cai
+    // no aleatorio. Perde a aderencia, nao perde o checkout.
+    rotationKey = "";
+  }
+
+  // Mesmo hash do servidor (FNV-1a 32 bits, ver lib/checkout-routes/rotation.ts).
+  // Os dois PRECISAM concordar: se o inline sorteia a loja A e a API sorteia a
+  // B, o comprador troca de checkout no meio da compra.
+  function hashRotationKey(key) {
+    var hash = 0x811c9dc5;
+    for (var i = 0; i < key.length; i++) {
+      hash ^= key.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash >>> 0;
   }
 
   var isRouting = false;
   var isAddingToCart = false;
+  // Ultimo destino sorteado, para a telemetria dizer QUAL loja de checkout
+  // levou (ou perdeu) o carrinho. Com rodizio, "a rota falhou" nao localiza
+  // mais o problema.
+  var lastRoutedTarget = null;
   var yampiPatchTimer = null;
   var yampiPatchAttempts = 0;
   var initialized = false;
@@ -178,21 +240,20 @@
     };
   }
 
-  // Resolucao inline: usa o mapa embutido no script tag, sem chamada de API.
+  // Quantas linhas do carrinho ESTE destino consegue resolver, e com que ids.
   // Resolve por variantMap (sourceVariantId) primeiro, depois skuMap.
-  function resolveInlineUrl(lines) {
-    if (!inlineConfig || !inlineConfig.domain) return null;
+  function resolveWithTarget(target, lines) {
     var resolvedLines = [];
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       var srcVariant = String(line.sourceVariantId || "");
       var sku = String(line.sku || "").trim().toLowerCase();
       var targetId = null;
-      if (srcVariant && inlineConfig.variantMap) {
-        targetId = inlineConfig.variantMap[srcVariant] || null;
+      if (srcVariant && target.variantMap) {
+        targetId = target.variantMap[srcVariant] || null;
       }
-      if (!targetId && sku && inlineConfig.skuMap) {
-        targetId = inlineConfig.skuMap[sku] || null;
+      if (!targetId && sku && target.skuMap) {
+        targetId = target.skuMap[sku] || null;
       }
       if (targetId) {
         var numericId = String(targetId);
@@ -200,11 +261,69 @@
         resolvedLines.push({ variantId: numericId, quantity: Math.max(1, Number(line.quantity) || 1) });
       }
     }
-    if (resolvedLines.length === 0) return null;
-    var cartPath = resolvedLines.map(function (l) { return l.variantId + ":" + l.quantity; }).join(",");
-    var url = new URL("https://" + inlineConfig.domain + "/cart/" + cartPath);
-    if (inlineConfig.country) url.searchParams.set("country", inlineConfig.country);
-    if (inlineConfig.locale) url.searchParams.set("locale", inlineConfig.locale);
+    return resolvedLines;
+  }
+
+  // Sorteia a loja de checkout deste carrinho. Espelha pickTarget do servidor:
+  // so disputam os destinos que empatam na MELHOR cobertura do carrinho --
+  // rodizio nunca vale um item a menos no checkout -- e entre eles o sorteio e
+  // ponderado por weight e ancorado na chave do comprador.
+  function pickInlineTarget(lines) {
+    if (!inlineConfig || !inlineConfig.targets.length) return null;
+
+    var candidates = [];
+    var best = 0;
+    for (var i = 0; i < inlineConfig.targets.length; i++) {
+      var target = inlineConfig.targets[i];
+      var resolved = resolveWithTarget(target, lines);
+      if (resolved.length > best) best = resolved.length;
+      candidates.push({ target: target, resolved: resolved });
+    }
+    if (best === 0) return null;
+
+    var pool = candidates.filter(function (c) { return c.resolved.length === best; });
+    var weighted = pool.filter(function (c) { return Number(c.target.weight || 0) > 0; });
+    if (weighted.length > 0) pool = weighted;
+    if (pool.length === 1) return pool[0];
+
+    // Ordem estavel: o mesmo comprador tem que cair sempre no mesmo destino,
+    // entao a fila do sorteio nao pode depender da ordem que veio o JSON.
+    pool.sort(function (a, b) {
+      return String(a.target.id || a.target.domain).localeCompare(
+        String(b.target.id || b.target.domain)
+      );
+    });
+
+    var total = 0;
+    for (var j = 0; j < pool.length; j++) total += Math.max(1, Number(pool[j].target.weight) || 1);
+
+    var key = inlineConfig.strategy === "each_checkout" || !rotationKey
+      ? String(Math.random())
+      : rotationKey;
+    var cursor = hashRotationKey(key) % total;
+
+    for (var k = 0; k < pool.length; k++) {
+      cursor -= Math.max(1, Number(pool[k].target.weight) || 1);
+      if (cursor < 0) return pool[k];
+    }
+    return pool[pool.length - 1];
+  }
+
+  // Resolucao inline: usa o mapa embutido no script tag, sem chamada de API.
+  function resolveInlineUrl(lines) {
+    var pick = pickInlineTarget(lines);
+    if (!pick) return null;
+
+    // Cobertura parcial cai para a API: la o destino ainda pode resolver o
+    // resto pelo products.json publico. Mandar o comprador para um checkout
+    // com item faltando e pior do que gastar uma chamada.
+    if (pick.resolved.length < lines.length) return null;
+
+    var cartPath = pick.resolved.map(function (l) { return l.variantId + ":" + l.quantity; }).join(",");
+    var url = new URL("https://" + pick.target.domain + "/cart/" + cartPath);
+    if (pick.target.country) url.searchParams.set("country", pick.target.country);
+    if (pick.target.locale) url.searchParams.set("locale", pick.target.locale);
+    lastRoutedTarget = pick.target;
     return url.toString();
   }
 
@@ -220,6 +339,7 @@
       body: JSON.stringify({
         token: token,
         lines: lines,
+        rotationKey: rotationKey,
       }),
     });
 
@@ -231,6 +351,7 @@
       throw new Error(data.error || "Nao foi possivel rotear o checkout.");
     }
 
+    lastRoutedTarget = { id: data.targetId || null, domain: data.targetDomain || "" };
     return data.redirectUrl;
   }
 
@@ -261,6 +382,8 @@
         reason: reason,
         detail: detail ? String(detail).slice(0, 500) : "",
         pageUrl: window.location.href,
+        targetId: (lastRoutedTarget && lastRoutedTarget.id) || null,
+        targetDomain: (lastRoutedTarget && lastRoutedTarget.domain) || "",
       });
       var url = appUrl.replace(/\/$/, "") + "/api/checkout-routes/track-fallback";
       var tipo = "text/plain;charset=UTF-8";
@@ -333,7 +456,11 @@
       }
 
       var destino = await resolveCheckout(cart);
-      report("routed_ok", String(cart.item_count || "") + " itens");
+      report(
+        "routed_ok",
+        String(cart.item_count || "") + " itens -> " +
+          ((lastRoutedTarget && lastRoutedTarget.domain) || "?")
+      );
       window.location.href = destino;
     } catch (error) {
       console.warn("[RoutedCheckout] erro ao rotear checkout", error);

@@ -34,6 +34,11 @@ async function lerCorpo(request: NextRequest): Promise<Record<string, unknown>> 
   }
 }
 
+// O targetId vem do navegador do comprador: so entra no banco se tiver cara
+// de uuid (a coluna e FK, um valor torto derrubaria o insert inteiro).
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(request: NextRequest) {
   const body = await lerCorpo(request);
   const token = typeof body.token === "string" ? body.token.trim() : "";
@@ -43,6 +48,12 @@ export async function POST(request: NextRequest) {
     typeof body.detail === "string" ? body.detail.slice(0, 500) : null;
   const pageUrl =
     typeof body.pageUrl === "string" ? body.pageUrl.slice(0, 500) : null;
+  // Com rodizio, saber que "a rota falhou" nao basta: o que interessa e qual
+  // das lojas de checkout falhou.
+  const targetId =
+    typeof body.targetId === "string" && UUID_RE.test(body.targetId)
+      ? body.targetId
+      : null;
 
   if (!token) {
     return NextResponse.json({ ok: false }, { headers: corsHeaders });
@@ -59,6 +70,7 @@ export async function POST(request: NextRequest) {
     if (config?.id) {
       await supabase.from("routed_checkout_fallbacks").insert({
         route_config_id: config.id,
+        target_id: targetId,
         reason,
         detail,
         page_url: pageUrl,

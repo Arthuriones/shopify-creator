@@ -153,6 +153,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Id da rota e obrigatorio." }, { status: 400 });
   }
 
+  // Qual loja de checkout verificar. A verificacao pagina o catalogo das DUAS
+  // lojas; rodar isso para todos os destinos numa requisicao so estouraria o
+  // maxDuration em catalogo grande. Entao verifica uma por vez e diz qual.
+  const targetIdPedido = typeof body.targetId === "string" ? body.targetId : "";
+
   const { data: config, error: configError } = await supabase
     .from("routed_checkout_configs")
     .select("id, name, sku_map, settings, source_store_id, target_store_id")
@@ -164,13 +169,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Rota nao encontrada." }, { status: 404 });
   }
 
+  const { data: todosAlvos } = await supabase
+    .from("routed_checkout_targets")
+    .select("id, target_store_id, sku_map, enabled")
+    .eq("route_id", routeId)
+    .order("position", { ascending: true })
+    .order("id", { ascending: true });
+
+  const alvosLigados = (todosAlvos || []).filter((alvo) => alvo.enabled !== false);
+  const alvo = targetIdPedido
+    ? (todosAlvos || []).find((item) => item.id === targetIdPedido)
+    : alvosLigados[0];
+
+  if (targetIdPedido && !alvo) {
+    return NextResponse.json(
+      { error: "Loja de checkout nao encontrada nesta rota." },
+      { status: 404 }
+    );
+  }
+
+  // Rota legada sem linha de destino: cai nas colunas da propria rota.
+  const targetStoreId = alvo?.target_store_id || config.target_store_id;
+  const skuMapDoAlvo = (alvo ? alvo.sku_map : config.sku_map) || {};
+
   const { data: stores } = await supabase
     .from("stores")
-    .select("id, shop_domain, client_id, client_secret, access_token, target_language")
-    .in("id", [config.source_store_id, config.target_store_id]);
+    .select("id, name, shop_domain, client_id, client_secret, access_token, target_language")
+    .in("id", [config.source_store_id, targetStoreId]);
 
   const sourceStore = stores?.find((store) => store.id === config.source_store_id);
-  const targetStore = stores?.find((store) => store.id === config.target_store_id);
+  const targetStore = stores?.find((store) => store.id === targetStoreId);
   if (!sourceStore || !targetStore) {
     return NextResponse.json({ error: "Vitrine ou loja checkout nao encontrada." }, { status: 404 });
   }
@@ -238,7 +266,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const skuMap = (config.sku_map || {}) as Record<string, string | number>;
+    const skuMap = skuMapDoAlvo as Record<string, string | number>;
 
     const missingSkus: string[] = [];
     const wrongSkus: { sku: string; expectedVariantId: string | null; mappedVariantId: string }[] = [];
@@ -316,6 +344,12 @@ export async function POST(request: NextRequest) {
       ok,
       shipping,
       checkedAt: new Date().toISOString(),
+      // Qual loja de checkout este resultado descreve. Sem isso, uma rota com
+      // rodizio mostraria um numero de cobertura sem dizer de quem ele e.
+      checkedTargetId: alvo?.id ?? null,
+      checkedTargetName: targetStore.name || targetStore.shop_domain,
+      checkedTargetDomain: targetStore.shop_domain,
+      targetCount: alvosLigados.length,
       totalSourceSkus: checkedCount,
       noSkuCount,
       sourceVariantCount: sourceVariants.length,

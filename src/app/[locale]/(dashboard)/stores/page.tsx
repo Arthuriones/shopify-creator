@@ -2,7 +2,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
+import { StoreRoleBadge } from "@/components/routed-checkout/store-role-badge";
+import type { StoreRole } from "@/lib/checkout-routes/store-roles";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -214,6 +216,9 @@ export default function StoresPage() {
   const t = useTranslations("stores");
   const [stores, setStores] = useState<ConnectedStore[]>([]);
   const [loadingStores, setLoadingStores] = useState(true);
+  // Papel de cada loja no roteamento (vitrine / checkout). Nao e coluna da
+  // loja: sai das rotas, entao vem do mesmo endpoint que desenha o mapa.
+  const [storeRoles, setStoreRoles] = useState<Record<string, StoreRole>>({});
   const [shopDomain, setShopDomain] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -328,6 +333,63 @@ export default function StoresPage() {
     if (!materialsStoreId) return;
     void loadStoreAssets(materialsStoreId);
   }, [materialsStoreId]);
+
+  // Best-effort: a lista de lojas nao pode depender disso. Sem os papeis as
+  // lojas caem todas no grupo "sem rota", que e a verdade quando nao ha rota.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/checkout-routes/map")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.stores) return;
+        const next: Record<string, StoreRole> = {};
+        for (const store of data.stores as { id: string; role: StoreRole }[]) {
+          next[store.id] = store.role;
+        }
+        setStoreRoles(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // As lojas agrupadas por papel. A ordem e deliberada: vitrine primeiro
+  // porque e por onde o trafego entra, depois quem cobra, e por ultimo o que
+  // ainda nao esta em rota nenhuma.
+  const storeGroups = useMemo(() => {
+    const order: { role: StoreRole; title: string; hint: string }[] = [
+      {
+        role: "vitrine",
+        title: "Vitrines",
+        hint: "Recebem o trafego do anuncio e carregam a marca. O comprador navega e monta o carrinho aqui.",
+      },
+      {
+        role: "both",
+        title: "Vitrine e checkout",
+        hint: "Recebem trafego numa rota e cobram em outra.",
+      },
+      {
+        role: "checkout",
+        title: "Lojas de checkout",
+        hint: "Catalogo neutralizado, onde o pagamento acontece. Titulo, descricao e imagem podem mudar a vontade; SKU e variante, nunca.",
+      },
+      {
+        role: "unassigned",
+        title: "Fora de rota",
+        hint: "Conectadas, mas ainda sem participar de nenhum roteamento.",
+      },
+    ];
+
+    return order
+      .map((group) => ({
+        ...group,
+        stores: stores.filter(
+          (store) => (storeRoles[store.id] || "unassigned") === group.role
+        ),
+      }))
+      .filter((group) => group.stores.length > 0);
+  }, [stores, storeRoles]);
 
   async function loadStores() {
     setLoadingStores(true);
@@ -1200,10 +1262,36 @@ export default function StoresPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-          {stores.map((store) => (
+          {storeGroups.map((group) => (
+            <Fragment key={group.role}>
+              {/* Cabecalho de grupo ocupando a linha inteira do grid: separa
+                  quem recebe trafego de quem cobra sem precisar de duas telas. */}
+              <div className="col-span-full mt-2 first:mt-0">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border/60 pb-2">
+                  <h2 className="text-sm font-semibold text-foreground">{group.title}</h2>
+                  <StoreRoleBadge role={group.role} />
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {group.stores.length}
+                  </span>
+                </div>
+                <p className="mt-1.5 max-w-2xl text-xs leading-5 text-muted-foreground">
+                  {group.hint}
+                </p>
+              </div>
+              {group.stores.map((store) => (
             <Card
               key={store.id}
-              className="group border-border/50 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-border"
+              className={cn(
+                "group border-border/50 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-border",
+                // Faixa lateral na cor do papel: depois de rolar a pagina e
+                // perder o cabecalho do grupo de vista, ela ainda diz se esta
+                // loja recebe trafego ou cobra.
+                "border-l-2",
+                group.role === "vitrine" && "border-l-vitrine/70",
+                group.role === "checkout" && "border-l-checkout/70",
+                group.role === "both" && "border-l-primary/70",
+                group.role === "unassigned" && "border-l-border"
+              )}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -1267,6 +1355,9 @@ export default function StoresPage() {
                       {store.shop_domain}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </a>
+                    {group.role !== "unassigned" && (
+                      <StoreRoleBadge role={group.role} className="mt-1.5" showHint />
+                    )}
                   </div>
                 </div>
                 {store.niche && (
@@ -1317,6 +1408,8 @@ export default function StoresPage() {
                 </Button>
               </CardContent>
             </Card>
+              ))}
+            </Fragment>
           ))}
         </div>
       )}

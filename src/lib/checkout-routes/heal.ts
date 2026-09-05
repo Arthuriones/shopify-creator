@@ -73,6 +73,8 @@ async function getAllTargetVariants(creds: ShopifyCredentials) {
 }
 
 export interface HealRouteResult {
+  /** Destino consertado. null = rota legada, sem linha de destino. */
+  targetId?: string | null;
   ok: true;
   routeId: string;
   stampedSkuCount: number;
@@ -98,6 +100,13 @@ export class HealRouteError extends Error {
 
 interface HealRouteInput {
   routeId: string;
+  /**
+   * Qual loja de checkout consertar. Uma rota pode ter varias (rodizio), e
+   * cada uma tem o SEU mapa -- consertar "a rota" sem dizer qual destino
+   * consertaria sempre o mesmo e deixaria os outros apodrecendo.
+   * Omitido = o primeiro destino ligado.
+   */
+  targetId?: string;
   /** Restringe ao dono. Omitido no cron, que ja seleciona as rotas. */
   userId?: string;
   /** Origem da app, para acordar a fila de imagens. */
@@ -159,15 +168,41 @@ export async function healRoute(
 
   const userId = config.user_id as string;
 
+  // Qual destino desta rota vai ser consertado.
+  let targetQuery = admin
+    .from("routed_checkout_targets")
+    .select("id, target_store_id, sku_map, variant_map")
+    .eq("route_id", config.id);
+  if (input.targetId) targetQuery = targetQuery.eq("id", input.targetId);
+  else targetQuery = targetQuery.eq("enabled", true);
+
+  const { data: targetRows } = await targetQuery
+    .order("position", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1);
+
+  const targetRow = targetRows?.[0] || null;
+  if (input.targetId && !targetRow) {
+    throw new HealRouteError("Loja de checkout nao encontrada nesta rota.", 404);
+  }
+
+  // Rota anterior a migracao 025 cujo destino foi apagado a mao: cai nas
+  // colunas da propria rota em vez de nao consertar nada.
+  const targetStoreId = targetRow?.target_store_id || config.target_store_id;
+  const oldMaps = {
+    skuMap: (targetRow ? targetRow.sku_map : config.sku_map) || {},
+    variantMap: (targetRow ? targetRow.variant_map : config.variant_map) || {},
+  };
+
   const { data: stores } = await admin
     .from("stores")
     .select(
       "id, shop_domain, client_id, client_secret, access_token, niche, target_language"
     )
-    .in("id", [config.source_store_id, config.target_store_id]);
+    .in("id", [config.source_store_id, targetStoreId]);
 
   const sourceStore = stores?.find((s) => s.id === config.source_store_id);
-  const targetStore = stores?.find((s) => s.id === config.target_store_id);
+  const targetStore = stores?.find((s) => s.id === targetStoreId);
   if (!sourceStore || !targetStore) {
     throw new HealRouteError("Vitrine ou loja checkout nao encontrada.", 404);
   }
@@ -233,7 +268,7 @@ export async function healRoute(
       targetVariantId;
   }
 
-  const oldSkuMap = (config.sku_map || {}) as Record<string, string | number>;
+  const oldSkuMap = oldMaps.skuMap as Record<string, string | number>;
   const missingByHandle = new Map<string, PublicShopifyProduct>();
   const missingVariantsByHandle = new Map<
     string,
@@ -451,21 +486,45 @@ export async function healRoute(
 
   const finalSkuMap = { ...oldSkuMap, ...correctSkuMap };
   const finalVariantMap = {
-    ...(config.variant_map || {}),
+    ...(oldMaps.variantMap as Record<string, string | number>),
     ...correctVariantMap,
   };
+
+  const agora = new Date().toISOString();
+
+  // O mapa corrigido pertence ao DESTINO: e ele que o resolve le.
+  if (targetRow) {
+    const { error: targetError } = await admin
+      .from("routed_checkout_targets")
+      .update({
+        sku_map: finalSkuMap,
+        variant_map: finalVariantMap,
+        last_healed_at: agora,
+      })
+      .eq("id", targetRow.id);
+    if (targetError) {
+      throw new HealRouteError("Falha ao salvar a loja de checkout corrigida.");
+    }
+  }
+
+  // As colunas da rota so acompanham quando o destino consertado E o primario.
+  // Sobrescrever com o mapa de um destino secundario faria o campo legado
+  // apontar para variantes de outra loja -- justamente o que quebraria quem
+  // ainda le dali (tema com loader antigo, rota sem linha de destino).
+  const ehPrimario = !targetRow || targetRow.target_store_id === config.target_store_id;
 
   const { error: updateError } = await admin
     .from("routed_checkout_configs")
     .update({
-      sku_map: finalSkuMap,
-      variant_map: finalVariantMap,
-      last_healed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      ...(ehPrimario
+        ? { sku_map: finalSkuMap, variant_map: finalVariantMap }
+        : {}),
+      last_healed_at: agora,
+      updated_at: agora,
       settings: {
         ...((config.settings as Record<string, unknown>) || {}),
         last_heal: {
-          at: new Date().toISOString(),
+          at: agora,
           // Aviso aqui e problema que o conserto NAO resolveu sozinho
           // (produto que falhou ao criar, SKU que nao gravou).
           ok: warnings.length === 0,
@@ -490,6 +549,7 @@ export async function healRoute(
   return {
     ok: true,
     routeId: config.id,
+    targetId: targetRow?.id ?? null,
     stampedSkuCount: carimbo.carimbadas,
     dedupedSkuCount: carimbo.desduplicadas,
     fixedWrongCount,

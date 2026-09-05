@@ -61,33 +61,60 @@ async function executar(request: NextRequest) {
   );
 
   const admin = createAdminClient();
-  let query = admin
-    .from("routed_checkout_configs")
-    .select("id, name, user_id, last_healed_at")
-    .eq("enabled", true)
-    // nullsFirst: rota nunca revisada tem prioridade sobre a revisada ontem.
-    .order("last_healed_at", { ascending: true, nullsFirst: true })
-    .limit(limite);
-  if (userId) query = query.eq("user_id", userId);
 
-  const { data: rotas, error } = await query;
+  // A unidade de conserto agora e o DESTINO, nao a rota: com rodizio, uma rota
+  // tem varias lojas de checkout e cada uma tem o seu mapa para apodrecer. Uma
+  // fila por rota consertaria sempre a mesma loja.
+  const query = admin
+    .from("routed_checkout_targets")
+    .select(
+      "id, route_id, last_healed_at, route:route_id(id, name, user_id, enabled)"
+    )
+    .eq("enabled", true)
+    // nullsFirst: destino nunca revisado tem prioridade sobre o revisado ontem.
+    .order("last_healed_at", { ascending: true, nullsFirst: true })
+    // Folga no limite porque a filtragem de rota desligada/de outro dono
+    // acontece abaixo, ja com as linhas em maos.
+    .limit(limite * 4);
+
+  const { data: linhas, error } = await query;
   if (error) {
     return NextResponse.json(
-      { error: "Falha ao listar rotas." },
+      { error: "Falha ao listar destinos." },
       { status: 500 }
     );
   }
 
+  interface LinhaDestino {
+    id: string;
+    route_id: string;
+    route?: { id: string; name: string; user_id: string; enabled: boolean } |
+      { id: string; name: string; user_id: string; enabled: boolean }[] | null;
+  }
+
+  const alvos = ((linhas || []) as LinhaDestino[])
+    .map((linha) => {
+      const rota = Array.isArray(linha.route) ? linha.route[0] : linha.route;
+      return rota ? { targetId: linha.id, rota } : null;
+    })
+    .filter(
+      (item): item is { targetId: string; rota: { id: string; name: string; user_id: string; enabled: boolean } } =>
+        Boolean(item && item.rota.enabled && (!userId || item.rota.user_id === userId))
+    )
+    .slice(0, limite);
+
   const resultados: Record<string, unknown>[] = [];
-  for (const rota of rotas || []) {
+  for (const alvo of alvos) {
     try {
       const r = await healRoute({
-        routeId: rota.id,
+        routeId: alvo.rota.id,
+        targetId: alvo.targetId,
         origin: request.nextUrl.origin,
       });
       resultados.push({
-        routeId: rota.id,
-        name: rota.name,
+        routeId: alvo.rota.id,
+        targetId: alvo.targetId,
+        name: alvo.rota.name,
         ...(r.noop
           ? { noop: true }
           : {
@@ -100,18 +127,23 @@ async function executar(request: NextRequest) {
             }),
       });
     } catch (erro) {
-      // Uma rota quebrada (loja desconectada, token expirado) nao pode impedir
-      // o conserto das outras.
+      // Um destino quebrado (loja desconectada, token expirado) nao pode
+      // impedir o conserto dos outros.
       const msg =
         erro instanceof HealRouteError || erro instanceof Error
           ? erro.message
           : "erro desconhecido";
-      resultados.push({ routeId: rota.id, name: rota.name, error: msg });
-      // Marca a tentativa para a rota nao travar o rodizio para sempre.
+      resultados.push({
+        routeId: alvo.rota.id,
+        targetId: alvo.targetId,
+        name: alvo.rota.name,
+        error: msg,
+      });
+      // Marca a tentativa para o destino nao travar a fila para sempre.
       await admin
-        .from("routed_checkout_configs")
+        .from("routed_checkout_targets")
         .update({ last_healed_at: new Date().toISOString() })
-        .eq("id", rota.id);
+        .eq("id", alvo.targetId);
     }
   }
 

@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   buildCartPermalink,
   marketParamsFromLanguage,
-  resolveCheckoutLinesDetailed,
   type CheckoutRouteLine,
 } from "@/lib/shopify/cart-routing";
 import { resolveVariantIdsBySku } from "@/lib/shopify/public-store";
+import {
+  computeCoverage,
+  normalizeRotation,
+  pickTarget,
+  type RouteTarget,
+} from "@/lib/checkout-routes/rotation";
+import {
+  legacyTargetFromConfig,
+  loadRouteTargets,
+} from "@/lib/checkout-routes/targets";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -26,6 +35,10 @@ export async function POST(request: NextRequest) {
   const lines = Array.isArray(body.lines)
     ? (body.lines as CheckoutRouteLine[])
     : [];
+  // Chave do comprador para o rodizio sticky. Vem do navegador dele; se nao
+  // vier, o sorteio e aleatorio (nao da para prender o comprador sem chave).
+  const rotationKey =
+    typeof body.rotationKey === "string" ? body.rotationKey.slice(0, 64) : "";
 
   if (!token || lines.length === 0) {
     return NextResponse.json(
@@ -39,7 +52,7 @@ export async function POST(request: NextRequest) {
     const { data: config, error } = await supabase
       .from("routed_checkout_configs")
       .select(
-        "id, name, enabled, mode, sku_map, variant_map, settings, target:target_store_id(shop_domain, target_language)"
+        "id, name, enabled, mode, rotation, sku_map, variant_map, settings, target_store_id, target:target_store_id(name, shop_domain, target_language)"
       )
       .eq("public_token", token)
       .eq("enabled", true)
@@ -52,57 +65,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const target = Array.isArray(config.target)
-      ? config.target[0]
-      : config.target;
-    const settings = (config.settings || {}) as {
-      checkout_domain?: string;
-      checkout_country?: string;
-      checkout_locale?: string;
-    };
-    // Override de dominio na rota: usado quando o dominio mudou na Shopify e
-    // ainda nao foi atualizado na loja conectada (ou para rota so por link).
-    const targetDomain = settings.checkout_domain?.trim() || target?.shop_domain;
-
-    const detailed = resolveCheckoutLinesDetailed(lines, {
-      skuMap: (config.sku_map || {}) as Record<string, string | number>,
-      variantMap: (config.variant_map || {}) as Record<string, string | number>,
-    });
-
-    // Fallback: linhas que o mapa nao cobriu mas tem SKU sao resolvidas por SKU
-    // direto no products.json publico da loja checkout. Conserta variantes nao
-    // mapeadas e permite rota so com o dominio (sem conectar a loja).
-    const unresolvedSkus = detailed
-      .filter((line) => !line.variantId && line.sku)
-      .map((line) => line.sku);
-    if (unresolvedSkus.length > 0 && targetDomain) {
-      const bySku = await resolveVariantIdsBySku(targetDomain, unresolvedSkus);
-      if (bySku.size > 0) {
-        for (const line of detailed) {
-          if (!line.variantId && line.sku) {
-            const variantId = bySku.get(line.sku);
-            if (variantId) line.variantId = String(variantId);
-          }
-        }
-      }
+    // Destinos do rodizio. Rota sem linha de destino (apagada a mao) cai no
+    // destino legado da propria rota em vez de derrubar o checkout.
+    let targets = await loadRouteTargets(supabase, config.id, { onlyEnabled: true });
+    if (targets.length === 0) {
+      const legacy = legacyTargetFromConfig(config);
+      if (legacy) targets = [legacy];
+    }
+    if (targets.length === 0) {
+      return NextResponse.json(
+        { error: "Rota sem loja de checkout configurada." },
+        { status: 409, headers: corsHeaders }
+      );
     }
 
-    const resolvedLines = detailed
+    const { strategy } = normalizeRotation(config.rotation);
+
+    // Fallback por SKU no products.json publico: cobre variante que ainda nao
+    // entrou no mapa. Roda ANTES do sorteio, senao um destino com o mapa
+    // desatualizado pareceria ter cobertura pior do que realmente tem e o
+    // rodizio o excluiria por um motivo que nao existe.
+    const enriched = await Promise.all(
+      targets.map(async (target) => hydrateTargetBySku(target, lines))
+    );
+
+    const pick = pickTarget(enriched, lines, { rotationKey, strategy });
+
+    if (!pick) {
+      return NextResponse.json(
+        {
+          error: "Nenhum item pode ser roteado para o checkout.",
+          coverage: summarize(computeCoverage(enriched, lines)),
+        },
+        { status: 422, headers: corsHeaders }
+      );
+    }
+
+    const { chosen } = pick;
+    const target = chosen.target;
+
+    const resolvedLines = chosen.resolved
       .filter((line) => line.variantId)
       .map((line) => ({
         variantId: line.variantId as string,
         quantity: line.quantity,
       }));
-    const unroutedCount = detailed.length - resolvedLines.length;
 
-    // Mercado/moeda do checkout: override da rota tem prioridade, senao deriva
-    // do idioma da loja destino (ex.: es-CL => country CL, moeda peso chileno).
-    const market = settings.checkout_country
-      ? { country: settings.checkout_country, locale: settings.checkout_locale }
-      : marketParamsFromLanguage(target?.target_language);
+    const market = target.settings.checkout_country
+      ? {
+          country: target.settings.checkout_country,
+          locale: target.settings.checkout_locale,
+        }
+      : marketParamsFromLanguage(target.targetLanguage);
 
     const redirectUrl = buildCartPermalink(
-      targetDomain,
+      target.domain,
       resolvedLines,
       {
         routed_checkout: config.id,
@@ -116,7 +133,13 @@ export async function POST(request: NextRequest) {
         redirectUrl,
         mode: config.mode,
         routedLines: resolvedLines.length,
-        unroutedLines: unroutedCount,
+        unroutedLines: chosen.totalCount - resolvedLines.length,
+        // Qual destino levou o carrinho, para o track-fallback e o painel
+        // conseguirem apontar a loja de checkout exata.
+        targetId: target.id.startsWith("legacy:") ? null : target.id,
+        targetStoreId: target.targetStoreId || null,
+        targetDomain: target.domain,
+        rotation: { strategy, candidates: pick.eligible.length, reason: pick.reason },
       },
       { headers: corsHeaders }
     );
@@ -128,4 +151,43 @@ export async function POST(request: NextRequest) {
       { status: 500, headers: corsHeaders }
     );
   }
+}
+
+/**
+ * Completa o sku_map do destino, em memoria, com o que der para resolver no
+ * products.json publico dele. Nao grava nada -- quem consolida o mapa e o
+ * heal; aqui e so para o carrinho da vez nao perder item.
+ */
+async function hydrateTargetBySku(
+  target: RouteTarget,
+  lines: CheckoutRouteLine[]
+): Promise<RouteTarget> {
+  const [coverage] = computeCoverage([target], lines);
+  const missing = coverage.resolved
+    .filter((line) => !line.variantId && line.sku)
+    .map((line) => line.sku);
+
+  if (missing.length === 0 || !target.domain) return target;
+
+  try {
+    const bySku = await resolveVariantIdsBySku(target.domain, missing);
+    if (bySku.size === 0) return target;
+    const skuMap = { ...target.skuMap };
+    for (const [sku, variantId] of bySku.entries()) {
+      skuMap[String(sku).trim().toLowerCase()] = String(variantId);
+    }
+    return { ...target, skuMap };
+  } catch {
+    // Loja fora do ar ou products.json bloqueado: segue com o mapa que tem.
+    return target;
+  }
+}
+
+function summarize(coverage: ReturnType<typeof computeCoverage>) {
+  return coverage.map((entry) => ({
+    targetId: entry.target.id,
+    domain: entry.target.domain,
+    resolved: entry.resolvedCount,
+    total: entry.totalCount,
+  }));
 }

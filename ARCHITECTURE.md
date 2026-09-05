@@ -16,7 +16,7 @@ At checkout, the customer's cart is **routed from the vitrine to the checkout st
 
 **The whole system hinges on SKU.** Neutralization deliberately rewrites titles and images, so title/handle/image can never be the join key. SKUs are copied verbatim from vitrine → checkout store and are the anchor for the routing map. **If source products lack SKUs, routing cannot work.** (See §9 and §13.)
 
-One neutralized checkout store can be **reused** across multiple vitrines; a vitrine routes to exactly one checkout store.
+One neutralized checkout store can be **reused** across multiple vitrines, and **a vitrine can route to several checkout stores at once** (rotation, §10.2) — traffic is split between them so a single payment account going down does not take the vitrine with it.
 
 Beyond routing, xcart also: imports/clones products from many sources, AI-optimizes/translates copy, AI-neutralizes text & images, generates store policies/pages/menus/reviews/Instagram content, and manages billing/credits.
 
@@ -73,8 +73,9 @@ All tables have RLS (owner-scoped via `auth.uid()`); service-role bypasses. Shar
 | **app_secrets** | Global KV secrets, **service-role only** (e.g. proxy creds). |
 | **background_jobs** | Async queue. `type` (`bulk_import`, `neutralize_image`, optimize, etc.), `status` (pending/processing/completed/failed), **`progress` jsonb doubles as the input payload + live step**, `result`, `error`. Index `(store_id,type,status,created_at)`. |
 | **clone_runs** | Audit of clone ops (preview/export/apply). |
-| **routed_checkout_configs** | **The routing map.** `source_store_id` (vitrine), `target_store_id` (checkout), `mode` (`standard`/`enterprise`/`enterprise_static` — wizard writes `enterprise_static`), `public_token` (unique; public loader identifier), `enabled`, **`sku_map`** `{sku→targetVariantId}`, **`variant_map`** `{sourceVariantId→targetVariantId}`, `settings` (`checkout_domain`/`checkout_country`/`checkout_locale` overrides). |
-| **routed_checkout_fallbacks** | Loader fallback telemetry (`route_config_id`, `reason`, `detail`, `page_url`). |
+| **routed_checkout_configs** | **The route.** `source_store_id` (vitrine), `target_store_id` (**primary checkout store — legacy/summary; the real destinations live in `routed_checkout_targets`**), `rotation` (`{strategy:'sticky'\|'each_checkout'}`), `mode` (`standard`/`enterprise`/`enterprise_static` — wizard writes `enterprise_static`), `public_token` (unique; public loader identifier), `enabled`, **`sku_map`** `{sku→targetVariantId}`, **`variant_map`** `{sourceVariantId→targetVariantId}`, `settings` (`checkout_domain`/`checkout_country`/`checkout_locale` overrides). |
+| **routed_checkout_targets** | **The routing map, one row per checkout store of a route.** `route_id`, `target_store_id`, `weight` (relative share in the rotation; 0 = configured but out of it), `enabled`, **`sku_map`** `{sku→targetVariantId}`, **`variant_map`**, `settings` (domain/market override), `position`, `last_healed_at`. Unique on `(route_id, target_store_id)`. Each checkout store has its own variant ids, so the maps **cannot** be shared between targets. |
+| **routed_checkout_fallbacks** | Loader fallback telemetry (`route_config_id`, **`target_id`** — which checkout store lost the cart, `reason`, `detail`, `page_url`). |
 | **ai_product_reviews** | AI-generated synthetic reviews (product ref, rating, body, disclosure, image_url, `published`). |
 | **instagram_connections / instagram_posts** | IG business-account tokens + published carousels. |
 | **profiles** | One per user. `is_admin`, `plan` (free/pro), `pagou_customer_id`/`pagou_subscription_id`, `payment_provider` (pagou\|stripe), `cancel_at_period_end`, `subscription_status`, `current_period_end`, **`ai_credits`**, `access_granted`, `free_clone_store_id` (trial; NULL = available). |
@@ -151,19 +152,35 @@ Files: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/**`, `sr
 1. Loader `<script>` (with `data-token` = `public_token`, optional `data-config-url` = a theme-CDN `xcart-config.json`) sits in the vitrine `theme.liquid`. Forces `no-referrer`.
 2. Add-to-cart is **not** intercepted (vitrine cart works normally). Only **checkout** clicks are intercepted (capture-phase listeners + 500 ms rescan; matches Shopify/Yampi/Dropi buttons via multilingual regex).
 3. On checkout: reads `/cart.js` → lines `{sku, sourceVariantId, quantity}`.
-4. Resolve: **inline map first** (`variantMap[sourceVariantId]` → `skuMap[sku]`), else `POST /api/checkout-routes/resolve` (server, keyed by `public_token`). Server precedence: `targetVariantId` → `variantMap` → `skuMap` → live `products.json` SKU lookup on the checkout store.
+4. Resolve: **inline first** (the loader picks a checkout store and reads its maps), else `POST /api/checkout-routes/resolve` (server, keyed by `public_token`). Per target the precedence is `targetVariantId` → `variantMap` → `skuMap` → live `products.json` SKU lookup on that checkout store. **Which checkout store gets the cart is decided by §10.2.** The loader only resolves inline when the picked target covers the cart *completely*; partial coverage falls through to the API, which can still complete it from `products.json`.
 5. Builds a Shopify **cart permalink** `https://<checkoutDomain>/cart/<variantId>:<qty>,...?country=&locale=&attributes[routed_checkout]=<id>` and redirects. Currency forced via Shopify Markets (`country`/`locale` from `settings` or `target_language`).
 6. Failures → red toast + `track-fallback` telemetry; never routes to the vitrine's own checkout (it can't charge).
 
 **CRITICAL for anyone editing the checkout store**: routing resolves **only by SKU / variant ID**. You can freely rewrite the checkout products' **title, description, tags, SEO and images** (that's exactly what neutralization does) — routing is unaffected as long as you do **not** change/delete variants or SKUs. Never delete+recreate checkout products after a route exists (new variant IDs break `variant_map`; even if SKUs are re-copied and `sku_map` still resolves, prefer in-place `productUpdate`).
 
+### 10.2 Rotation — one vitrine, several checkout stores
+
+`src/lib/checkout-routes/rotation.ts` (server) and the mirrored logic in `public/routed-checkout-loader.js` decide **which** checkout store receives a given cart.
+
+**The rule that overrides everything: rotation never costs a cart line.** Coverage is computed per target first; only the targets tied for the *best* coverage enter the draw. Splitting "fairly" between a store that resolves 5 of 5 lines and one that resolves 3 would send the buyer to a checkout missing two items — rotation exists to spread volume across payment accounts, not to lose sales. A target with `weight = 0` is out of the draw entirely, *unless* it is the only one that covers the cart (better a paused store than a partial checkout).
+
+Among the tied targets the draw is weighted by `weight` and anchored on a rotation key:
+- **`sticky`** (default) — the key is the buyer's, stored in their browser (`localStorage["xcart_rk"]`), so the same buyer always lands on the same checkout store. Abandoning the cart and coming back finds the same checkout, and the checkout store's pixel does not see one user hopping domains.
+- **`each_checkout`** — fresh draw on every checkout click.
+
+⚠️ **The server and the loader must agree.** Both use the same FNV-1a 32-bit hash (`hashRotationKey`) and the same stable ordering (by target id). If they diverge, a buyer who resolves inline on one visit and via the API on the next switches checkout store mid-purchase. There is a test for exactly this in the rotation suite.
+
+`weight` is relative, not a percentage: `[2,1,1]` is 50%/25%/25%. The UI shows the derived share.
+
+Managed at `/clone/routed-checkout/map` (visual map + weights) and via `GET/PATCH/DELETE /api/checkout-routes/[id]/targets`. Adding a checkout store to an existing route reuses the SKU matching: `POST /api/checkout-routes/connect-by-sku` with `routeId` and `createRoute:false`. A target whose coverage comes back below the safety bar is inserted with `weight = 0` — configured and visible, but receiving nothing until reviewed.
+
 ### 10.1 Self-healing
 
 A route rots rather than breaking: the merchant adds a product by hand in Shopify, it lands with no SKU and outside `sku_map`, and nobody notices because the vitrine keeps selling — through the wrong checkout. One account reached **27% coverage** with no alarm.
 
-- `src/lib/checkout-routes/heal.ts` → `healRoute({ routeId })` — stamps/dedupes vitrine SKUs, remaps entries pointing at the wrong target variant, creates missing counterparts in the checkout store (text-neutralized, image queued), and writes `last_healed_at`.
-- Callers: the **Corrigir** button (`POST /api/checkout-routes/repair`, user-scoped) and the cron (`/api/jobs/routes/heal`, `30 * * * *`, `CRON_SECRET`). The cron takes 4 enabled routes per run, oldest `last_healed_at` first (NULL first).
-- `POST /api/checkout-routes/health` reports `coveragePercent` and `noSkuCount`, and **never returns `ok: true` while SKU-less variants exist** — that blind spot is what made a 27% route look healthy.
+- `src/lib/checkout-routes/heal.ts` → `healRoute({ routeId, targetId })` — **the unit of healing is the target, not the route**: each checkout store has its own map to rot. Omitting `targetId` heals the first enabled one. It stamps/dedupes vitrine SKUs, remaps entries pointing at the wrong target variant, creates missing counterparts in the checkout store (text-neutralized, image queued), and writes `last_healed_at`.
+- Callers: the **Corrigir** button (`POST /api/checkout-routes/repair`, user-scoped) heals **every** target of the route in one go; the cron (`/api/jobs/routes/heal`, `30 * * * *`, `CRON_SECRET`) takes 4 enabled **targets** per run, oldest `last_healed_at` first (NULL first). Healing writes the corrected map to the target row; the route's legacy `sku_map`/`variant_map` are only kept in sync when the healed target is the primary one.
+- `POST /api/checkout-routes/health` checks **one** checkout store per call (it paginates both catalogs; sweeping every target in one request would blow `maxDuration`) — pass `targetId`, else the first enabled one; the response says which via `checkedTargetId`/`checkedTargetName`. It reports `coveragePercent` and `noSkuCount`, and **never returns `ok: true` while SKU-less variants exist** — that blind spot is what made a 27% route look healthy.
 - `PATCH /api/checkout-routes/toggle` flips `enabled` only; the general `PATCH /api/checkout-routes` overwrites `sku_map`/`variant_map` and must not be used to toggle.
 
 ---
@@ -196,6 +213,8 @@ Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_
 6. **Currency correctness** depends on the checkout store actually having the Shopify Market/currency configured.
 7. **Pricing/copy inconsistencies**: `PRO_PRICE_USD=17` but some strings still say "R$89/mês"; some AI prompts hardcode BR (CDC/LGPD/15-30 business days) regardless of `target_language`.
 8. **CORS wide open** on `resolve`/`track-fallback` (needed cross-origin); auth is solely the unguessable `public_token`.
+9. **The theme config must be regenerated after changing the rotation.** Weights, added or removed checkout stores and the strategy only reach the buyer once `xcart-config.json` is pushed again (`POST /api/checkout-routes/[id]/update-theme`). Until then the theme routes on the previous split — the API fallback stays correct, the inline path does not.
+10. **A theme still running the previous loader** reads the legacy `domain`/`skuMap`/`variantMap` fields, which `buildEmbedConfig` keeps emitting alongside `targets`. Those themes route to the first target only — no rotation, but no breakage.
 
 ---
 
@@ -213,9 +232,9 @@ Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_
 
 ## 15. File map (entry points)
 
-- Routing: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/{resolve,connect-by-sku,create-destination,repair,health,settings,track-fallback,[id]/*}/route.ts`, `src/lib/shopify/cart-routing.ts`, `src/components/routed-checkout/*`.
+- Routing: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/{resolve,connect-by-sku,create-destination,repair,health,settings,track-fallback,map,[id]/*}/route.ts`, `src/lib/shopify/cart-routing.ts`, `src/lib/checkout-routes/{rotation,targets,embed-config,store-roles,heal}.ts`, `src/components/routed-checkout/*`, `src/app/[locale]/(dashboard)/clone/routed-checkout/map/page.tsx`.
 - Import: `src/lib/import/*`, `src/lib/aliexpress/*`, `src/lib/shopify/public-store.ts`, `src/lib/jobs/*`, `src/app/api/{import,aliexpress,jobs}/*`.
 - Shopify + AI: `src/lib/shopify/client.ts`, `src/lib/gemini/client.ts`, `src/lib/ai/product-neutralizer.ts`, `src/lib/store-context.ts`, `src/lib/products/shopify-taxonomy-enrichment.ts`, `src/app/api/{shopify,ai,product}/*`.
 - Shell: `src/proxy.ts`, `src/lib/supabase/middleware.ts`, `src/i18n/*`, `src/lib/billing/*`, `src/app/[locale]/(dashboard)/*`, `src/app/admin/*`.
-- Data: `supabase/migrations/001-018_*.sql`.
+- Data: `supabase/migrations/001-025_*.sql`.
 - Deploy: `next.config.ts`, `vercel.json`, `Dockerfile`, `docker-compose.yml`, `.env.example`.

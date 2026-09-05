@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublicAppUrl } from "@/lib/public-url";
+import { buildEmbedConfig } from "@/lib/checkout-routes/embed-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,7 +69,7 @@ export async function POST(
   const { data: config, error: configError } = await admin
     .from("routed_checkout_configs")
     .select(
-      "id, public_token, sku_map, variant_map, settings, source_store_id, target:target_store_id(shop_domain, target_language)"
+      "id, public_token, rotation, sku_map, variant_map, settings, source_store_id, target_store_id, target:target_store_id(name, shop_domain, target_language)"
     )
     .eq("id", id)
     .eq("user_id", user.id)
@@ -89,36 +90,18 @@ export async function POST(
     return NextResponse.json({ error: "Vitrine não encontrada." }, { status: 404 });
   }
 
-  const target = Array.isArray(config.target) ? config.target[0] : config.target;
-  const settings = (config.settings || {}) as {
-    checkout_domain?: string;
-    checkout_country?: string;
-    checkout_locale?: string;
-  };
-
-  const domain = settings.checkout_domain?.trim() || target?.shop_domain || "";
-  let country = settings.checkout_country || "";
-  let locale = settings.checkout_locale || "";
-  if (!country && target?.target_language) {
-    const [, region] = String(target.target_language).split("-");
-    country = region ? region.toUpperCase() : "";
-    locale = target.target_language;
+  // Mesmo payload que o /embed-config devolve: o tema e o painel precisam
+  // enxergar exatamente a mesma configuracao.
+  const embed = await buildEmbedConfig(admin, config);
+  if (embed.targets.length === 0) {
+    return NextResponse.json(
+      { error: "Esta rota nao tem loja de checkout com dominio configurado." },
+      { status: 409 }
+    );
   }
 
-  const rawSkuMap = (config.sku_map || {}) as Record<string, string | number>;
-  const skuMap: Record<string, string> = {};
-  for (const [k, v] of Object.entries(rawSkuMap)) {
-    const key = k.trim().toLowerCase();
-    if (key) skuMap[key] = String(v);
-  }
-
-  const rawVariantMap = (config.variant_map || {}) as Record<string, string | number>;
-  const variantMap: Record<string, string> = {};
-  for (const [k, v] of Object.entries(rawVariantMap)) {
-    if (k) variantMap[k] = String(v);
-  }
-
-  const configPayload = JSON.stringify({ domain, skuMap, variantMap, country, locale });
+  const { skuMap, variantMap } = embed;
+  const configPayload = JSON.stringify(embed);
   const appOrigin = getPublicAppUrl(
     process.env.NEXT_PUBLIC_APP_URL || "https://xcart.app"
   );
@@ -179,14 +162,33 @@ export async function POST(
       });
     }
 
+    // Os numeros do resumo somam TODOS os destinos: com rodizio, contar so o
+    // primeiro faria o lojista achar que enviou menos mapa do que enviou.
+    const totalSkus = embed.targets.reduce(
+      (sum, item) => sum + Object.keys(item.skuMap).length,
+      0
+    );
+    const totalVariants = embed.targets.reduce(
+      (sum, item) => sum + Object.keys(item.variantMap).length,
+      0
+    );
+    const lojas =
+      embed.targets.length === 1
+        ? "1 loja de checkout"
+        : `${embed.targets.length} lojas de checkout`;
+
     return NextResponse.json({
       ok: true,
       updated: true,
-      message: hasExisting
-        ? `Script atualizado + xcart-config.json enviado (${Object.keys(skuMap).length} SKUs, ${Object.keys(variantMap).length} variantes).`
-        : `Script inserido + xcart-config.json enviado (${Object.keys(skuMap).length} SKUs, ${Object.keys(variantMap).length} variantes).`,
-      skuCount: Object.keys(skuMap).length,
-      variantCount: Object.keys(variantMap).length,
+      message: `${
+        hasExisting ? "Script atualizado" : "Script inserido"
+      } + xcart-config.json enviado (${lojas}, ${totalSkus} SKUs, ${totalVariants} variantes).`,
+      targetCount: embed.targets.length,
+      skuCount: totalSkus,
+      variantCount: totalVariants,
+      // Mantidos para quem le o retorno esperando o destino principal.
+      primarySkuCount: Object.keys(skuMap).length,
+      primaryVariantCount: Object.keys(variantMap).length,
       configUrl: configCdnUrl,
     });
   } catch (error) {

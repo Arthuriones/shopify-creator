@@ -103,6 +103,10 @@ export async function POST(request: NextRequest) {
       ? body.name.trim()
       : "Rota por SKU";
   const createRoute = body.createRoute !== false;
+  // Modo "adicionar destino": em vez de criar uma rota nova, casa a mesma
+  // vitrine contra mais uma loja de checkout e pendura o resultado como mais
+  // um destino do rodizio da rota que ja existe.
+  const routeId = typeof body.routeId === "string" ? body.routeId.trim() : "";
 
   if (!sourceStoreId || !targetStoreId) {
     return NextResponse.json(
@@ -279,7 +283,59 @@ export async function POST(request: NextRequest) {
     const seguro = cobertura >= COBERTURA_MINIMA && skusDuplicados.length === 0;
 
     let route: { id?: string; public_token?: string } | null = null;
-    if (createRoute && Object.keys(variantMap).length > 0) {
+    let targetId: string | null = null;
+    const hasMatches = Object.keys(variantMap).length > 0;
+
+    if (routeId && hasMatches) {
+      // --- adicionar mais uma loja de checkout a uma rota existente ---
+      const { data: existing } = await supabase
+        .from("routed_checkout_configs")
+        .select("id, public_token, source_store_id")
+        .eq("id", routeId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (!existing) {
+        return NextResponse.json({ error: "Rota nao encontrada." }, { status: 404 });
+      }
+      // A vitrine tem que ser a mesma: os mapas sao construidos a partir das
+      // variantes DELA, entao pendurar um destino casado contra outra vitrine
+      // rotearia o comprador para variantes que nao tem nada a ver.
+      if (existing.source_store_id !== sourceStoreId) {
+        return NextResponse.json(
+          { error: "Esta rota pertence a outra vitrine." },
+          { status: 409 }
+        );
+      }
+
+      // Destino novo entra com peso 0 quando a cobertura esta ruim: fica
+      // configurado e visivel, mas fora do rodizio ate o dono revisar.
+      const { data: target, error: targetError } = await supabase
+        .from("routed_checkout_targets")
+        .upsert(
+          {
+            route_id: existing.id,
+            target_store_id: targetStoreId,
+            weight: seguro ? 1 : 0,
+            enabled: true,
+            sku_map: skuMap,
+            variant_map: variantMap,
+            settings: { generatedBy: "connect_by_sku" },
+          },
+          { onConflict: "route_id,target_store_id" }
+        )
+        .select("id")
+        .single();
+
+      if (targetError) {
+        return NextResponse.json(
+          { error: "Variantes casadas, mas falhou ao adicionar a loja de checkout." },
+          { status: 500 }
+        );
+      }
+      targetId = target?.id ?? null;
+      route = { id: existing.id, public_token: existing.public_token };
+    } else if (createRoute && hasMatches) {
       const { data, error } = await supabase
         .from("routed_checkout_configs")
         .insert({
@@ -305,6 +361,24 @@ export async function POST(request: NextRequest) {
         );
       }
       route = data;
+
+      // O destino e a unidade real do roteamento desde a 025. As colunas da
+      // rota continuam preenchidas acima so como legado/resumo.
+      const { data: target } = await supabase
+        .from("routed_checkout_targets")
+        .insert({
+          route_id: data.id,
+          target_store_id: targetStoreId,
+          weight: 1,
+          enabled: true,
+          sku_map: skuMap,
+          variant_map: variantMap,
+          settings: { generatedBy: "connect_by_sku" },
+          position: 0,
+        })
+        .select("id")
+        .single();
+      targetId = target?.id ?? null;
     }
 
     return NextResponse.json({
@@ -330,6 +404,7 @@ export async function POST(request: NextRequest) {
       skuMap,
       variantMap,
       route,
+      targetId,
     });
   } catch (error) {
     return NextResponse.json(
