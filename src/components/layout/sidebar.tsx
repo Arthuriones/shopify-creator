@@ -90,15 +90,13 @@ const navSections: NavSection[] = [
           { href: "/clone/export", label: "exportCatalog" },
         ],
       },
+      // Uma entrada so: conectar lojas, ver o mapa e mexer nas rotas acontecem
+      // todos na mesma tela agora. Tres itens de menu para um trabalho so era
+      // parte do que confundia.
       {
         href: "/clone/routed-checkout",
-        label: "showcaseStore",
+        label: "routing",
         icon: WorkflowIcon,
-        children: [
-          { href: "/clone/routed-checkout", label: "connectStores" },
-          { href: "/clone/routed-checkout/map", label: "routeMap" },
-          { href: "/clone/routed-checkout/active-routes", label: "routesAndTokens" },
-        ],
       },
     ],
   },

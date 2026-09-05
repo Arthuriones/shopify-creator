@@ -51,3 +51,11 @@ geradas/
 failed_html.html
 aliexpress_data.json
 ._*
+
+# artefatos do preview de componentes (render isolado para revisar design)
+.preview-out/
+.preview-render.mjs
+.preview-in.css
+
+# estado local da CLI do Supabase (link, versoes, url do pooler)
+supabase/.temp/

@@ -259,10 +259,9 @@ export function RotationPanel({
   return (
     <div className={cn("space-y-5", className)}>
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          Rodizio de checkout
-        </p>
-        <h3 className="mt-0.5 text-sm font-semibold text-foreground">{routeName}</h3>
+        <h3 className="font-heading text-base font-semibold text-foreground">
+          {routeName}
+        </h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
           {activeCount <= 1
             ? "Todo o trafego desta vitrine vai para uma unica loja de checkout."
@@ -321,7 +320,10 @@ export function RotationPanel({
                     <span className="truncate">{target.storeName || target.shopDomain}</span>
                   </p>
                   <p className="mt-0.5 truncate pl-5 text-[11px] text-muted-foreground">
-                    {target.shopDomain} &middot; {target.skuMapCount} SKUs mapeados
+                    {target.shopDomain}
+                  </p>
+                  <p className="mt-0.5 pl-5 text-[11px] text-muted-foreground">
+                    {target.skuMapCount} SKUs mapeados
                   </p>
                 </div>
 
@@ -416,7 +418,7 @@ export function RotationPanel({
           </p>
           <p className="text-[11px] leading-4 text-muted-foreground">
             A loja precisa ja ter o catalogo publicado. O xcart casa as variantes por
-            SKU contra a vitrine &mdash; pode levar alguns minutos em catalogo grande.
+            SKU contra a vitrine, o que pode levar alguns minutos em catalogo grande.
           </p>
           <div className="flex gap-2">
             <Select
@@ -456,9 +458,9 @@ export function RotationPanel({
       )}
 
       <p className="text-[11px] leading-4 text-muted-foreground">
-        O peso e relativo, nao porcentagem: pesos 2, 1 e 1 dividem o trafego em 50%, 25% e
-        25%. Peso 0 mantem a loja configurada mas fora do rodizio &mdash; util para aquecer
-        uma conta de pagamento nova antes de mandar volume.
+        O peso e relativo, nao porcentagem: pesos 2, 1 e 1 dividem o trafego em 50%, 25%
+        e 25%. Peso 0 mantem a loja configurada e fora do rodizio, para aquecer uma conta
+        de pagamento nova antes de mandar volume.
       </p>
     </div>
   );

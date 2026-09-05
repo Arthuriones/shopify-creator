@@ -38,7 +38,7 @@ export async function GET() {
     supabase
       .from("routed_checkout_configs")
       .select(
-        "id, name, enabled, mode, rotation, public_token, source_store_id, target_store_id, sku_map, last_healed_at, created_at"
+        "id, name, enabled, mode, rotation, public_token, settings, source_store_id, target_store_id, sku_map, last_healed_at, created_at"
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),
@@ -93,12 +93,19 @@ export async function GET() {
       .filter((t) => t.enabled !== false && (t.weight ?? 1) > 0)
       .reduce((sum, t) => sum + (t.weight ?? 1), 0);
 
+    // Resultado da ultima passada do auto-conserto. E o unico sinal de saude
+    // que existe sem o usuario pedir, entao o console mostra ele direto.
+    const settings = (route.settings || {}) as {
+      last_heal?: { at: string; ok: boolean; message?: string; mappedCount?: number };
+    };
+
     return {
       id: route.id,
       name: route.name,
       enabled: route.enabled !== false,
       mode: route.mode,
       publicToken: route.public_token,
+      lastHeal: settings.last_heal ?? null,
       sourceStoreId: route.source_store_id,
       rotationStrategy:
         (route.rotation as { strategy?: string } | null)?.strategy === "each_checkout"

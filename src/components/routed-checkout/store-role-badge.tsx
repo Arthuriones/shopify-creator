@@ -62,7 +62,7 @@ export function StoreRoleBadge({
       <span>{style.label}</span>
       {showHint && (
         <span className="hidden font-normal opacity-70 sm:inline">
-          &middot; {style.hint}
+          {style.hint}
         </span>
       )}
     </span>

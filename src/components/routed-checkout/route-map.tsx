@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CreditCard, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +34,9 @@ export interface MapRoute {
 const NODE_W = 216;
 const NODE_H = 62;
 const ROW_GAP = 20;
-const COL_GAP = 170;
+const COL_GAP_MIN = 150;
+const COL_GAP_MAX = 460;
 const PAD_Y = 12;
-const CANVAS_W = NODE_W * 2 + COL_GAP;
 
 interface Placed {
   store: MapStore;
@@ -121,6 +121,25 @@ export function RouteMap({
 }) {
   const [hoverStoreId, setHoverStoreId] = useState<string | null>(null);
 
+  // O quadro ocupa a largura que tiver. Com largura fixa sobrava vazio dos
+  // dois lados numa tela grande, e as curvas ficavam mais apertadas do que
+  // precisavam -- justo o que atrapalha seguir uma aresta com o olho.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [colGap, setColGap] = useState(COL_GAP_MIN + 20);
+
+  useEffect(() => {
+    const node = wrapRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const livre = entry.contentRect.width - NODE_W * 2;
+      setColGap(Math.max(COL_GAP_MIN, Math.min(COL_GAP_MAX, livre)));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const canvasW = NODE_W * 2 + colGap;
+
   const { vitrines, checkouts, edges, height } = useMemo(() => {
     const byId = new Map(stores.map((store) => [store.id, store]));
 
@@ -157,7 +176,7 @@ export function RouteMap({
     };
 
     const vitrineNodes = place(sourceIds, 0);
-    const checkoutNodes = place(targetIds, NODE_W + COL_GAP);
+    const checkoutNodes = place(targetIds, NODE_W + colGap);
     const vitrineByStore = new Map(vitrineNodes.map((n) => [n.store.id, n]));
     const checkoutByStore = new Map(checkoutNodes.map((n) => [n.store.id, n]));
 
@@ -219,7 +238,7 @@ export function RouteMap({
       edges: drawn,
       height: canvasH,
     };
-  }, [stores, routes]);
+  }, [stores, routes, colGap]);
 
   const focusedRouteIds = useMemo(() => {
     if (!hoverStoreId) return null;
@@ -235,13 +254,16 @@ export function RouteMap({
     return ids;
   }, [hoverStoreId, routes]);
 
-  // Uma aresta some do foco quando o mouse esta em outro no, ou quando ha uma
-  // rota selecionada e ela nao e essa.
+  // So o hover apaga o resto. Escurecer pela SELECAO deixava metade do quadro
+  // morto assim que a tela abria -- com uma rota sempre selecionada por
+  // padrao, a outra vitrine parecia desligada sem estar.
   const isDimmed = (routeId: string) => {
-    if (focusedRouteIds) return !focusedRouteIds.has(routeId);
-    if (selectedRouteId) return routeId !== selectedRouteId;
-    return false;
+    if (!focusedRouteIds) return false;
+    return !focusedRouteIds.has(routeId);
   };
+
+  const isSelected = (routeId: string) =>
+    Boolean(selectedRouteId) && routeId === selectedRouteId;
 
   if (edges.length === 0) {
     return (
@@ -260,14 +282,14 @@ export function RouteMap({
   }
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
+    <div ref={wrapRef} className={cn("overflow-x-auto", className)}>
       <div
         className="relative mx-auto"
-        style={{ width: CANVAS_W, height, minWidth: CANVAS_W }}
+        style={{ width: canvasW, height, minWidth: NODE_W * 2 + COL_GAP_MIN }}
       >
         <svg
           className="absolute inset-0 h-full w-full"
-          viewBox={`0 0 ${CANVAS_W} ${height}`}
+          viewBox={`0 0 ${canvasW} ${height}`}
           aria-hidden
         >
           <defs>
@@ -294,7 +316,12 @@ export function RouteMap({
               ? 1.5 + (Math.max(0, Math.min(100, edge.sharePercent)) / 100) * 3.5
               : 1.5;
             return (
-              <g key={edge.key} opacity={dimmed ? 0.12 : edge.active ? 0.9 : 0.45}>
+              <g
+                key={edge.key}
+                opacity={
+                  dimmed ? 0.12 : isSelected(edge.routeId) ? 1 : edge.active ? 0.62 : 0.32
+                }
+              >
                 {/* Linha base. Cheia = no rodizio; tracejada = destino
                     configurado mas sem receber trafego (peso 0, destino
                     desligado, ou rota inteira desligada). */}
@@ -357,8 +384,7 @@ export function RouteMap({
               : route.targets.some((t) => t.storeId === node.store.id)
           );
           const dimmed =
-            (focusedRouteIds || selectedRouteId) &&
-            routesOfNode.every((route) => isDimmed(route.id));
+            Boolean(focusedRouteIds) && routesOfNode.every((route) => isDimmed(route.id));
           const Icon = isVitrine ? Store : CreditCard;
 
           return (
