@@ -5,8 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle,
-  ArrowLeftRight,
   ArrowRight,
   CheckCircle2,
   Copy,
@@ -17,11 +15,8 @@ import {
   Image as ImageIcon,
   Loader2,
   PackageCheck,
-  Route,
-  Settings2,
   SlidersHorizontal,
   Store,
-  Trash2,
   WandSparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,9 +43,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
-import { ConnectStoresWizard } from "@/components/routed-checkout/connect-stores-wizard";
-import { SwapImagesDialog } from "@/components/routed-checkout/swap-images-dialog";
-import { CheckoutSettingsDialog } from "@/components/routed-checkout/checkout-settings-dialog";
 import {
   Dialog,
   DialogContent,
@@ -173,16 +165,10 @@ interface CloneApplyProgress {
   message: string;
 }
 
-type CloneView = "overview" | "shopify" | "export" | "routed-checkout";
-type CloneMode = "identical" | "translated" | "routed" | "complete" | "custom";
+// O roteamento saiu daqui: vive na propria tela (clone/routed-checkout/page.tsx).
+type CloneView = "overview" | "shopify" | "export";
 type InventoryMode = "not_tracked" | "tracked";
 type ImportMode = "single" | "bulk";
-type RoutedCheckoutView =
-  | "create-route"
-  | "create-destination"
-  | "neutralize"
-  | "active-routes"
-  | "script";
 
 interface ConnectedVariant {
   id: string;
@@ -192,23 +178,6 @@ interface ConnectedVariant {
   selectedOptions?: { name: string; value: string }[];
 }
 
-interface ConnectedProduct {
-  id: string;
-  title: string;
-  handle: string;
-  status?: string;
-  variants: { nodes: ConnectedVariant[] };
-}
-
-interface FlatVariant extends ConnectedVariant {
-  productTitle: string;
-  productHandle: string;
-  label: string;
-}
-
-const DEFAULT_SKU_MAP = "{}";
-
-const DEFAULT_VARIANT_MAP = "{}";
 
 const DEFAULT_CLONE_LIMIT = 250;
 const MAX_CLONE_LIMIT = 5000;
@@ -334,26 +303,6 @@ function cloneSourceKey(sourceValue: string, limitValue: number) {
   return `${sourceValue.trim().toLowerCase()}::${limitValue}`;
 }
 
-function safeJsonMap(value: string) {
-  try {
-    const parsed = JSON.parse(value || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return parsed as Record<string, string>;
-  } catch {
-    return {};
-  }
-}
-
-function normalizeMatchKey(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
 
 function looksLikeGeneratedId(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -381,70 +330,6 @@ function formatDomainLabel(value?: string | null) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function flattenVariants(products: ConnectedProduct[]): FlatVariant[] {
-  return products.flatMap((product) =>
-    (product.variants?.nodes || []).map((variant) => {
-      const optionText =
-        variant.selectedOptions
-          ?.map((option) => option.value)
-          .filter(Boolean)
-          .join(" / ") || variant.title;
-      return {
-        ...variant,
-        productTitle: product.title,
-        productHandle: product.handle,
-        label: `${product.title}${optionText && optionText !== "Default Title" ? ` - ${optionText}` : ""}`,
-      };
-    })
-  );
-}
-
-function buildSuggestedMaps(
-  sourceProducts: ConnectedProduct[],
-  targetProducts: ConnectedProduct[]
-) {
-  const sourceVariants = flattenVariants(sourceProducts);
-  const targetVariants = flattenVariants(targetProducts);
-  const targetBySku = new Map<string, FlatVariant>();
-  const targetByLabel = new Map<string, FlatVariant>();
-
-  targetVariants.forEach((variant) => {
-    if (variant.sku?.trim()) {
-      targetBySku.set(variant.sku.trim().toLowerCase(), variant);
-    }
-    targetByLabel.set(normalizeMatchKey(variant.label), variant);
-  });
-
-  const skuMap: Record<string, string> = {};
-  const variantMap: Record<string, string> = {};
-  const matches: {
-    source: FlatVariant;
-    target: FlatVariant;
-    reason: "sku" | "titulo";
-  }[] = [];
-  const unmatched: FlatVariant[] = [];
-
-  sourceVariants.forEach((sourceVariant) => {
-    const sku = sourceVariant.sku?.trim();
-    const targetVariant = sku
-      ? targetBySku.get(sku.toLowerCase())
-      : targetByLabel.get(normalizeMatchKey(sourceVariant.label));
-
-    if (targetVariant) {
-      if (sku) skuMap[sku] = targetVariant.id;
-      variantMap[sourceVariant.id] = targetVariant.id;
-      matches.push({
-        source: sourceVariant,
-        target: targetVariant,
-        reason: sku ? "sku" : "titulo",
-      });
-    } else {
-      unmatched.push(sourceVariant);
-    }
-  });
-
-  return { sourceVariants, targetVariants, skuMap, variantMap, matches, unmatched };
-}
 
 function formatStoreLabel(store?: StoreOption) {
   if (!store) return "Selecione uma loja";
@@ -457,9 +342,6 @@ function formatStoreLabel(store?: StoreOption) {
   return `Loja ${store.id.slice(0, 8)}`;
 }
 
-function formatJsonMap(map: Record<string, string>) {
-  return JSON.stringify(map || {}, null, 2);
-}
 
 function ServiceIntro({
   icon: Icon,
@@ -576,7 +458,6 @@ export default function ClonePage() {
   const [inventoryQuantity, setInventoryQuantity] = useState("100");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [sourceStoreId, setSourceStoreId] = useState("");
-  const [cloneMode, setCloneMode] = useState<CloneMode>("identical");
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
@@ -621,180 +502,12 @@ export default function ClonePage() {
   const [previewSort, setPreviewSort] = useState<PreviewSort>("source");
   const [previewCollections, setPreviewCollections] = useState<string[]>([]);
 
-  const [configs, setConfigs] = useState<CheckoutConfig[]>([]);
   const [cloneRuns, setCloneRuns] = useState<CloneRun[]>([]);
-  const [configsLoading, setConfigsLoading] = useState(true);
-  const [routeName, setRouteName] = useState("Vitrine para loja checkout");
   const [routeSourceStoreId, setRouteSourceStoreId] = useState("");
   const [routeTargetStoreId, setRouteTargetStoreId] = useState("");
-  const [routeMode, setRouteMode] = useState("enterprise_static");
-  const [skuMap, setSkuMap] = useState(DEFAULT_SKU_MAP);
-  const [variantMap, setVariantMap] = useState(DEFAULT_VARIANT_MAP);
-  const [editingRouteId, setEditingRouteId] = useState("");
-  const [deletingRouteId, setDeletingRouteId] = useState("");
-  const [invertingRouteId, setInvertingRouteId] = useState("");
-  const [checkingRouteId, setCheckingRouteId] = useState("");
-  const [routeHealth, setRouteHealth] = useState<
-    Record<
-      string,
-      {
-        ok: boolean;
-        storeIssue?: {
-          message?: string;
-          source?: { motivo?: string; mensagem?: string } | null;
-          target?: { motivo?: string; mensagem?: string } | null;
-        };
-        totalSourceSkus: number;
-        noSkuCount: number;
-        sourceVariantCount: number;
-        coveragePercent: number;
-        missingCount: number;
-        missingSkus: string[];
-        wrongCount: number;
-        wrongSkus: { sku: string }[];
-        checkedAt: string;
-        fallbackCount7d: number;
-        loaderReady7d: number;
-        routedOk7d: number;
-        fallbackByReason: Record<string, number>;
-        recentFallbacks: { reason: string; detail: string | null; created_at: string }[];
-      } | { error: string }
-    >
-  >({});
 
-  async function handleCheckRouteHealth(config: CheckoutConfig) {
-    setCheckingRouteId(config.id);
-    try {
-      const res = await fetch("/api/checkout-routes/health", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: config.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setRouteHealth((current) => ({ ...current, [config.id]: { error: data.error || "Falha ao verificar." } }));
-        return;
-      }
-      setRouteHealth((current) => ({ ...current, [config.id]: data }));
-      if (data.ok) {
-        toast.success("Rota 100% saudavel: todos os produtos roteando certo.");
-      } else {
-        const partes: string[] = [];
-        if (data.noSkuCount > 0) partes.push(`${data.noSkuCount} sem SKU`);
-        if (data.missingCount > 0) partes.push(`${data.missingCount} sem mapa`);
-        if (data.wrongCount > 0)
-          partes.push(`${data.wrongCount} apontando pro produto errado`);
-        toast.error(
-          `Rota em ${data.coveragePercent}%: ${partes.join(", ")}. Clique em Corrigir.`
-        );
-      }
-    } catch {
-      setRouteHealth((current) => ({
-        ...current,
-        [config.id]: { error: "Falha ao verificar a rota." },
-      }));
-    } finally {
-      setCheckingRouteId("");
-    }
-  }
 
-  const [repairingRouteId, setRepairingRouteId] = useState("");
-  const [updatingThemeId, setUpdatingThemeId] = useState("");
-  const [copyingScriptId, setCopyingScriptId] = useState("");
-
-  async function handleRepairRoute(config: CheckoutConfig) {
-    setRepairingRouteId(config.id);
-    try {
-      const res = await fetch("/api/checkout-routes/repair", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: config.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Falha ao corrigir a rota.");
-        return;
-      }
-      const feito: string[] = [];
-      if (data.stampedSkuCount > 0)
-        feito.push(`${data.stampedSkuCount} SKU(s) gerados na vitrine`);
-      if (data.dedupedSkuCount > 0)
-        feito.push(`${data.dedupedSkuCount} SKU(s) duplicados separados`);
-      if (data.fixedWrongCount > 0)
-        feito.push(`${data.fixedWrongCount} mapas errados`);
-      if (data.extendedCount > 0)
-        feito.push(`${data.extendedCount} variantes adicionadas`);
-      if (data.createdProductCount > 0)
-        feito.push(`${data.createdProductCount} produto(s) criado(s)`);
-      toast.success(
-        feito.length > 0
-          ? `Corrigido: ${feito.join(", ")}.`
-          : "Nada para corrigir — a rota ja estava completa."
-      );
-      if (data.warnings?.length) {
-        toast.warning(`${data.warnings.length} aviso(s) durante a correção — veja o console.`);
-        console.warn("[repair route] warnings", data.warnings);
-      }
-      if (data.imageQueueCount > 0) {
-        toast(`${data.imageQueueCount} imagem(ns) na fila pra trocar sem marca, em background.`);
-      }
-      await handleCheckRouteHealth(config);
-    } catch {
-      toast.error("Falha ao corrigir a rota.");
-    } finally {
-      setRepairingRouteId("");
-    }
-  }
-
-  async function handleCopyFullScript(config: CheckoutConfig) {
-    setCopyingScriptId(config.id);
-    try {
-      const configUrl = `${appOrigin}/api/c/${config.public_token}`;
-      const script = `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${config.public_token}"\n  data-config-url="${configUrl}"\n  async>\n</script>`;
-      await navigator.clipboard.writeText(script);
-      toast.success("Script copiado! Cole antes de </head> no theme.liquid da vitrine.");
-    } catch {
-      toast.error("Falha ao copiar script.");
-    } finally {
-      setCopyingScriptId("");
-    }
-  }
-
-  async function handleUpdateTheme(config: CheckoutConfig) {
-    setUpdatingThemeId(config.id);
-    try {
-      const res = await fetch(`/api/checkout-routes/${config.id}/update-theme`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Falha ao atualizar o tema.");
-        return;
-      }
-      if (data.updated) {
-        toast.success(`Tema atualizado: ${data.skuCount} SKUs + ${data.variantCount} variantes embutidos.`);
-      } else {
-        toast(`${data.message}`);
-      }
-    } catch {
-      toast.error("Falha ao atualizar o tema.");
-    } finally {
-      setUpdatingThemeId("");
-    }
-  }
-
-  const [sourceProducts, setSourceProducts] = useState<ConnectedProduct[]>([]);
-  const [targetProducts, setTargetProducts] = useState<ConnectedProduct[]>([]);
-  const [routeProductsLoading, setRouteProductsLoading] = useState(false);
-  const [routeProductsError, setRouteProductsError] = useState("");
-  const [routeProductsRefreshKey, setRouteProductsRefreshKey] = useState(0);
   const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
-  const [autofilledMapKey, setAutofilledMapKey] = useState("");
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [swapStore, setSwapStore] = useState<{ id: string; label: string } | null>(
-    null
-  );
-  const [settingsRoute, setSettingsRoute] = useState<CheckoutConfig | null>(null);
   const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
   const [importScope, setImportScope] = useState<"all" | "collection">("all");
@@ -811,9 +524,7 @@ export default function ClonePage() {
     ? "shopify"
     : pathname.endsWith("/export")
       ? "export"
-      : pathname === "/clone/routed-checkout" || pathname.startsWith("/clone/routed-checkout/")
-        ? "routed-checkout"
-        : "overview";
+      : "overview";
 
   const routedImportMode: ImportMode | null = pathname.endsWith("/individual")
     ? "single"
@@ -917,89 +628,6 @@ export default function ClonePage() {
     return sorted;
   }, [preview, previewSearch, previewCollections, previewSort]);
 
-  const selectedRouteConfig = useMemo(
-    () =>
-      configs.find(
-        (config) =>
-          config.source_store_id === routeSourceStoreId &&
-          config.target_store_id === routeTargetStoreId &&
-          config.enabled
-      ) || null,
-    [configs, routeSourceStoreId, routeTargetStoreId]
-  );
-
-  const suggestedRouteMaps = useMemo(
-    () => buildSuggestedMaps(sourceProducts, targetProducts),
-    [sourceProducts, targetProducts]
-  );
-
-  const manualSourceVariants = useMemo(
-    () => suggestedRouteMaps.sourceVariants.slice(0, 40),
-    [suggestedRouteMaps.sourceVariants]
-  );
-
-  const currentVariantMap = useMemo(
-    () => safeJsonMap(variantMap),
-    [variantMap]
-  );
-
-  const targetVariantById = useMemo(
-    () =>
-      new Map(
-        suggestedRouteMaps.targetVariants.map((variant) => [variant.id, variant])
-      ),
-    [suggestedRouteMaps.targetVariants]
-  );
-
-  const routeLinkRows = useMemo(
-    () =>
-      manualSourceVariants.map((sourceVariant) => {
-        const manualTargetId = currentVariantMap[sourceVariant.id];
-        const suggestedMatch = suggestedRouteMaps.matches.find(
-          (match) => match.source.id === sourceVariant.id
-        );
-        const targetVariant = manualTargetId
-          ? targetVariantById.get(manualTargetId)
-          : suggestedMatch?.target;
-        return {
-          source: sourceVariant,
-          target: targetVariant || null,
-          targetId: manualTargetId || suggestedMatch?.target.id || "__none__",
-          reason: manualTargetId ? "manual" : suggestedMatch?.reason || "sem-par",
-        };
-      }),
-    [
-      currentVariantMap,
-      manualSourceVariants,
-      suggestedRouteMaps.matches,
-      targetVariantById,
-    ]
-  );
-
-  const routeMapKey = useMemo(
-    () =>
-      `${routeSourceStoreId}:${routeTargetStoreId}:${suggestedRouteMaps.matches.length}:${suggestedRouteMaps.sourceVariants.length}:${suggestedRouteMaps.targetVariants.length}`,
-    [
-      routeSourceStoreId,
-      routeTargetStoreId,
-      suggestedRouteMaps.matches.length,
-      suggestedRouteMaps.sourceVariants.length,
-      suggestedRouteMaps.targetVariants.length,
-    ]
-  );
-
-  // Para o passo "Instalar script": usa a rota que casa com as lojas selecionadas;
-  // se nenhuma casar, cai para a primeira rota ativa, garantindo um token real.
-  const scriptConfig =
-    selectedRouteConfig || configs.find((config) => config.enabled) || configs[0] || null;
-  const installToken = scriptConfig?.public_token || "";
-  function buildRoutedInstallSnippet(token: string) {
-    return `<script\n  src="${appOrigin}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>`;
-  }
-
-  const installSnippet = buildRoutedInstallSnippet(
-    installToken || "COLE_O_TOKEN_DA_ROTA"
-  );
 
   useEffect(() => {
     setAppOrigin(getPublicAppUrl(window.location.origin));
@@ -1069,7 +697,6 @@ export default function ClonePage() {
       setImportStep(1);
       setImportWizardOpen(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isImportSubpage, isCloneConfigSubpage]);
 
   useEffect(() => {
@@ -1100,19 +727,6 @@ export default function ClonePage() {
     void loadStores();
   }, []);
 
-  async function loadConfigs() {
-    setConfigsLoading(true);
-    try {
-      const res = await fetch("/api/checkout-routes");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao carregar rotas.");
-      setConfigs(data.configs || []);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao carregar rotas.");
-    } finally {
-      setConfigsLoading(false);
-    }
-  }
 
   async function loadCloneRuns() {
     const supabase = createClient();
@@ -1126,78 +740,9 @@ export default function ClonePage() {
   }
 
   useEffect(() => {
-    void loadConfigs();
     void loadCloneRuns();
   }, []);
 
-  useEffect(() => {
-    if (activeView !== "routed-checkout" || !routeSourceStoreId || !routeTargetStoreId) {
-      return;
-    }
-
-    if (routeSourceStoreId === routeTargetStoreId) {
-      setRouteProductsError("Escolha lojas diferentes: a vitrine e a loja checkout não podem ser a mesma loja.");
-      setSourceProducts([]);
-      setTargetProducts([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadRouteProducts() {
-      setRouteProductsLoading(true);
-      setRouteProductsError("");
-      try {
-        const [sourceRes, targetRes] = await Promise.all([
-          fetch(`/api/shopify/products?storeId=${routeSourceStoreId}&first=250`),
-          fetch(`/api/shopify/products?storeId=${routeTargetStoreId}&first=250`),
-        ]);
-        const [sourceData, targetData] = await Promise.all([
-          sourceRes.json(),
-          targetRes.json(),
-        ]);
-
-        if (!sourceRes.ok) {
-          throw new Error(sourceData.error || "Nao foi possivel carregar produtos da vitrine.");
-        }
-        if (!targetRes.ok) {
-          throw new Error(targetData.error || "Nao foi possivel carregar produtos da loja checkout.");
-        }
-
-        if (!cancelled) {
-          setSourceProducts((sourceData.products || []) as ConnectedProduct[]);
-          setTargetProducts((targetData.products || []) as ConnectedProduct[]);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setRouteProductsError(
-            error instanceof Error ? error.message : "Falha ao carregar produtos reais."
-          );
-          setSourceProducts([]);
-          setTargetProducts([]);
-        }
-      } finally {
-        if (!cancelled) setRouteProductsLoading(false);
-      }
-    }
-
-    void loadRouteProducts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeView, routeProductsRefreshKey, routeSourceStoreId, routeTargetStoreId]);
-
-  useEffect(() => {
-    if (activeView !== "routed-checkout") return;
-    if (!routeMapKey || routeMapKey === autofilledMapKey) return;
-    if (editingRouteId) return;
-    if (suggestedRouteMaps.matches.length === 0) return;
-
-    setSkuMap(formatJsonMap(suggestedRouteMaps.skuMap));
-    setVariantMap(formatJsonMap(suggestedRouteMaps.variantMap));
-    setAutofilledMapKey(routeMapKey);
-  }, [activeView, autofilledMapKey, editingRouteId, routeMapKey, suggestedRouteMaps]);
 
   async function runClone(
     action: "preview" | "export-json" | "export-csv" | "apply",
@@ -1619,7 +1164,7 @@ export default function ClonePage() {
       if (aggregate.logoAppliedCount) {
         toast.success(`${aggregate.logoAppliedCount} imagem(ns) receberam a logo.`);
       }
-      await Promise.all([loadConfigs(), loadCloneRuns()]);
+      await loadCloneRuns();
     } catch (error) {
       if (isAbortError(error)) {
         toast("Operacao cancelada.");
@@ -1651,95 +1196,6 @@ export default function ClonePage() {
     });
   }
 
-  async function copyToClipboard(value: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} copiado.`);
-    } catch {
-      toast.error(`Nao foi possivel copiar ${label}.`);
-    }
-  }
-
-  function resetRouteForm() {
-    setEditingRouteId("");
-    setRouteName("Vitrine para loja checkout");
-    setRouteMode("enterprise_static");
-    setSkuMap(DEFAULT_SKU_MAP);
-    setVariantMap(DEFAULT_VARIANT_MAP);
-  }
-
-  async function handleDeleteRoute(config: CheckoutConfig) {
-    const confirmed = window.confirm(`Excluir a rota "${config.name}"?`);
-    if (!confirmed) return;
-
-    setDeletingRouteId(config.id);
-    try {
-      const res = await fetch("/api/checkout-routes", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: config.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao excluir rota.");
-      if (editingRouteId === config.id) resetRouteForm();
-      toast.success("Rota excluida.");
-      await loadConfigs();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao excluir rota.");
-    } finally {
-      setDeletingRouteId("");
-    }
-  }
-
-  async function handleInvertRoute(config: CheckoutConfig) {
-    const entries = Object.entries(config.variant_map || {});
-    if (entries.length === 0) {
-      toast.error("Esta rota nao tem mapa para inverter. Recrie a rota.");
-      return;
-    }
-    const values = entries.map(([, value]) => value);
-    if (new Set(values).size !== values.length) {
-      toast.error(
-        "Nao da para inverter automaticamente (destinos repetidos no mapa). Recrie a rota com a vitrine correta."
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Inverter "${config.name}"?\n\nA vitrine (onde o cliente compra) e a loja checkout (onde fica o checkout) serao trocadas. O token instalado no tema continua o mesmo.`
-    );
-    if (!confirmed) return;
-
-    setInvertingRouteId(config.id);
-    try {
-      const invertedVariantMap = Object.fromEntries(
-        entries.map(([key, value]) => [value, key])
-      );
-      const res = await fetch("/api/checkout-routes", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: config.id,
-          name: config.name,
-          sourceStoreId: config.target_store_id,
-          targetStoreId: config.source_store_id,
-          mode: config.mode,
-          variantMap: invertedVariantMap,
-          // sku_map nao pode ser invertido de forma confiavel; o variant_map
-          // ja cobre o roteamento. Recriar destino refaz o sku_map se preciso.
-          skuMap: {},
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao inverter rota.");
-      toast.success("Vitrine e loja checkout invertidas. O token segue o mesmo.");
-      await loadConfigs();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao inverter rota.");
-    } finally {
-      setInvertingRouteId("");
-    }
-  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -2992,422 +2448,6 @@ export default function ClonePage() {
       </section>
       )}
 
-      {activeView === "routed-checkout" && (
-      <section className="space-y-5" aria-labelledby="routed-checkout">
-        <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/60 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Route className="h-5 w-5 text-primary" />
-              <h2
-                id="routed-checkout"
-                className="text-lg font-semibold text-foreground"
-              >
-                Loja vitrine para loja checkout
-              </h2>
-            </div>
-            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Conecte duas lojas em poucos cliques: cria os produtos na dark
-              store, neutraliza, conecta por SKU e gera o script do checkout
-              roteado.
-            </p>
-          </div>
-          <Button
-            size="lg"
-            className="shrink-0"
-            onClick={() => setWizardOpen(true)}
-            disabled={stores.length < 2}
-          >
-            <Route className="h-4 w-4" />
-            Conectar lojas
-          </Button>
-        </div>
-
-        {stores.length < 2 && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
-            Conecte pelo menos duas lojas (uma vitrine e uma loja checkout) em{" "}
-            <Link href="/stores" className="font-medium underline">
-              Lojas conectadas
-            </Link>
-            .
-          </div>
-        )}
-
-        <Card className="rounded-lg border-border/60">
-          <CardHeader>
-            <CardTitle className="text-lg">Rotas ativas</CardTitle>
-            <CardDescription>
-              {configsLoading
-                ? "Carregando"
-                : `${configs.length} rota(s) - token e script para a vitrine`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {configs.length === 0 ? (
-              <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-background/35 p-6 text-center text-sm text-muted-foreground">
-                <Route className="h-6 w-6 text-muted-foreground/70" />
-                Nenhuma rota ainda. Clique em &quot;Conectar lojas&quot; para
-                criar a primeira.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {configs.map((config) => {
-                  const routeSnippet = buildRoutedInstallSnippet(
-                    config.public_token
-                  );
-                  const ultimo = config.settings?.last_heal;
-                  return (
-                    <div
-                      key={config.id}
-                      className="rounded-lg border border-border/60 bg-background/45 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {config.name}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatStoreLabel(
-                              stores.find(
-                                (store) => store.id === config.source_store_id
-                              )
-                            )}
-                            {" -> "}
-                            {formatStoreLabel(
-                              stores.find(
-                                (store) => store.id === config.target_store_id
-                              )
-                            )}
-                            {" - "}
-                            {config.enabled ? "ativo" : "pausado"}
-                          </p>
-                          {/* Estado vindo da ultima passada automatica. Rota
-                              quebrada precisa gritar na lista, nao esperar
-                              alguem clicar em Verificar. */}
-                          {ultimo && !ultimo.ok && (
-                            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-destructive">
-                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                              <span>{ultimo.message || "Rota com problema."}</span>
-                            </p>
-                          )}
-                          {ultimo && ultimo.ok && (
-                            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                              Verificada automaticamente{" "}
-                              {new Date(ultimo.at).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </p>
-                          )}
-                          {!ultimo && (
-                            <p className="mt-1.5 text-xs text-muted-foreground/70">
-                              Ainda não verificada — a checagem automática roda
-                              a cada hora.
-                            </p>
-                          )}
-                        </div>
-                        <Badge
-                          variant={config.enabled ? "secondary" : "outline"}
-                          className="rounded-md"
-                        >
-                          {Object.keys(config.sku_map || {}).length +
-                            Object.keys(config.variant_map || {}).length}{" "}
-                          mapas
-                        </Badge>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <Label className="text-xs font-semibold text-foreground">
-                          Script para colar na vitrine
-                        </Label>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCopyFullScript(config)}
-                          disabled={copyingScriptId === config.id}
-                          title="Copia o script com data-config-url para resolução local sem chamar a API no clique"
-                        >
-                          {copyingScriptId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
-                          Copiar script
-                        </Button>
-                      </div>
-                      <Textarea
-                        readOnly
-                        value={routeSnippet}
-                        className="mt-2 min-h-24 resize-y font-mono text-xs leading-6"
-                        onFocus={(event) => event.currentTarget.select()}
-                      />
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setSwapStore({
-                              id: config.target_store_id,
-                              label: formatStoreLabel(
-                                stores.find(
-                                  (store) => store.id === config.target_store_id
-                                )
-                              ),
-                            })
-                          }
-                          title="Recria as fotos sem marca na loja checkout."
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" />
-                          Trocar imagens
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSettingsRoute(config)}
-                          title="Domínio e moeda do checkout."
-                        >
-                          <Settings2 className="h-3.5 w-3.5" />
-                          Checkout
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleInvertRoute(config)}
-                          disabled={invertingRouteId === config.id}
-                          title="Troca vitrine e loja checkout."
-                        >
-                          {invertingRouteId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                          )}
-                          Inverter lojas
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCheckRouteHealth(config)}
-                          disabled={checkingRouteId === config.id}
-                          title="Confere se todo produto da vitrine tem checkout roteado pro produto certo na loja checkout."
-                        >
-                          {checkingRouteId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          )}
-                          Verificar rota
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateTheme(config)}
-                          disabled={updatingThemeId === config.id}
-                          title="Emite o mapa de SKUs direto no tema da vitrine via Shopify API. O loader resolve o checkout sem chamar a API do xcart."
-                        >
-                          {updatingThemeId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <PackageCheck className="h-3.5 w-3.5" />
-                          )}
-                          Atualizar tema
-                        </Button>
-                        {(() => {
-                          const health = routeHealth[config.id];
-                          if (!health || "error" in health || health.ok) return null;
-                          return (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRepairRoute(config)}
-                              disabled={repairingRouteId === config.id}
-                              title="Recalcula o mapa por SKU exato e cria/completa os produtos que faltam na loja checkout."
-                            >
-                              {repairingRouteId === config.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <WandSparkles className="h-3.5 w-3.5" />
-                              )}
-                              Corrigir rota
-                            </Button>
-                          );
-                        })()}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteRoute(config)}
-                          disabled={deletingRouteId === config.id}
-                        >
-                          {deletingRouteId === config.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                          Excluir
-                        </Button>
-                      </div>
-                      {(() => {
-                        const health = routeHealth[config.id];
-                        if (!health) return null;
-                        if ("error" in health) {
-                          return (
-                            <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                              <div className="flex items-center gap-2">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                {health.error}
-                              </div>
-                            </div>
-                          );
-                        }
-                        // Funil real do loader nos ultimos 7 dias. A conta que
-                        // interessa nao e "quantos erros", e "de quem viu o
-                        // script, quantos foram redirecionados".
-                        const funil = health.loaderReady7d > 0 && (
-                          <p className="text-muted-foreground">
-                            Últimos 7 dias: {health.loaderReady7d} sessão(ões)
-                            com o script ativo, {health.routedOk7d} roteada(s)
-                            {health.loaderReady7d > 0 && (
-                              <>
-                                {" "}
-                                (
-                                {Math.round(
-                                  (health.routedOk7d / health.loaderReady7d) * 100
-                                )}
-                                %)
-                              </>
-                            )}
-                            .
-                          </p>
-                        );
-                        // Loja fora do ar e mais grave que qualquer numero de
-                        // cobertura: nao adianta falar de SKU se o checkout nem
-                        // abre. Entao esta checagem vem antes de tudo.
-                        if (health.storeIssue?.message) {
-                          return (
-                            <div className="mt-3 space-y-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs">
-                              <div className="flex items-center gap-2 font-medium text-destructive">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Esta rota não consegue rotear.
-                              </div>
-                              <p className="text-muted-foreground">
-                                {health.storeIssue.message}
-                              </p>
-                              <p className="text-muted-foreground/80">
-                                Todo cliente que clicar em finalizar cai num
-                                checkout que não abre. Resolva a loja ou desligue
-                                a rota.
-                              </p>
-                            </div>
-                          );
-                        }
-                        const fallbackNote = (health.fallbackCount7d > 0 ||
-                          health.loaderReady7d > 0) && (
-                          <div className="space-y-1">
-                            {funil}
-                            {health.fallbackCount7d > 0 && (
-                            <p className="text-muted-foreground">
-                              {health.fallbackCount7d} checkout(s) caíram pro nativo da vitrine nos
-                              últimos 7 dias (
-                              {Object.entries(health.fallbackByReason)
-                                .map(([reason, count]) => `${reason}: ${count}`)
-                                .join(", ")}
-                              ).
-                            </p>
-                            )}
-                            {health.recentFallbacks?.slice(0, 3).map((fb, i) => (
-                              <p key={i} className="text-muted-foreground/80 truncate">
-                                {new Date(fb.created_at).toLocaleDateString()} — {fb.reason}{fb.detail ? `: ${fb.detail}` : ""}
-                              </p>
-                            ))}
-                          </div>
-                        );
-                        if (health.ok) {
-                          return (
-                            <div className="mt-3 space-y-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-700">
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Rota 100% saudável — {health.totalSourceSkus} produtos verificados,
-                                todos roteando pro produto certo.
-                              </div>
-                              {fallbackNote}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="mt-3 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
-                            <div className="flex items-center gap-2 font-medium">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              Rota em {health.coveragePercent}% — o resto do
-                              tráfego cai no checkout da vitrine.
-                            </div>
-                            {health.noSkuCount > 0 && (
-                              <p className="text-muted-foreground">
-                                {health.noSkuCount} variante(s) da vitrine sem
-                                SKU (produto criado à mão no Shopify). Clique em
-                                Corrigir: o app gera o SKU e cria o par na loja
-                                checkout.
-                              </p>
-                            )}
-                            {(health.missingCount > 0 || health.wrongCount > 0) && (
-                              <p className="text-muted-foreground">
-                                {health.missingCount} produto(s) sem mapa e{" "}
-                                {health.wrongCount} apontando pro produto errado
-                                na loja checkout.
-                              </p>
-                            )}
-                            {health.missingSkus.length > 0 && (
-                              <p className="text-muted-foreground">
-                                Sem mapa: {health.missingSkus.slice(0, 8).join(", ")}
-                                {health.missingCount > 8 ? "..." : ""}
-                              </p>
-                            )}
-                            {health.wrongSkus.length > 0 && (
-                              <p className="text-muted-foreground">
-                                Errados: {health.wrongSkus.slice(0, 8).map((item) => item.sku).join(", ")}
-                                {health.wrongCount > 8 ? "..." : ""}
-                              </p>
-                            )}
-                            {fallbackNote}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <ConnectStoresWizard
-          open={wizardOpen}
-          onOpenChange={setWizardOpen}
-          stores={stores}
-          appOrigin={appOrigin}
-          onRouteCreated={loadConfigs}
-        />
-
-        <SwapImagesDialog
-          open={!!swapStore}
-          onOpenChange={(next) => {
-            if (!next) setSwapStore(null);
-          }}
-          storeId={swapStore?.id || ""}
-          storeLabel={swapStore?.label || ""}
-        />
-
-        <CheckoutSettingsDialog
-          open={!!settingsRoute}
-          onOpenChange={(next) => {
-            if (!next) setSettingsRoute(null);
-          }}
-          routeId={settingsRoute?.id || ""}
-          routeName={settingsRoute?.name || ""}
-          settings={settingsRoute?.settings}
-          onSaved={loadConfigs}
-        />
-      </section>
-      )}
     </div>
   );
 }
