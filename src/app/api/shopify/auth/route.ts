@@ -36,7 +36,7 @@ function verifyShopifyHmac(
   return timingSafeEqual(digest, expected);
 }
 
-function dashboardUrl(request: NextRequest, query?: string): string {
+function storesUrl(request: NextRequest, query?: string): string {
   const url = new URL("/stores", request.nextUrl.origin);
   if (query) url.search = query;
   return url.toString();
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       const normalizedShop = normalizeShopDomain(shop);
       if (!normalizedShop) {
         return NextResponse.redirect(
-          dashboardUrl(request, "error=Dominio+invalido+no+install")
+          storesUrl(request, "error=Dominio+invalido+no+install")
         );
       }
       const { data } = await supabase
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
 
     if (!store) {
       return NextResponse.redirect(
-        dashboardUrl(
+        storesUrl(
           request,
           "error=Cadastre+a+loja+no+app+antes+de+instalar+(preencha+dominio+e+credenciais)."
         )
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
     const normalizedShop = normalizeShopDomain(shop);
     if (!normalizedShop) {
       return NextResponse.redirect(
-        dashboardUrl(request, "error=Dominio+invalido+no+callback")
+        storesUrl(request, "error=Dominio+invalido+no+callback")
       );
     }
 
@@ -142,13 +142,13 @@ export async function GET(request: NextRequest) {
 
     if (error || !store) {
       return NextResponse.redirect(
-        dashboardUrl(request, "error=Sessao+de+instalacao+invalida")
+        storesUrl(request, "error=Sessao+de+instalacao+invalida")
       );
     }
 
     if (store.shop_domain !== normalizedShop) {
       return NextResponse.redirect(
-        dashboardUrl(request, "error=Loja+do+callback+nao+confere")
+        storesUrl(request, "error=Loja+do+callback+nao+confere")
       );
     }
 
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
     // https://shopify.dev/docs/apps/auth/oauth/getting-started
     if (!verifyShopifyHmac(request.nextUrl.searchParams, store.client_secret)) {
       return NextResponse.redirect(
-        dashboardUrl(request, "error=Assinatura+do+callback+invalida")
+        storesUrl(request, "error=Assinatura+do+callback+invalida")
       );
     }
 
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
           body: body.slice(0, 300),
         });
         return NextResponse.redirect(
-          dashboardUrl(
+          storesUrl(
             request,
             `error=${encodeURIComponent("Falha ao trocar o codigo de autorizacao. Tente conectar novamente.")}`
           )
@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
       if (!tokenPayload.access_token) {
         console.error("[shopify/auth] code exchange without access_token");
         return NextResponse.redirect(
-          dashboardUrl(
+          storesUrl(
             request,
             `error=${encodeURIComponent("Shopify nao retornou token de acesso. Tente conectar novamente.")}`
           )
@@ -217,7 +217,7 @@ export async function GET(request: NextRequest) {
     } catch (exchangeErr) {
       console.error("[shopify/auth] code exchange error", exchangeErr);
       return NextResponse.redirect(
-        dashboardUrl(
+        storesUrl(
           request,
           `error=${encodeURIComponent("Erro de rede ao trocar codigo de autorizacao.")}`
         )
@@ -251,12 +251,12 @@ export async function GET(request: NextRequest) {
         .eq("id", store.id);
 
       return NextResponse.redirect(
-        dashboardUrl(request, "installed=1")
+        storesUrl(request, "installed=1")
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro pos-instalacao";
       return NextResponse.redirect(
-        dashboardUrl(request, `error=${encodeURIComponent(message.slice(0, 200))}`)
+        storesUrl(request, `error=${encodeURIComponent(message.slice(0, 200))}`)
       );
     }
   }
@@ -273,6 +273,6 @@ export async function GET(request: NextRequest) {
       : "Parametros invalidos no OAuth";
 
   return NextResponse.redirect(
-    dashboardUrl(request, `error=${encodeURIComponent(errorMsg)}`)
+    storesUrl(request, `error=${encodeURIComponent(errorMsg)}`)
   );
 }

@@ -6,6 +6,7 @@ import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { AssinarPro } from "@/components/billing/assinar-pro";
+import { APP_HOME } from "@/lib/app-home";
 
 /**
  * Paywall. O layout do dashboard manda todo mundo sem acesso para ca, entao
@@ -44,7 +45,7 @@ export default function NoAccessPage() {
             <AssinarPro
               onPronto={() =>
                 // Recarrega para o layout reavaliar o acesso e liberar o app.
-                setTimeout(() => window.location.replace("/clone/routed-checkout"), 900)
+                setTimeout(() => window.location.replace(APP_HOME), 900)
               }
             />
             <button

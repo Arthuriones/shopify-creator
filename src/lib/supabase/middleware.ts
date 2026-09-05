@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "@/i18n/routing";
+import { APP_HOME } from "@/lib/app-home";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -149,7 +150,7 @@ export async function updateSession(request: NextRequest) {
   // /admin so existe no subdominio adm.; no app manda pra home (roteamento).
   if (!isLocal && pathname.startsWith("/admin")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/clone/routed-checkout";
+    url.pathname = APP_HOME;
     return NextResponse.redirect(url);
   }
 
@@ -196,7 +197,7 @@ export async function updateSession(request: NextRequest) {
     }
     if (isAuthPath && !isSetPassword) {
       const url = request.nextUrl.clone();
-      url.pathname = `${prefix}/dashboard`;
+      url.pathname = `${prefix}${APP_HOME}`;
       return NextResponse.redirect(url);
     }
   }

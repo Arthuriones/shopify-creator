@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Landing from "./lp/page";
+import { APP_HOME } from "@/lib/app-home";
 
 type HomePageProps = {
   params: Promise<{ locale: string }>;
@@ -27,7 +28,7 @@ export default async function Home({ params, searchParams }: HomePageProps) {
     return <Landing />;
   }
 
-  // Host do app: trata callback de instalacao da Shopify ou vai pro dashboard.
+  // Host do app: trata callback de instalacao da Shopify ou vai pra home.
   const sp = await searchParams;
   const shop = firstParam(sp.shop);
   const code = firstParam(sp.code);
@@ -53,5 +54,5 @@ export default async function Home({ params, searchParams }: HomePageProps) {
   }
 
   const prefix = locale === "en" ? "/en" : "";
-  redirect(`${prefix}/dashboard`);
+  redirect(`${prefix}${APP_HOME}`);
 }
