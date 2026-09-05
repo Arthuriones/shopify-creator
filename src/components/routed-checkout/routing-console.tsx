@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { CreditCard, Loader2, Plus, RefreshCw, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { RouteMap, type MapRoute, type MapStore } from "@/components/routed-checkout/route-map";
 import { RouteInspector } from "@/components/routed-checkout/route-inspector";
+import { AddStorePanel } from "@/components/routed-checkout/add-store-panel";
 
 interface Graph {
   stores: MapStore[];
@@ -30,6 +30,10 @@ export function RoutingConsole({ onConnectStores }: { onConnectStores: () => voi
   const [graph, setGraph] = useState<Graph>({ stores: [], routes: [] });
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // O painel lateral e um espaco so: ou inspeciona uma rota, ou conecta uma
+  // loja. Abrir um dialogo por cima do quadro para conectar era exatamente o
+  // que tirava a pessoa do contexto.
+  const [addingStore, setAddingStore] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -66,9 +70,15 @@ export function RoutingConsole({ onConnectStores }: { onConnectStores: () => voi
     <ConsoleView
       graph={graph}
       selectedId={selectedId}
-      onSelect={setSelectedId}
+      onSelect={(id) => {
+        setAddingStore(false);
+        setSelectedId(id);
+      }}
       onConnectStores={onConnectStores}
       onReload={load}
+      addingStore={addingStore}
+      onAddStore={() => setAddingStore(true)}
+      onCloseAddStore={() => setAddingStore(false)}
     />
   );
 }
@@ -83,12 +93,18 @@ export function ConsoleView({
   onSelect,
   onConnectStores,
   onReload,
+  addingStore = false,
+  onAddStore,
+  onCloseAddStore,
 }: {
   graph: Graph;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onConnectStores: () => void;
   onReload: () => void;
+  addingStore?: boolean;
+  onAddStore?: () => void;
+  onCloseAddStore?: () => void;
 }) {
   const selected = graph.routes.find((route) => route.id === selectedId) ?? null;
 
@@ -110,7 +126,7 @@ export function ConsoleView({
 
   // Estado vazio como convite, nao como aviso: quem chega aqui sem rota
   // precisa saber qual e o proximo passo, nao que algo esta faltando.
-  if (graph.routes.length === 0) {
+  if (graph.routes.length === 0 && !addingStore) {
     const semLojas = graph.stores.length < 2;
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
@@ -131,17 +147,35 @@ export function ConsoleView({
           leva o carrinho de uma para a outra casando os SKUs.
         </p>
         {semLojas ? (
-          <p className="mt-6 text-sm text-muted-foreground">
-            Voce precisa de duas lojas Shopify conectadas.{" "}
-            <Link href="/stores" className="text-foreground underline underline-offset-4">
-              Conectar uma loja
-            </Link>
-          </p>
+          <>
+            <Button size="lg" className="mt-6" onClick={onAddStore}>
+              Conectar uma loja Shopify
+            </Button>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {graph.stores.length === 0
+                ? "Sao necessarias duas: a que recebe o trafego e a que cobra."
+                : "Falta uma. Voce ja conectou a primeira."}
+            </p>
+          </>
         ) : (
           <Button size="lg" className="mt-6" onClick={onConnectStores}>
             Criar a primeira rota
           </Button>
         )}
+      </div>
+    );
+  }
+
+  if (graph.routes.length === 0 && addingStore) {
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-border/60 bg-card/40">
+        <AddStorePanel
+          onConnected={() => {
+            onCloseAddStore?.();
+            onReload();
+          }}
+          onCancel={() => onCloseAddStore?.()}
+        />
       </div>
     );
   }
@@ -169,6 +203,10 @@ export function ConsoleView({
           <Button variant="ghost" size="sm" onClick={onReload}>
             <RefreshCw className="mr-2 h-3.5 w-3.5" />
             Atualizar
+          </Button>
+          <Button variant="outline" onClick={onAddStore}>
+            <Store className="mr-2 h-4 w-4" />
+            Conectar loja
           </Button>
           <Button onClick={onConnectStores}>
             <Plus className="mr-2 h-4 w-4" />
@@ -218,7 +256,15 @@ export function ConsoleView({
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-card/40 xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
-          {selected ? (
+          {addingStore ? (
+            <AddStorePanel
+              onConnected={() => {
+                onCloseAddStore?.();
+                onReload();
+              }}
+              onCancel={() => onCloseAddStore?.()}
+            />
+          ) : selected ? (
             <RouteInspector
               route={{
                 id: selected.id,
