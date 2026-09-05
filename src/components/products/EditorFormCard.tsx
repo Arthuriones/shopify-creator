@@ -55,10 +55,10 @@ function CharCounter({ current, max }: { current: number; max: number }) {
   const ratio = current / max;
   const color =
     ratio > 1
-      ? "oklch(0.65 0.2 25)"
+      ? "var(--danger)"
       : ratio > 0.9
-        ? "oklch(0.75 0.15 75)"
-        : "oklch(0.55 0.005 260)";
+        ? "var(--warning)"
+        : "var(--muted-foreground)";
   return (
     <p className="text-xs transition-colors duration-200" style={{ color }}>
       {current}/{max}
@@ -144,9 +144,9 @@ export function EditorFormCard({
           style={{
             background:
               optimizing || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche
-                ? "oklch(0.72 0.19 155 / 30%)"
-                : "oklch(0.72 0.19 155)",
-            color: "oklch(0.13 0.02 155)",
+                ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                : "var(--action)",
+            color: "var(--action-foreground)",
           }}
         >
           {optimizing ? (
@@ -190,8 +190,8 @@ export function EditorFormCard({
               disabled={isGeneratingDesc || !selectedStore}
               className="h-7 text-[11px] border-border/50"
               style={{
-                background: isGeneratingDesc ? "oklch(0.72 0.19 155 / 10%)" : "transparent",
-                color: "oklch(0.72 0.19 155)",
+                background: isGeneratingDesc ? "color-mix(in oklch, var(--action) 10%, transparent)" : "transparent",
+                color: "var(--action)",
               }}
             >
               {isGeneratingDesc ? (
@@ -299,15 +299,15 @@ export function EditorFormCard({
           style={
             published
               ? {
-                  background: "oklch(0.72 0.19 155 / 15%)",
-                  color: "oklch(0.72 0.19 155)",
+                  background: "color-mix(in oklch, var(--action) 15%, transparent)",
+                  color: "var(--action)",
                 }
               : {
                   background:
                     publishing || !selectedStore
-                      ? "oklch(0.72 0.19 155 / 30%)"
-                      : "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
+                      ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                      : "var(--action)",
+                  color: "var(--action-foreground)",
                 }
           }
         >

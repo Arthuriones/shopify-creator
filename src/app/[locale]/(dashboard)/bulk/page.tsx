@@ -505,16 +505,16 @@ export default function BulkImportPage() {
                     style={{
                       background:
                         job.status === "completed"
-                          ? "oklch(0.72 0.19 155 / 16%)"
+                          ? "color-mix(in oklch, var(--action) 16%, transparent)"
                           : job.status === "failed"
-                            ? "oklch(0.65 0.2 25 / 16%)"
-                            : "oklch(0.7 0.13 250 / 16%)",
+                            ? "color-mix(in oklch, var(--danger) 16%, transparent)"
+                            : "color-mix(in oklch, var(--info) 16%, transparent)",
                       color:
                         job.status === "completed"
-                          ? "oklch(0.72 0.19 155)"
+                          ? "var(--action)"
                           : job.status === "failed"
-                            ? "oklch(0.65 0.2 25)"
-                            : "oklch(0.7 0.13 250)",
+                            ? "var(--danger)"
+                            : "var(--info)",
                     }}
                   >
                     {job.status}

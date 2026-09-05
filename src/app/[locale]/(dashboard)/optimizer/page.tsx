@@ -562,9 +562,9 @@ export default function OptimizerPage() {
               className="h-9 text-[13px] font-medium transition-all duration-200"
               style={{
                 background: loadingPolicies
-                  ? "oklch(0.72 0.19 155 / 70%)"
-                  : "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
+                  ? "color-mix(in oklch, var(--action) 70%, transparent)"
+                  : "var(--action)",
+                color: "var(--action-foreground)",
               }}
             >
               {loadingPolicies ? (
@@ -652,9 +652,9 @@ export default function OptimizerPage() {
             className="h-9 text-[13px] font-medium transition-all duration-200"
             style={{
               background: loadingTheme
-                ? "oklch(0.72 0.19 155 / 70%)"
-                : "oklch(0.72 0.19 155)",
-              color: "oklch(0.13 0.02 155)",
+                ? "color-mix(in oklch, var(--action) 70%, transparent)"
+                : "var(--action)",
+              color: "var(--action-foreground)",
             }}
           >
             {loadingTheme ? (

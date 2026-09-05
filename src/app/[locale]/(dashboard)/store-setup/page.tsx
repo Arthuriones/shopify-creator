@@ -229,8 +229,8 @@ export default function StoreSetupPage() {
                       <Badge
                         className="text-[11px]"
                         style={{
-                          background: "oklch(0.72 0.19 155 / 10%)",
-                          color: "oklch(0.72 0.19 155)",
+                          background: "color-mix(in oklch, var(--action) 10%, transparent)",
+                          color: "var(--action)",
                           border: "none",
                         }}
                       >
@@ -264,9 +264,9 @@ export default function StoreSetupPage() {
               style={{
                 background:
                   generating || !selectedStore || !stores.find((s) => s.id === selectedStore)?.niche
-                    ? "oklch(0.72 0.19 155 / 30%)"
-                    : "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
+                    ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                    : "var(--action)",
+                color: "var(--action-foreground)",
               }}
             >
               {generating ? (
@@ -335,8 +335,8 @@ export default function StoreSetupPage() {
               <Badge
                 className="h-9 px-4 text-[13px] font-medium animate-scale-in"
                 style={{
-                  background: "oklch(0.72 0.19 155 / 15%)",
-                  color: "oklch(0.72 0.19 155)",
+                  background: "color-mix(in oklch, var(--action) 15%, transparent)",
+                  color: "var(--action)",
                   border: "none",
                 }}
               >
@@ -550,8 +550,8 @@ export default function StoreSetupPage() {
                         variant="secondary"
                         className="text-[11px]"
                         style={{
-                          background: "oklch(0.72 0.19 155 / 10%)",
-                          color: "oklch(0.72 0.19 155)",
+                          background: "color-mix(in oklch, var(--action) 10%, transparent)",
+                          color: "var(--action)",
                           border: "none",
                         }}
                       >

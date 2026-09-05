@@ -1081,9 +1081,9 @@ export default function StoresPage() {
                 className="w-full h-10 text-sm font-medium transition-all duration-200"
                 style={{
                   background: loading
-                    ? "oklch(0.72 0.19 155 / 70%)"
-                    : "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
+                    ? "color-mix(in oklch, var(--action) 70%, transparent)"
+                    : "var(--action)",
+                  color: "var(--action-foreground)",
                 }}
                 disabled={loading || !isShopDomainValid}
               >
@@ -1145,9 +1145,9 @@ export default function StoresPage() {
                   className="h-10"
                   style={{
                     background: quickAssetsSaving
-                      ? "oklch(0.72 0.19 155 / 40%)"
-                      : "oklch(0.72 0.19 155)",
-                    color: "oklch(0.13 0.02 155)",
+                      ? "color-mix(in oklch, var(--action) 40%, transparent)"
+                      : "var(--action)",
+                    color: "var(--action-foreground)",
                   }}
                   disabled={quickAssetsSaving || quickAssetFiles.length === 0 || !materialsStoreId}
                   onClick={handleSaveQuickAssets}
@@ -1232,11 +1232,11 @@ export default function StoresPage() {
         <div className="animate-fade-in flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 py-16">
           <div
             className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.72 0.19 155 / 8%)" }}
+            style={{ background: "color-mix(in oklch, var(--action) 8%, transparent)" }}
           >
             <Store
               className="h-6 w-6"
-              style={{ color: "oklch(0.72 0.19 155)" }}
+              style={{ color: "var(--action)" }}
             />
           </div>
           <p
@@ -1252,8 +1252,8 @@ export default function StoresPage() {
             onClick={() => setOpen(true)}
             className="mt-5 h-9 text-[13px] font-medium transition-all duration-200"
             style={{
-              background: "oklch(0.72 0.19 155)",
-              color: "oklch(0.13 0.02 155)",
+              background: "var(--action)",
+              color: "var(--action-foreground)",
             }}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
@@ -1298,7 +1298,7 @@ export default function StoresPage() {
                   {/* Logo thumbnail */}
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/50 overflow-hidden"
-                    style={{ background: "oklch(0.15 0.005 260)" }}
+                    style={{ background: "var(--muted)" }}
                   >
                     {store.logo_path ? (
                       <Image
@@ -1325,8 +1325,8 @@ export default function StoresPage() {
                         <Badge
                           className="text-[10px] font-medium shrink-0"
                           style={{
-                            background: "oklch(0.72 0.19 155 / 10%)",
-                            color: "oklch(0.72 0.19 155)",
+                            background: "color-mix(in oklch, var(--action) 10%, transparent)",
+                            color: "var(--action)",
                             border: "none",
                           }}
                         >
@@ -1336,8 +1336,8 @@ export default function StoresPage() {
                         <Badge
                           className="text-[10px] font-medium shrink-0"
                           style={{
-                            background: "oklch(0.75 0.15 75 / 10%)",
-                            color: "oklch(0.75 0.15 75)",
+                            background: "color-mix(in oklch, var(--warning) 10%, transparent)",
+                            color: "var(--warning)",
                             border: "none",
                           }}
                         >
@@ -1377,8 +1377,8 @@ export default function StoresPage() {
                       <Badge
                         className="w-fit text-[10px] font-medium"
                         style={{
-                          background: "oklch(0.72 0.19 155 / 10%)",
-                          color: "oklch(0.72 0.19 155)",
+                          background: "color-mix(in oklch, var(--action) 10%, transparent)",
+                          color: "var(--action)",
                           border: "none",
                         }}
                       >
@@ -1447,7 +1447,7 @@ export default function StoresPage() {
               <div className="flex items-center gap-4">
                 <div
                   className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-border/50 overflow-hidden cursor-pointer hover:border-border transition-colors duration-200"
-                  style={{ background: "oklch(0.12 0.005 260)" }}
+                  style={{ background: "var(--background)" }}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {logoPreview ? (
@@ -1504,7 +1504,7 @@ export default function StoresPage() {
                     .filter((a) => (a.label || "").toLowerCase().startsWith("logo"))
                     .map((asset) => (
                       <div key={asset.id} className="relative group">
-                        <div className="aspect-square rounded-md border border-border/40 overflow-hidden" style={{ background: "oklch(0.12 0.005 260)" }}>
+                        <div className="aspect-square rounded-md border border-border/40 overflow-hidden" style={{ background: "var(--background)" }}>
                           <Image
                             src={getLogoUrl(asset.file_path)}
                             alt={asset.label || "Logo"}
@@ -1806,9 +1806,9 @@ export default function StoresPage() {
               className="w-full h-10 text-sm font-medium transition-all duration-200"
               style={{
                 background: profileSaving
-                  ? "oklch(0.72 0.19 155 / 30%)"
-                  : "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
+                  ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                  : "var(--action)",
+                color: "var(--action-foreground)",
               }}
             >
               {profileSaving ? (

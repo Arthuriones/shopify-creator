@@ -150,10 +150,10 @@ function CharCounter({ current, max }: { current: number; max: number }) {
   const ratio = current / max;
   const color =
     ratio > 1
-      ? "oklch(0.65 0.2 25)"
+      ? "var(--danger)"
       : ratio > 0.9
-        ? "oklch(0.75 0.15 75)"
-        : "oklch(0.55 0.005 260)";
+        ? "var(--warning)"
+        : "var(--muted-foreground)";
   return (
     <p className="text-xs transition-colors duration-200" style={{ color }}>
       {current}/{max}
@@ -1969,7 +1969,7 @@ function ProductsPageContent() {
                                 onClick={() => setSelectedMainImage(i)}
                                 className={`relative aspect-square overflow-hidden rounded-md border transition-all duration-200 ${
                                   selectedMainImage === i
-                                    ? "border-[oklch(0.72_0.19_155)] ring-1 ring-[oklch(0.72_0.19_155)]"
+                                    ? "border-[var(--action)] ring-1 ring-[var(--action)]"
                                     : "border-border/50 hover:border-border"
                                 }`}
                               >
@@ -2004,8 +2004,8 @@ function ProductsPageContent() {
                         <Badge
                           className="text-xs font-medium"
                           style={{
-                            background: "oklch(0.72 0.19 155 / 10%)",
-                            color: "oklch(0.72 0.19 155)",
+                            background: "color-mix(in oklch, var(--action) 10%, transparent)",
+                            color: "var(--action)",
                             border: "none",
                           }}
                         >
@@ -2075,7 +2075,7 @@ function ProductsPageContent() {
                         <Badge
                           variant="outline"
                           className="text-[11px] border-border/30"
-                          style={{ color: "oklch(0.72 0.19 155)" }}
+                          style={{ color: "var(--action)" }}
                         >
                           <Layers className="mr-1 h-3 w-3" />
                           {product.variants.length} variantes
@@ -2172,7 +2172,7 @@ function ProductsPageContent() {
                             onClick={() => setSelectedMainImage(index)}
                             className={`relative aspect-square overflow-hidden rounded-md border transition-all duration-200 ${
                               selectedMainImage === index
-                                ? "border-[oklch(0.72_0.19_155)] ring-1 ring-[oklch(0.72_0.19_155)]"
+                                ? "border-[var(--action)] ring-1 ring-[var(--action)]"
                                 : "border-border/50 hover:border-border"
                             }`}
                           >
@@ -2206,7 +2206,7 @@ function ProductsPageContent() {
                       <div className="flex items-end gap-2">
                         <span
                           className="text-2xl font-bold"
-                          style={{ color: "oklch(0.72 0.19 155)" }}
+                          style={{ color: "var(--action)" }}
                         >
                           {formatPrice(previewPrice, activeCurrency)}
                         </span>
@@ -2243,7 +2243,7 @@ function ProductsPageContent() {
                                     }
                                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
                                       selected
-                                        ? "border-[oklch(0.72_0.19_155)] text-[oklch(0.72_0.19_155)]"
+                                        ? "border-[var(--action)] text-[var(--action)]"
                                         : "border-border/40 text-muted-foreground hover:border-border"
                                     }`}
                                   >
@@ -2260,8 +2260,8 @@ function ProductsPageContent() {
                     <Button
                       className="w-full h-11 text-sm font-medium"
                       style={{
-                        background: "oklch(0.72 0.19 155)",
-                        color: "oklch(0.13 0.02 155)",
+                        background: "var(--action)",
+                        color: "var(--action-foreground)",
                       }}
                     >
                       <ShoppingCart className="mr-2 h-4 w-4" />
@@ -2275,15 +2275,15 @@ function ProductsPageContent() {
                       style={
                         published
                           ? {
-                              background: "oklch(0.72 0.19 155 / 15%)",
-                              color: "oklch(0.72 0.19 155)",
+                              background: "color-mix(in oklch, var(--action) 15%, transparent)",
+                              color: "var(--action)",
                             }
                           : {
                               background:
                                 publishing || !selectedStore
-                                  ? "oklch(0.72 0.19 155 / 30%)"
-                                  : "oklch(0.72 0.19 155)",
-                              color: "oklch(0.13 0.02 155)",
+                                  ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                                  : "var(--action)",
+                              color: "var(--action-foreground)",
                             }
                       }
                     >
@@ -2402,9 +2402,9 @@ function ProductsPageContent() {
                       className="h-9 text-[13px] font-medium transition-all duration-200"
                       style={{
                         background: generatingAll
-                          ? "oklch(0.72 0.19 155 / 30%)"
-                          : "oklch(0.72 0.19 155)",
-                        color: "oklch(0.13 0.02 155)",
+                          ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                          : "var(--action)",
+                        color: "var(--action-foreground)",
                       }}
                     >
                       {generatingAll ? (
@@ -2522,7 +2522,7 @@ function ProductsPageContent() {
                     const imgConfig = getImageLogoConfig(img);
 
                     return (
-                      <div key={i} className="space-y-2 rounded-lg border border-border/30 p-2" style={{ background: "oklch(0.14 0.005 260 / 50%)" }}>
+                      <div key={i} className="space-y-2 rounded-lg border border-border/30 p-2" style={{ background: "color-mix(in oklch, var(--background) 50%, transparent)" }}>
                         {/* Image preview */}
                         <div className="relative aspect-square overflow-hidden rounded-md border border-border/50">
                           <Image
@@ -2533,8 +2533,8 @@ function ProductsPageContent() {
                             unoptimized
                           />
                           {(isGenerating || isBranding) && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "oklch(0.09 0.005 260 / 80%)" }}>
-                              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "oklch(0.72 0.19 155)" }} />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "color-mix(in oklch, var(--background) 80%, transparent)" }}>
+                              <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--action)" }} />
                               <span className="text-[11px] text-muted-foreground">
                                 {isGenerating ? "Gerando com IA..." : "Aplicando logo..."}
                               </span>
@@ -2543,7 +2543,7 @@ function ProductsPageContent() {
                           {generated && !branded && !isGenerating && !isBranding && (
                             <div
                               className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium"
-                              style={{ background: "oklch(0.72 0.19 155 / 90%)", color: "oklch(0.13 0.02 155)" }}
+                              style={{ background: "color-mix(in oklch, var(--action) 90%, transparent)", color: "var(--action-foreground)" }}
                             >
                               LIMPA COM IA
                             </div>
@@ -2551,7 +2551,7 @@ function ProductsPageContent() {
                           {branded && !isGenerating && !isBranding && (
                             <div
                               className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium"
-                              style={{ background: "oklch(0.80 0.15 80 / 90%)", color: "oklch(0.15 0.02 80)" }}
+                              style={{ background: "color-mix(in oklch, var(--warning) 90%, transparent)", color: "color-mix(in oklch, var(--warning) 14%, var(--background))" }}
                             >
                               COM LOGO
                             </div>
@@ -2607,7 +2607,7 @@ function ProductsPageContent() {
                                 type="range" min={8} max={40}
                                 value={imgConfig.scale}
                                 onChange={(e) => updateImageLogoConfig(img, { scale: Number(e.target.value) })}
-                                className="w-full h-1 accent-[oklch(0.72_0.19_155)]"
+                                className="w-full h-1 accent-[var(--action)]"
                               />
                             </div>
                             <div>
@@ -2616,7 +2616,7 @@ function ProductsPageContent() {
                                 type="range" min={20} max={100}
                                 value={imgConfig.opacity}
                                 onChange={(e) => updateImageLogoConfig(img, { opacity: Number(e.target.value) })}
-                                className="w-full h-1 accent-[oklch(0.72_0.19_155)]"
+                                className="w-full h-1 accent-[var(--action)]"
                               />
                             </div>
                           </div>
@@ -2657,9 +2657,9 @@ function ProductsPageContent() {
                               title="Usa Gemini AI para reconstruir a foto sem textos ou logos."
                               style={{
                                 background: isGenerating || isBranding
-                                  ? "oklch(0.72 0.19 155 / 30%)"
-                                  : "oklch(0.72 0.19 155)",
-                                color: "oklch(0.13 0.02 155)",
+                                  ? "color-mix(in oklch, var(--action) 30%, transparent)"
+                                  : "var(--action)",
+                                color: "var(--action-foreground)",
                               }}
                             >
                               <Sparkles className="mr-1 h-3 w-3" />
@@ -2738,8 +2738,8 @@ function ProductsPageContent() {
                             <div
                               className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
                               style={{
-                                background: "oklch(0.80 0.15 80 / 90%)",
-                                color: "oklch(0.15 0.02 80)",
+                                background: "color-mix(in oklch, var(--warning) 90%, transparent)",
+                                color: "color-mix(in oklch, var(--warning) 14%, var(--background))",
                               }}
                             >
                               COM LOGO
@@ -2748,8 +2748,8 @@ function ProductsPageContent() {
                             <div
                               className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium"
                               style={{
-                                background: "oklch(0.72 0.19 155 / 90%)",
-                                color: "oklch(0.13 0.02 155)",
+                                background: "color-mix(in oklch, var(--action) 90%, transparent)",
+                                color: "var(--action-foreground)",
                               }}
                             >
                               LIMPA COM IA
@@ -2766,7 +2766,7 @@ function ProductsPageContent() {
                                   onClick={() => setSelectedMainImage(i)}
                                   className={`relative aspect-square overflow-hidden rounded-md border transition-all duration-200 ${
                                     selectedMainImage === i
-                                      ? "border-[oklch(0.72_0.19_155)] ring-1 ring-[oklch(0.72_0.19_155)]"
+                                      ? "border-[var(--action)] ring-1 ring-[var(--action)]"
                                       : "border-border/50 hover:border-border"
                                   }`}
                                 >
@@ -2780,7 +2780,7 @@ function ProductsPageContent() {
                                   {(brandedImages[img] || generatedImages[img]) && (
                                     <div
                                       className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full"
-                                      style={{ background: brandedImages[img] ? "oklch(0.80 0.15 80)" : "oklch(0.72 0.19 155)" }}
+                                      style={{ background: brandedImages[img] ? "var(--warning)" : "var(--action)" }}
                                     />
                                   )}
                                 </button>
@@ -2799,7 +2799,7 @@ function ProductsPageContent() {
                     <div className="flex items-baseline gap-2">
                       <span
                         className="text-lg font-bold"
-                        style={{ color: "oklch(0.72 0.19 155)" }}
+                        style={{ color: "var(--action)" }}
                       >
                         {formatPrice(product.price, activeCurrency)}
                       </span>
@@ -2903,8 +2903,8 @@ function ProductsPageContent() {
                 <div
                   className="absolute top-2 left-2 px-2 py-1 rounded text-[11px] font-medium"
                   style={{
-                    background: "oklch(0.09 0.005 260 / 80%)",
-                    color: "oklch(0.55 0.005 260)",
+                    background: "color-mix(in oklch, var(--background) 80%, transparent)",
+                    color: "var(--muted-foreground)",
                     backdropFilter: "blur(8px)",
                   }}
                 >
@@ -2930,8 +2930,8 @@ function ProductsPageContent() {
                     onClick={handleCopyPrompt}
                     className="h-9 text-[13px] font-medium flex-1 transition-all duration-200"
                     style={{
-                      background: "oklch(0.72 0.19 155)",
-                      color: "oklch(0.13 0.02 155)",
+                      background: "var(--action)",
+                      color: "var(--action-foreground)",
                     }}
                   >
                     <Copy className="mr-2 h-3.5 w-3.5" />

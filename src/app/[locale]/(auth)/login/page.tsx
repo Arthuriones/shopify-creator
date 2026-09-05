@@ -140,7 +140,7 @@ function LoginForm() {
           width: "600px",
           height: "600px",
           background:
-            "radial-gradient(circle, oklch(0.72 0.19 155 / 6%) 0%, transparent 70%)",
+            "radial-gradient(circle, color-mix(in oklch, var(--action) 6%, transparent) 0%, transparent 70%)",
         }}
       />
 
@@ -165,11 +165,11 @@ function LoginForm() {
         {sent && (mode === "recovery" || mode === "signup") ? (
           <div className="animate-fade-in text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full animate-scale-in"
-              style={{ background: "oklch(0.72 0.19 155 / 12%)" }}
+              style={{ background: "color-mix(in oklch, var(--action) 12%, transparent)" }}
             >
               <Check
                 className="h-5 w-5"
-                style={{ color: "oklch(0.72 0.19 155)" }}
+                style={{ color: "var(--action)" }}
               />
             </div>
             <p className="text-sm text-foreground font-medium">
@@ -255,8 +255,8 @@ function LoginForm() {
                 type="submit"
                 className="w-full h-11 text-sm font-medium transition-all duration-200"
                 style={{
-                  background: loading ? "oklch(0.72 0.19 155 / 70%)" : "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
+                  background: loading ? "color-mix(in oklch, var(--action) 70%, transparent)" : "var(--action)",
+                  color: "var(--action-foreground)",
                 }}
                 disabled={loading || secondsRemaining > 0}
               >

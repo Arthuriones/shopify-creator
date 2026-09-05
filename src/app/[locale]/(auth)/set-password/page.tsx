@@ -59,7 +59,7 @@ export default function SetPasswordPage() {
           width: "600px",
           height: "600px",
           background:
-            "radial-gradient(circle, oklch(0.72 0.19 155 / 6%) 0%, transparent 70%)",
+            "radial-gradient(circle, color-mix(in oklch, var(--action) 6%, transparent) 0%, transparent 70%)",
         }}
       />
 
@@ -68,11 +68,11 @@ export default function SetPasswordPage() {
         <div className="mb-8 text-center">
           <div
             className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.72 0.19 155)" }}
+            style={{ background: "var(--action)" }}
           >
             <Package
               className="h-5 w-5"
-              style={{ color: "oklch(0.13 0.02 155)" }}
+              style={{ color: "var(--action-foreground)" }}
             />
           </div>
           <h1
@@ -132,8 +132,8 @@ export default function SetPasswordPage() {
               type="submit"
               className="w-full h-11 text-sm font-medium transition-all duration-200"
               style={{
-                background: loading ? "oklch(0.72 0.19 155 / 70%)" : "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
+                background: loading ? "color-mix(in oklch, var(--action) 70%, transparent)" : "var(--action)",
+                color: "var(--action-foreground)",
               }}
               disabled={loading}
             >

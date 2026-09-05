@@ -972,8 +972,8 @@ export default function CatalogPage() {
                 disabled={saving}
                 onClick={handleSave}
                 style={{
-                  background: "oklch(0.72 0.19 155)",
-                  color: "oklch(0.13 0.02 155)",
+                  background: "var(--action)",
+                  color: "var(--action-foreground)",
                 }}
               >
                 {saving ? (
@@ -1097,15 +1097,15 @@ export default function CatalogPage() {
                           className="w-fit rounded-md px-2 py-1 text-[11px] font-semibold uppercase"
                           style={{
                             background: canApply
-                              ? "oklch(0.72 0.19 155 / 16%)"
+                              ? "color-mix(in oklch, var(--action) 16%, transparent)"
                               : item.status === "failed"
-                                ? "oklch(0.65 0.2 25 / 16%)"
-                                : "oklch(0.7 0.13 250 / 16%)",
+                                ? "color-mix(in oklch, var(--danger) 16%, transparent)"
+                                : "color-mix(in oklch, var(--info) 16%, transparent)",
                             color: canApply
-                              ? "oklch(0.72 0.19 155)"
+                              ? "var(--action)"
                               : item.status === "failed"
-                                ? "oklch(0.65 0.2 25)"
-                                : "oklch(0.7 0.13 250)",
+                                ? "var(--danger)"
+                                : "var(--info)",
                           }}
                         >
                           {canApply ? "prévia" : item.status}

@@ -167,8 +167,8 @@ export function LogoCustomizationCard({
             }
             className="h-9 text-[13px]"
             style={{
-              background: "oklch(0.72 0.19 155)",
-              color: "oklch(0.13 0.02 155)",
+              background: "var(--action)",
+              color: "var(--action-foreground)",
             }}
           >
             {brandingAll ? (

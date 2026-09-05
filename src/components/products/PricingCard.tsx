@@ -81,8 +81,8 @@ export function PricingCard({
             <Badge
               className="text-[11px]"
               style={{
-                background: "oklch(0.72 0.19 155 / 12%)",
-                color: "oklch(0.72 0.19 155)",
+                background: "color-mix(in oklch, var(--action) 12%, transparent)",
+                color: "var(--action)",
                 border: "none",
               }}
             >
@@ -128,8 +128,8 @@ export function PricingCard({
               className="h-10 w-full text-sm"
               onClick={handleApplyPriceDraft}
               style={{
-                background: "oklch(0.72 0.19 155)",
-                color: "oklch(0.13 0.02 155)",
+                background: "var(--action)",
+                color: "var(--action-foreground)",
               }}
             >
               Aplicar precos
