@@ -2259,10 +2259,6 @@ function ProductsPageContent() {
 
                     <Button
                       className="w-full h-11 text-sm font-medium"
-                      style={{
-                        background: "var(--action)",
-                        color: "var(--action-foreground)",
-                      }}
                     >
                       <ShoppingCart className="mr-2 h-4 w-4" />
                       Comprar agora
@@ -2929,10 +2925,6 @@ function ProductsPageContent() {
                   <Button
                     onClick={handleCopyPrompt}
                     className="h-9 text-[13px] font-medium flex-1 transition-all duration-200"
-                    style={{
-                      background: "var(--action)",
-                      color: "var(--action-foreground)",
-                    }}
                   >
                     <Copy className="mr-2 h-3.5 w-3.5" />
                     Copiar Prompt

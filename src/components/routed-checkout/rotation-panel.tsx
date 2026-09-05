@@ -43,11 +43,11 @@ const STRATEGIES: { value: Strategy; label: string; hint: string }[] = [
 // Cores dos segmentos da barra. Sao os tons de checkout, variando o suficiente
 // para distinguir lojas vizinhas sem virar arco-iris.
 const FAIXAS = [
-  "oklch(0.74 0.15 165)",
-  "oklch(0.70 0.13 190)",
-  "oklch(0.72 0.14 140)",
-  "oklch(0.66 0.12 205)",
-  "oklch(0.76 0.13 120)",
+  "oklch(0.72 0.11 205)",
+  "oklch(0.68 0.10 232)",
+  "oklch(0.76 0.10 182)",
+  "oklch(0.62 0.09 255)",
+  "oklch(0.80 0.09 160)",
 ];
 
 export function RotationPanel({

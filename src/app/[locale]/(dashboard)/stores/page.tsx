@@ -1251,10 +1251,6 @@ export default function StoresPage() {
           <Button
             onClick={() => setOpen(true)}
             className="mt-5 h-9 text-[13px] font-medium transition-all duration-200"
-            style={{
-              background: "var(--action)",
-              color: "var(--action-foreground)",
-            }}
           >
             <Plus className="mr-2 h-3.5 w-3.5" />
             {t("connect_btn")}

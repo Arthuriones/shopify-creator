@@ -166,10 +166,6 @@ export function LogoCustomizationCard({
               !stores.find((store) => store.id === selectedStore)?.logo_path
             }
             className="h-9 text-[13px]"
-            style={{
-              background: "var(--action)",
-              color: "var(--action-foreground)",
-            }}
           >
             {brandingAll ? (
               <span className="flex items-center gap-2">

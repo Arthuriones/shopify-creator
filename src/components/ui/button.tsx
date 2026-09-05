@@ -8,7 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/20 hover:brightness-[1.03] hover:shadow-md hover:shadow-primary/20",
+        // Um acento so para acao. O gradiente de marca perdia para um verde
+        // escrito a mao em 82 lugares -- quem escrevia a tela queria uma cor
+        // de acao, nao um gradiente. Ele volta a ser identidade (sidebar,
+        // logo) em vez de enfeite de botao.
+        default:
+          "bg-action text-action-foreground shadow-sm shadow-action/20 hover:brightness-[1.05] hover:shadow-md hover:shadow-action/25",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

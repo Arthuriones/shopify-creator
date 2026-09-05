@@ -127,10 +127,6 @@ export function PricingCard({
               type="button"
               className="h-10 w-full text-sm"
               onClick={handleApplyPriceDraft}
-              style={{
-                background: "var(--action)",
-                color: "var(--action-foreground)",
-              }}
             >
               Aplicar precos
             </Button>

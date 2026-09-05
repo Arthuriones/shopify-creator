@@ -94,14 +94,18 @@
   --info: oklch(0.55 0.13 250);
   --warning: oklch(0.65 0.14 78);
 
-  /* Papel da loja no roteamento. Duas cores que nunca se confundem entre si
+  /* Papel da loja no roteamento. Menos saturados que --action de proposito:
+     estas cores codificam DADO (quem manda trafego, quem cobra) e nao devem
+     competir com a cor de acao. O checkout foi para o verde-azulado para nao
+     virar um segundo verde ao lado do botao.
+     Papel da loja no roteamento. Duas cores que nunca se confundem entre si
      nem com a primary: ambar = vitrine (recebe o trafego, carrega a marca),
      verde = checkout (cobra). Sao usadas na badge, no no do mapa e na aresta,
      entao precisam viver aqui e nao espalhadas por classe. */
-  --vitrine: oklch(0.62 0.15 68);
+  --vitrine: oklch(0.60 0.12 68);
   --vitrine-soft: oklch(0.95 0.04 78);
-  --checkout: oklch(0.55 0.14 162);
-  --checkout-soft: oklch(0.94 0.04 165);
+  --checkout: oklch(0.54 0.10 205);
+  --checkout-soft: oklch(0.94 0.035 205);
 
   --sidebar: oklch(0.992 0.004 255);
   --sidebar-foreground: oklch(0.29 0.02 258);
@@ -145,10 +149,10 @@
   --info: oklch(0.7 0.13 250);
   --warning: oklch(0.78 0.15 78);
 
-  --vitrine: oklch(0.78 0.15 72);
+  --vitrine: oklch(0.76 0.12 72);
   --vitrine-soft: oklch(0.28 0.05 72);
-  --checkout: oklch(0.74 0.15 165);
-  --checkout-soft: oklch(0.26 0.05 165);
+  --checkout: oklch(0.72 0.11 205);
+  --checkout-soft: oklch(0.26 0.04 205);
 
   --sidebar: oklch(0.175 0.018 264);
   --sidebar-foreground: oklch(0.94 0.008 258);

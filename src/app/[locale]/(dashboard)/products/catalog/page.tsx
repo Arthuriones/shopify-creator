@@ -971,10 +971,6 @@ export default function CatalogPage() {
                 className="h-10 text-sm"
                 disabled={saving}
                 onClick={handleSave}
-                style={{
-                  background: "var(--action)",
-                  color: "var(--action-foreground)",
-                }}
               >
                 {saving ? (
                   <span className="flex items-center gap-2">
