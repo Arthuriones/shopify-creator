@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # xcart — orientation for AI agents
 
-This repo (`shopify-creator`, product name **xcart**) is a dropshipping automation tool built around a **two-store routed-checkout** model:
+This repo (`xcart`) is a dropshipping automation tool built around a **two-store routed-checkout** model:
 
 - **Vitrine (source store)** — branded/replica products, gets ad traffic, customer adds to cart.
 - **Loja checkout (target/dark store)** — neutralized generic copy + AI de-branded photos, where payment happens.

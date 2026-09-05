@@ -591,7 +591,7 @@ async function applyInitialInventoryQuantities(
         ignoreCompareQuantity: true,
         name: "available",
         reason: "correction",
-        referenceDocumentUri: `gid://shopify-creator/ProductClone/${productId.split("/").pop() || Date.now()}`,
+        referenceDocumentUri: `gid://xcart/ProductClone/${productId.split("/").pop() || Date.now()}`,
         quantities,
       },
     });

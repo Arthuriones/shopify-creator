@@ -1,6 +1,6 @@
 # xcart — Complete Technical Reference
 
-> Package name: `shopify-creator`. Product/UI name: **Xcart**.
+> Package name: `xcart`. Product/UI name: **Xcart**.
 > This file is the canonical, self-contained explanation of how the app works. Any AI or developer pulling this repo should read this first. Last deep-audited: 2026-07.
 
 ---

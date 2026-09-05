@@ -34,7 +34,7 @@ function dashboardRedirect(request: NextRequest, params: Record<string, string>)
 
 function popupResponse(request: NextRequest, params: Record<string, string>) {
   const payload = JSON.stringify({
-    type: "shopify-creator:instagram-oauth",
+    type: "xcart:instagram-oauth",
     ...params,
   }).replace(/</g, "\\u003c");
   const targetOrigin = JSON.stringify(request.nextUrl.origin);

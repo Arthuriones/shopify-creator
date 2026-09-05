@@ -47,7 +47,9 @@
   }
 
   function findMount() {
-    var explicit = document.querySelector("[data-shopify-creator-reviews]");
+    var explicit =
+      document.querySelector("[data-xcart-reviews]") ||
+      document.querySelector("[data-shopify-creator-reviews]");
     if (explicit) return explicit;
 
     var productInfo =
@@ -58,7 +60,7 @@
       document.querySelector('form[action*="/cart/add"]');
 
     var mount = document.createElement("section");
-    mount.setAttribute("data-shopify-creator-reviews", "true");
+    mount.setAttribute("data-xcart-reviews", "true");
     if (productInfo && productInfo.parentNode) {
       productInfo.parentNode.insertBefore(mount, productInfo.nextSibling);
     } else {

@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# xcart (package: shopify-creator)
+# xcart
 
 > **Full technical reference: [`ARCHITECTURE.md`](./ARCHITECTURE.md)** — read it for the complete picture. This file is the quick orientation.
 

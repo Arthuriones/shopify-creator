@@ -43,3 +43,11 @@ next-env.d.ts
 
 # imagens geradas pelo agent de design
 geradas/
+
+# artefatos de execucao local (logs, screenshots de debug, dumps de scrape)
+*.log
+.dev-check.log
+.artifacts-*.png
+failed_html.html
+aliexpress_data.json
+._*
