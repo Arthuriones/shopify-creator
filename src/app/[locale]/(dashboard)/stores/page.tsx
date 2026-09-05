@@ -8,7 +8,6 @@ import type { StoreRole } from "@/lib/checkout-routes/store-roles";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -179,7 +178,9 @@ function getAssetUrl(filePath: string): string {
 }
 
 function isProfileComplete(store: ConnectedStore): boolean {
-  return !!(store.niche && store.logo_path);
+  // O nicho saiu do formulario, entao nao pode mais fazer parte do que
+  // significa 'configurada' -- ninguem conseguiria completar.
+  return !!store.logo_path;
 }
 
 async function ensureStorageBuckets() {
@@ -1623,80 +1624,6 @@ export default function StoresPage() {
                   No extra materials yet. These files will be used as visual references for image recreation.
                 </p>
               )}
-            </div>
-
-            {/* Nicho */}
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
-                {t("niche_label")}
-              </Label>
-              <Input
-                placeholder={t("niche_placeholder")}
-                value={profileNiche}
-                onChange={(e) => setProfileNiche(e.target.value)}
-                className="h-10 bg-background/50 border-border/50 text-sm"
-              />
-              <p className="text-[11px] text-muted-foreground/50">
-                {t("niche_hint")}
-              </p>
-            </div>
-
-            {/* Público-alvo */}
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
-                {t("audience_label")}
-              </Label>
-              <Textarea
-                placeholder="e.g. Women 25-40 who practice yoga and pilates, looking for quality and convenience"
-                value={profileAudience}
-                onChange={(e) => setProfileAudience(e.target.value)}
-                rows={2}
-                className="bg-background/50 border-border/50 text-sm"
-              />
-            </div>
-
-            {/* Voz da marca */}
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
-                {t("brand_voice_label")}
-              </Label>
-              <Select value={profileVoice} onValueChange={(v) => setProfileVoice(v ?? "")}>
-                <SelectTrigger className="h-10 bg-background/50 border-border/50 text-sm">
-                  <SelectValue placeholder="How does your brand communicate?" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BRAND_VOICE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {profileVoice === "custom" && (
-                <Input
-                  placeholder="Describe your brand voice..."
-                  value={profileCustomVoice}
-                  onChange={(e) => setProfileCustomVoice(e.target.value)}
-                  className="h-10 bg-background/50 border-border/50 text-sm"
-                />
-              )}
-            </div>
-
-            {/* Descrição da loja */}
-            <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
-                {t("store_description_label")}
-              </Label>
-              <Textarea
-                placeholder="e.g. We sell premium fitness accessories for women who train at home. Focus on practicality, comfort and beautiful design."
-                value={profileDescription}
-                onChange={(e) => setProfileDescription(e.target.value)}
-                rows={3}
-                className="bg-background/50 border-border/50 text-sm"
-              />
-              <p className="text-[11px] text-muted-foreground/50">
-                {t("store_description_hint")}
-              </p>
             </div>
 
             <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
