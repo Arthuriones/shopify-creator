@@ -44,7 +44,7 @@ export default function NoAccessPage() {
             <AssinarPro
               onPronto={() =>
                 // Recarrega para o layout reavaliar o acesso e liberar o app.
-                setTimeout(() => window.location.replace("/dashboard"), 900)
+                setTimeout(() => window.location.replace("/clone/routed-checkout"), 900)
               }
             />
             <button

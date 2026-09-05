@@ -146,10 +146,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ===== HOST DO APP (ou local) =====
-  // /admin so existe no subdominio adm.; no app manda pro dashboard.
+  // /admin so existe no subdominio adm.; no app manda pra home (roteamento).
   if (!isLocal && pathname.startsWith("/admin")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/clone/routed-checkout";
     return NextResponse.redirect(url);
   }
 

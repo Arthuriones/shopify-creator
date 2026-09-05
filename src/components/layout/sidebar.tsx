@@ -26,16 +26,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, LogOut, Store, Terminal } from "lucide-react";
-import { LayoutPanelTopIcon } from "@/components/ui/layout-panel-top";
 import { DownloadIcon } from "@/components/ui/download";
 import { WorkflowIcon } from "@/components/ui/workflow";
-import { BoxesIcon } from "@/components/ui/boxes";
 import { BoxIcon } from "@/components/ui/box";
-import { SparklesIcon } from "@/components/ui/sparkles";
-import { MessageSquareMoreIcon } from "@/components/ui/message-square-more";
-import { InstagramIcon } from "@/components/ui/instagram";
 import { CreditCardIcon } from "@/components/ui/credit-card";
-import { SettingsGearIcon } from "@/components/ui/settings-gear";
 
 // Contrato comum dos icones animados (lucide-animated): handle imperativo
 // para disparar a animacao no hover da LINHA inteira do menu.
@@ -81,52 +75,24 @@ const navSections: NavSection[] = [
   {
     label: "operations",
     items: [
-      { href: "/dashboard", label: "overview", icon: LayoutPanelTopIcon },
-      {
-        href: "/clone/shopify",
-        label: "importProducts",
-        icon: DownloadIcon,
-        children: [
-          { href: "/clone/export", label: "exportCatalog" },
-        ],
-      },
-      // Uma entrada so: conectar lojas, ver o mapa e mexer nas rotas acontecem
-      // todos na mesma tela agora. Tres itens de menu para um trabalho so era
-      // parte do que confundia.
-      {
-        href: "/clone/routed-checkout",
-        label: "routing",
-        icon: WorkflowIcon,
-      },
+      // O roteamento e o produto. Fica no topo, sozinho, sem competir com
+      // servico nenhum.
+      { href: "/clone/routed-checkout", label: "routing", icon: WorkflowIcon },
+      { href: "/stores", label: "connectedStores", icon: StoreIcon },
     ],
   },
   {
     label: "shopify",
     items: [
-      { href: "/stores", label: "connectedStores", icon: StoreIcon },
-      { href: "/products/catalog", label: "productCatalog", icon: BoxesIcon },
+      { href: "/clone/shopify", label: "importProducts", icon: DownloadIcon },
       { href: "/products", label: "products", icon: BoxIcon },
-    ],
-  },
-  {
-    label: "automations",
-    items: [
-      { href: "/optimizer", label: "aiOptimizer", icon: SparklesIcon },
-      { href: "/reviews", label: "aiReviews", icon: MessageSquareMoreIcon },
-    ],
-  },
-  {
-    label: "channels",
-    items: [
-      { href: "/instagram", label: "instagram", icon: InstagramIcon, badge: "beta" },
-      { href: "/claude", label: "claude", icon: TerminalIcon, badge: "novo" },
     ],
   },
   {
     label: "account",
     items: [
       { href: "/billing", label: "billing", icon: CreditCardIcon },
-      { href: "/store-setup", label: "settings", icon: SettingsGearIcon },
+      { href: "/claude", label: "claude", icon: TerminalIcon },
     ],
   },
 ];
@@ -135,8 +101,8 @@ const mobileNavItems: NavItem[] = [
   navSections[0].items[0],
   navSections[0].items[1],
   navSections[1].items[0],
+  navSections[1].items[1],
   navSections[2].items[0],
-  navSections[3].items[0],
 ];
 
 function splitHref(href: string) {
@@ -201,7 +167,7 @@ export function Sidebar() {
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[264px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center px-5">
-          <Link href="/dashboard" className="flex items-center">
+          <Link href="/clone/routed-checkout" className="flex items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="Logo" className="h-13 w-auto" />
           </Link>

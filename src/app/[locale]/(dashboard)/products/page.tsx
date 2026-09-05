@@ -1737,12 +1737,6 @@ function ProductsPageContent() {
             Importe produtos de qualquer site, otimize com IA e publique na Shopify
           </p>
         </div>
-        <Link
-          href="/products/catalog"
-          className="inline-flex h-9 items-center rounded-lg border border-border/50 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Ver Catálogo completo
-        </Link>
       </div>
 
       {/* Config */}

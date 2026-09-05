@@ -399,13 +399,6 @@ function ServiceOverview() {
       bullets: ["Origem pública", "Prévia antes de gravar", "Aplicação em loja conectada"],
     },
     {
-      href: "/clone/export",
-      icon: FileOutput,
-      title: t("service_export_title"),
-      description: t("service_export_desc"),
-      bullets: ["JSON completo", "CSV operacional", "Histórico de execuções"],
-    },
-    {
       href: "/clone/routed-checkout",
       icon: GitBranch,
       title: t("service_showcase_title"),
