@@ -148,7 +148,6 @@ Contexto: o tema atual tem elementos de conversao como:
 - SeÃ§Ãµes de confianÃ§a (devoluÃ§Ã£o, envio nacional)
 - Parcelamento em atÃ© 12x
 - Frete grÃ¡tis acima de R$200
-- Instagram feed integrado
 - Fonte Montserrat
 
 Sugira melhorias ESPECÃFICAS e PRÃTICAS para aumentar conversÃ£o. Inclua:

@@ -19,7 +19,7 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
-  title: "Shopify Creator",
+  title: "xcart",
   description: "Automatize sua loja Shopify com IA",
 };
 

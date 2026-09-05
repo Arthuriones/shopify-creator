@@ -334,19 +334,6 @@ export function EditorFormCard({
           )}
         </Button>
 
-        <Button
-          className="w-full h-11 text-sm font-medium transition-all duration-200 mt-2 bg-background border border-border/50 hover:bg-muted text-foreground"
-          onClick={() => {
-            const reviewsUrl = `/api/aliexpress/reviews?url=${encodeURIComponent(product.original_url || "")}`;
-            window.open(reviewsUrl, "_blank");
-          }}
-          disabled={!product.original_url}
-        >
-          <span className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square-star"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7l1.5 3 3.5.5-2.5 2.5.5 3.5-3-1.5-3 1.5.5-3.5-2.5-2.5 3.5-.5z"/></svg>
-            Baixar Avaliações (.csv)
-          </span>
-        </Button>
       </CardContent>
     </Card>
   );
