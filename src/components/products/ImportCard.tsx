@@ -9,7 +9,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
-import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
+import dynamic from "next/dynamic";
+
+// Dialogo: so existe depois de um clique, entao nao precisa vir no primeiro
+// download da tela.
+const CustomPromptDialog = dynamic(
+  () => import("@/components/products/CustomPromptDialog").then((m) => m.CustomPromptDialog),
+  { ssr: false }
+);
 
 interface ImportCardProps {
   url: string;

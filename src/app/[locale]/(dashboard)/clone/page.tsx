@@ -1,5 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -42,7 +44,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
-import { CustomPromptDialog } from "@/components/products/CustomPromptDialog";
+const CustomPromptDialog = dynamic(
+  () => import("@/components/products/CustomPromptDialog").then((m) => m.CustomPromptDialog),
+  { ssr: false }
+);
 import {
   Dialog,
   DialogContent,

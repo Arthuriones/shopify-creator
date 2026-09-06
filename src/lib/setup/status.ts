@@ -71,29 +71,36 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   const listaRotas = rotas.data || [];
   const rota = listaRotas[0] || null;
 
-  let destinos: { target_store_id: string; enabled: boolean | null; weight: number | null; sku_map: Record<string, unknown> | null }[] = [];
-  if (listaRotas.length > 0) {
-    const { data } = await supabase
-      .from("routed_checkout_targets")
-      .select("target_store_id, enabled, weight, sku_map")
-      .in(
-        "route_id",
-        listaRotas.map((r) => r.id)
-      );
-    destinos = data || [];
-  }
+  // Os destinos e a contagem de carrinhos roteados dependem so dos ids que já
+  // temos, então saem na mesma ida. "routed_ok" é gravado pelo loader quando
+  // um carrinho de verdade foi roteado: é o único sinal de que a operação
+  // funcionou ponta a ponta.
+  const [destinosRes, roteadosRes] = await Promise.all([
+    listaRotas.length > 0
+      ? supabase
+          .from("routed_checkout_targets")
+          .select("target_store_id, enabled, weight, sku_map")
+          .in(
+            "route_id",
+            listaRotas.map((r) => r.id)
+          )
+      : Promise.resolve({ data: null }),
+    rota
+      ? supabase
+          .from("routed_checkout_fallbacks")
+          .select("id", { count: "exact", head: true })
+          .eq("route_config_id", rota.id)
+          .eq("reason", "routed_ok")
+      : Promise.resolve({ count: 0 }),
+  ]);
 
-  // "routed_ok" é gravado pelo loader quando um carrinho de verdade foi
-  // roteado. É o único sinal de que a operação funcionou ponta a ponta.
-  let roteouAlgumaVez = false;
-  if (rota) {
-    const { count } = await supabase
-      .from("routed_checkout_fallbacks")
-      .select("id", { count: "exact", head: true })
-      .eq("route_config_id", rota.id)
-      .eq("reason", "routed_ok");
-    roteouAlgumaVez = (count ?? 0) > 0;
-  }
+  const destinos = (destinosRes.data || []) as {
+    target_store_id: string;
+    enabled: boolean | null;
+    weight: number | null;
+    sku_map: Record<string, unknown> | null;
+  }[];
+  const roteouAlgumaVez = ((roteadosRes as { count?: number | null }).count ?? 0) > 0;
 
   const nomePorId = new Map(listaLojas.map((l) => [l.id, l.name]));
   const idsDestino = [...new Set(destinos.map((d) => d.target_store_id))];

@@ -97,11 +97,21 @@ export async function getOverview(): Promise<Overview> {
     return { ...vazio, storeCount: listaLojas.length };
   }
 
-  const { data: linhasDestino } = await supabase
-    .from("routed_checkout_targets")
-    .select("id, target_store_id, enabled, weight, sku_map, last_healed_at")
-    .eq("route_id", rota.id)
-    .order("position");
+  // As duas so dependem de rota.id, entao saem juntas. Em serie eram dois
+  // arredondamentos ao banco onde um resolve.
+  const [{ data: linhasDestino }, { data: eventos }] = await Promise.all([
+    supabase
+      .from("routed_checkout_targets")
+      .select("id, target_store_id, enabled, weight, sku_map, last_healed_at")
+      .eq("route_id", rota.id)
+      .order("position"),
+    supabase
+      .from("routed_checkout_fallbacks")
+      .select("id, reason, detail, created_at")
+      .eq("route_config_id", rota.id)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
 
   const destinos = linhasDestino || [];
   const pesoTotal = destinos
@@ -127,13 +137,6 @@ export async function getOverview(): Promise<Overview> {
       state: problema ? "attention" : ativo ? "ok" : "paused",
     };
   });
-
-  const { data: eventos } = await supabase
-    .from("routed_checkout_fallbacks")
-    .select("id, reason, detail, created_at")
-    .eq("route_config_id", rota.id)
-    .order("created_at", { ascending: false })
-    .limit(8);
 
   // ---- o que requer ação ----
   const issues: OverviewIssue[] = [];
