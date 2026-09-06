@@ -1,5 +1,8 @@
 {
   "nav": {
+    "setup": "セットアップ",
+    "overview": "概要",
+    "theme": "テーマ",
     "operations": "運用",
     "importProducts": "商品インポート",
     "routing": "ルーティング",

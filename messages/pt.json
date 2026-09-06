@@ -1,5 +1,8 @@
 {
   "nav": {
+    "setup": "Configuração",
+    "overview": "Visão geral",
+    "theme": "Tema",
     "operations": "Operações",
     "importProducts": "Importar produtos",
     "routing": "Roteamento",

@@ -1,5 +1,8 @@
 {
   "nav": {
+    "setup": "Setup",
+    "overview": "Overview",
+    "theme": "Theme",
     "operations": "Operations",
     "importProducts": "Import products",
     "routing": "Routing",

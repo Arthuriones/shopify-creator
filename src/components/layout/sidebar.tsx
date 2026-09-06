@@ -1,321 +1,268 @@
 "use client";
 
-import type {
-  CSSProperties,
-  ForwardRefExoticComponent,
-  RefAttributes,
-} from "react";
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { cn } from "@/lib/utils";
+import {
+  ChevronDown,
+  CreditCard,
+  Download,
+  LayoutGrid,
+  ListChecks,
+  LogOut,
+  Package,
+  Store,
+  Terminal,
+  Waypoints,
+  type LucideIcon,
+} from "lucide-react";
+import { Link, useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LogOut, Store, Terminal } from "lucide-react";
-import { DownloadIcon } from "@/components/ui/download";
-import { WorkflowIcon } from "@/components/ui/workflow";
-import { BoxIcon } from "@/components/ui/box";
-import { CreditCardIcon } from "@/components/ui/credit-card";
-
-// Contrato comum dos icones animados (lucide-animated): handle imperativo
-// para disparar a animacao no hover da LINHA inteira do menu.
-type AnimatedIconHandle = { startAnimation: () => void; stopAnimation: () => void };
-type NavIconProps = { size?: number; className?: string; style?: CSSProperties };
-type NavIcon = ForwardRefExoticComponent<
-  NavIconProps & RefAttributes<AnimatedIconHandle>
->;
-
-// Adapta o Store (lucide, estatico) ao mesmo contrato — sem animacao.
-const StoreIcon = forwardRef<AnimatedIconHandle, NavIconProps>(
-  function StoreIcon(props, ref) {
-    useImperativeHandle(ref, () => ({ startAnimation() {}, stopAnimation() {} }));
-    return <Store {...props} />;
-  }
-);
-
-// Mesmo adaptador do Store: lucide estatico no contrato dos animados.
-const TerminalIcon = forwardRef<AnimatedIconHandle, NavIconProps>(
-  function TerminalIcon(props, ref) {
-    useImperativeHandle(ref, () => ({ startAnimation() {}, stopAnimation() {} }));
-    return <Terminal {...props} />;
-  }
-);
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: NavIcon;
-  badge?: string;
-  disabled?: boolean;
-  children?: { href: string; label: string }[];
+  icon: LucideIcon;
+  /** Numero a direita: quantas lojas, quantos creditos. */
+  counter?: "stores" | "credits";
 }
 
 interface NavSection {
-  label: string;
+  /** Chave de traducao; ausente = grupo sem cabecalho. */
+  label?: string;
   items: NavItem[];
 }
 
-// Os "label" guardam CHAVES de traducao (namespace nav.*), resolvidas no
-// render com useTranslations("nav").
-const navSections: NavSection[] = [
+// A ordem e a do design: o que se configura uma vez em cima, a operacao no
+// meio, a conta embaixo.
+const NAV: NavSection[] = [
   {
-    label: "operations",
     items: [
-      // O roteamento e o produto. Fica no topo, sozinho, sem competir com
-      // servico nenhum.
-      { href: "/clone/routed-checkout", label: "routing", icon: WorkflowIcon },
-      { href: "/stores", label: "connectedStores", icon: StoreIcon },
+      { href: "/setup", label: "setup", icon: ListChecks },
+      { href: "/overview", label: "overview", icon: LayoutGrid },
     ],
   },
   {
-    label: "shopify",
+    label: "operations",
     items: [
-      { href: "/clone/shopify", label: "importProducts", icon: DownloadIcon },
-      { href: "/products", label: "products", icon: BoxIcon },
+      { href: "/stores", label: "connectedStores", icon: Store, counter: "stores" },
+      { href: "/clone/routed-checkout", label: "routing", icon: Waypoints },
+      { href: "/clone/shopify", label: "importProducts", icon: Download },
+      { href: "/products", label: "products", icon: Package },
     ],
   },
   {
     label: "account",
     items: [
-      { href: "/billing", label: "billing", icon: CreditCardIcon },
-      { href: "/claude", label: "claude", icon: TerminalIcon },
+      { href: "/billing", label: "billing", icon: CreditCard, counter: "credits" },
+      { href: "/claude", label: "claude", icon: Terminal },
     ],
   },
 ];
 
-const mobileNavItems: NavItem[] = [
-  navSections[0].items[0],
-  navSections[0].items[1],
-  navSections[1].items[0],
-  navSections[1].items[1],
-  navSections[2].items[0],
+const MOBILE = [
+  NAV[1].items[1], // roteamento
+  NAV[1].items[0], // lojas
+  NAV[1].items[2], // importar
+  NAV[0].items[1], // visao geral
 ];
 
-function splitHref(href: string) {
-  const [path, query = ""] = href.split("?");
-  const params = new URLSearchParams(query);
-  return { path, section: params.get("section") || "" };
+function initial(nome: string) {
+  return (nome.trim()[0] || "?").toUpperCase();
 }
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations("nav");
-  const [userName, setUserName] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  // Handles dos icones animados, por item — a animacao dispara no hover da
-  // linha inteira do menu (nao so do icone).
-  const iconRefs = useRef(new Map<string, AnimatedIconHandle | null>());
+
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [contadores, setContadores] = useState({ stores: 0, credits: 0 });
+  const [progresso, setProgresso] = useState<{ pct: number; next: string } | null>(null);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      const user = data?.user;
-      const meta = user?.user_metadata ?? {};
-      const name =
-        (typeof meta.name === "string" && meta.name) ||
-        (typeof meta.full_name === "string" && meta.full_name) ||
-        (user?.email ? user.email.split("@")[0] : "");
-      setUserName(name);
-      setUserEmail(user?.email ?? "");
-    })();
+    let cancelado = false;
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelado || !data.user) return;
+      const meta = data.user.user_metadata || {};
+      setNome((meta.full_name as string) || (meta.name as string) || data.user.email || "");
+      setEmail(data.user.email || "");
+    });
+
+    // Best-effort: a navegacao nunca pode depender destes numeros.
+    fetch("/api/setup/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado || !d) return;
+        setContadores({ stores: d.storeCount ?? 0, credits: d.credits ?? 0 });
+        if (d.percent < 100) setProgresso({ pct: d.percent, next: d.nextLabel });
+      })
+      .catch(() => {});
+
     return () => {
-      active = false;
+      cancelado = true;
     };
-  }, []);
+  }, [pathname]);
 
-  const displayName = userName || t("account");
-  const userInitial = (userName || userEmail || "?").charAt(0).toUpperCase();
+  function ativo(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
 
-  async function handleLogout() {
+  async function sair() {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
   }
 
-  function isHrefActive(href: string, exact = false) {
-    const target = splitHref(href);
-    if (exact) return pathname === target.path;
-    if (pathname !== target.path && !pathname.startsWith(`${target.path}/`)) return false;
-    return true;
-  }
-
-  function isItemExpanded(item: NavItem) {
-    const target = splitHref(item.href);
-    return pathname === target.path || pathname.startsWith(`${target.path}/`);
-  }
-
   return (
     <>
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[264px] flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        {/* Logo */}
-        <div className="flex h-16 shrink-0 items-center px-5">
-          <Link href="/clone/routed-checkout" className="flex items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Logo" className="h-13 w-auto" />
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[228px] flex-col border-r border-border bg-surface md:flex">
+        <div className="flex h-14 shrink-0 items-center gap-2.5 px-4">
+          <Link
+            href="/overview"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--solid)] text-[11px] font-bold tracking-tight text-[var(--on-solid)]"
+            aria-label="xcart"
+          >
+            X
           </Link>
+          <span className="min-w-0">
+            <span className="block text-[12.5px] font-semibold leading-tight text-ink">
+              XCART
+            </span>
+            <span className="block truncate text-[10.5px] leading-tight text-t3">
+              {contadores.stores === 1
+                ? "1 loja conectada"
+                : `${contadores.stores} lojas conectadas`}
+            </span>
+          </span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-1">
-          <div className="space-y-6">
-            {navSections.map((section) => (
-              <div key={section.label} className="space-y-1">
-                <div className="px-3 pb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground/70">
-                  {t(section.label)}
+        <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
+          {NAV.map((secao, i) => (
+            <div key={secao.label ?? `s${i}`} className={i === 0 ? "" : "mt-5"}>
+              {secao.label && (
+                <div className="px-2.5 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.13em] text-t4">
+                  {t(secao.label)}
                 </div>
-                {section.items.map((item) => {
-                  const isActive = isHrefActive(item.href, true);
-                  const isExpanded = item.children ? isItemExpanded(item) : false;
-                  const hasActiveChild = item.children?.some((child) =>
-                    isHrefActive(child.href, true)
-                  );
-                  const highlighted = isActive;
-                  const itemKey = `${section.label}-${item.label}`;
+              )}
+              <div className="flex flex-col gap-px">
+                {secao.items.map((item) => {
+                  const on = ativo(item.href);
+                  const valor = item.counter ? contadores[item.counter] : null;
                   return (
-                    <div key={itemKey} className="space-y-1">
-                      <Link
-                        href={item.disabled ? "#" : item.href}
-                        aria-disabled={item.disabled}
-                        onMouseEnter={() =>
-                          iconRefs.current.get(itemKey)?.startAnimation()
-                        }
-                        onMouseLeave={() =>
-                          iconRefs.current.get(itemKey)?.stopAnimation()
-                        }
-                        className={cn(
-                          "group relative flex min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] font-medium transition-all",
-                          item.disabled && "pointer-events-none opacity-50",
-                          highlighted
-                            ? "bg-gradient-to-r from-primary/90 to-[oklch(0.52_0.2_290)] text-white shadow-[0_8px_20px_-8px_oklch(0.58_0.19_272)]"
-                            : hasActiveChild || isExpanded
-                              ? "bg-white/[0.04] text-foreground"
-                              : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
-                        )}
-                      >
-                        <item.icon
-                          ref={(handle) => {
-                            iconRefs.current.set(itemKey, handle);
-                          }}
-                          size={18}
-                          className={cn(
-                            "inline-flex shrink-0 transition-colors",
-                            highlighted
-                              ? "text-white"
-                              : hasActiveChild
-                                ? "text-primary"
-                                : "text-muted-foreground group-hover:text-foreground"
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
-                        {item.badge && (
-                          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                            {item.badge}
-                          </span>
-                        )}
-                        {item.children && (
-                          <ChevronDown
-                            className={cn(
-                              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                              (isExpanded || hasActiveChild) && "rotate-180"
-                            )}
-                          />
-                        )}
-                      </Link>
-                      {item.children && (isExpanded || hasActiveChild) && (
-                        <div className="ml-[1.65rem] space-y-0.5 border-l border-sidebar-border pb-1 pl-3 pt-0.5">
-                          {item.children.map((child, index) => {
-                            const childActive = isHrefActive(child.href, true);
-                            return (
-                              <Link
-                                key={`${child.label}-${index}`}
-                                href={child.href}
-                                className={cn(
-                                  "block rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
-                                  childActive
-                                    ? "bg-white/[0.05] text-foreground"
-                                    : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
-                                )}
-                              >
-                                {t(child.label)}
-                              </Link>
-                            );
-                          })}
-                        </div>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[12.5px] transition-colors",
+                        on
+                          ? "bg-[var(--nav-active)] font-medium text-ink"
+                          : "text-t2 hover:bg-hover hover:text-ink"
                       )}
-                    </div>
+                    >
+                      <item.icon
+                        className={cn("h-[15px] w-[15px] shrink-0", on ? "text-ink" : "text-t3")}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
+                      {valor ? (
+                        <span className="font-mono text-[10.5px] tabular-nums text-t4">
+                          {valor}
+                        </span>
+                      ) : null}
+                    </Link>
                   );
                 })}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </nav>
 
-        {/* Profile */}
-        <div className="shrink-0 border-t border-sidebar-border p-3">
+        {/* Progresso da configuracao. Some quando a operacao esta pronta --
+            um medidor cravado em 100% vira ruido permanente. */}
+        {progresso && (
+          <Link
+            href="/setup"
+            className="mx-2.5 mb-2 shrink-0 rounded-lg border border-border bg-surface-2 px-3 py-2.5 transition-colors hover:border-[var(--border-strong)]"
+          >
+            <span className="flex items-baseline justify-between gap-2">
+              <span className="text-[11.5px] font-medium text-ink">{t("setup")}</span>
+              <span className="font-mono text-[11px] tabular-nums text-t2">
+                {progresso.pct}%
+              </span>
+            </span>
+            <span className="mt-1.5 block h-[3px] overflow-hidden rounded-full bg-[var(--track)]">
+              <span
+                className="block h-full rounded-full bg-[var(--brand)] transition-[width] duration-500"
+                style={{ width: `${progresso.pct}%` }}
+              />
+            </span>
+            <span className="mt-1.5 block truncate text-[10.5px] text-t3">
+              {progresso.next}
+            </span>
+          </Link>
+        )}
+
+        <div className="shrink-0 border-t border-border px-2.5 py-2">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border bg-white/[0.02] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.05] focus:outline-none">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-[oklch(0.52_0.2_290)] text-[13px] font-bold text-white">
-                {userInitial}
+            <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover focus-visible:outline-none">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--track)] text-[10.5px] font-semibold text-t1">
+                {initial(nome)}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-foreground">{displayName}</span>
-                {userEmail && (
-                  <span className="block truncate text-[11px] text-muted-foreground">{userEmail}</span>
-                )}
+              <span className="min-w-0 flex-1 truncate text-[12px] text-ink">
+                {nome || "—"}
               </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-t4" aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" className="w-[238px]">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>{t("myAccount")}</DropdownMenuLabel>
-              </DropdownMenuGroup>
+            <DropdownMenuContent align="end" side="top" className="w-[206px]">
+              <DropdownMenuLabel className="truncate text-[11px] font-normal text-t3">
+                {email}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="text-red-400 focus:text-red-400"
-              >
-                <LogOut className="h-4 w-4" />
+              <DropdownMenuItem variant="destructive" onClick={sair}>
+                <LogOut className="mr-2 h-3.5 w-3.5" />
                 {t("logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <div className="mt-1.5 flex items-center justify-between px-2">
+            <span className="text-[9.5px] font-semibold uppercase tracking-[0.13em] text-t4">
+              {t("theme")}
+            </span>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
-      {/* Mobile nav bar at bottom */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-16 items-center justify-around border-t border-border bg-card/95 px-2 backdrop-blur md:hidden">
-        {mobileNavItems.map((item) => {
-          const isActive = item.children
-            ? isItemExpanded(item)
-            : isHrefActive(item.href, true);
+      <nav className="fixed inset-x-0 bottom-0 z-50 flex h-14 items-center justify-around border-t border-border bg-surface px-2 md:hidden">
+        {MOBILE.map((item) => {
+          const on = ativo(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "flex h-full min-w-[60px] flex-col items-center justify-center gap-1 transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                "flex h-full min-w-[56px] flex-col items-center justify-center gap-1 transition-colors",
+                on ? "text-ink" : "text-t3"
               )}
             >
-              <item.icon size={20} className="inline-flex" />
-              <span className="text-[10px] font-semibold">{t(item.label)}</span>
+              <item.icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
+              <span className="text-[9.5px] font-medium">{t(item.label)}</span>
             </Link>
           );
         })}

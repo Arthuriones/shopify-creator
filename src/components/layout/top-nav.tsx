@@ -1,34 +1,39 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "@/i18n/navigation";
 import { LanguageSwitcher } from "./language-switcher";
 
+// Onde cada rota aparece na trilha do topo. Chave de traducao do namespace nav.
+const TRILHA: { prefixo: string; chave: string }[] = [
+  { prefixo: "/setup", chave: "setup" },
+  { prefixo: "/overview", chave: "overview" },
+  { prefixo: "/stores", chave: "connectedStores" },
+  { prefixo: "/clone/routed-checkout", chave: "routing" },
+  { prefixo: "/clone/shopify", chave: "importProducts" },
+  { prefixo: "/clone", chave: "importProducts" },
+  { prefixo: "/products", chave: "products" },
+  { prefixo: "/billing", chave: "billing" },
+  { prefixo: "/claude", chave: "claude" },
+];
+
 export function TopNav() {
-  const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations("nav");
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
+  // O prefixo mais longo ganha: /clone/routed-checkout antes de /clone.
+  const atual = TRILHA.filter((item) => pathname.startsWith(item.prefixo)).sort(
+    (a, b) => b.prefixo.length - a.prefixo.length
+  )[0];
 
   return (
-    <header className="fixed inset-x-0 top-0 z-30 h-16 border-b border-border bg-background/80 backdrop-blur-md md:left-[264px]">
-      <div className="flex h-full items-center gap-3 px-4 sm:px-6 lg:px-8">
-        <div className="ml-auto flex items-center gap-1.5">
+    <header className="fixed inset-x-0 top-0 z-30 h-14 border-b border-border bg-[var(--header-bg)] backdrop-blur-md md:left-[228px]">
+      <div className="flex h-full items-center gap-3 px-4 sm:px-6">
+        {atual && (
+          <span className="text-[12.5px] font-medium text-ink">{t(atual.chave)}</span>
+        )}
+        <div className="ml-auto">
           <LanguageSwitcher />
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">{t("logout")}</span>
-          </button>
         </div>
       </div>
     </header>
