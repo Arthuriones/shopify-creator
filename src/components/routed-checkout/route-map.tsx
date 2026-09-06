@@ -363,8 +363,8 @@ export function RouteMap({
               className={cn(
                 "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-opacity duration-200",
                 edge.active
-                  ? "border-checkout/40 bg-background text-checkout"
-                  : "border-border bg-background text-muted-foreground"
+                  ? "border-border bg-surface text-t1"
+                  : "border-border bg-surface text-t3"
               )}
               style={{
                 left: edge.labelX,
@@ -399,29 +399,30 @@ export function RouteMap({
                 const first = routesOfNode[0];
                 if (first && onSelectRoute) onSelectRoute(first.id);
               }}
+              // Card neutro com um ponto colorido, nao card tingido: a cor
+              // marca o papel sem competir com o resto da tela.
               className={cn(
-                "absolute flex flex-col justify-center gap-0.5 rounded-xl border px-3 text-left transition-all duration-200",
+                "absolute flex flex-col justify-center gap-0.5 rounded-xl border border-border bg-surface px-3 text-left transition-all duration-200",
+                "hover:border-[var(--border-strong)]",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isVitrine
-                  ? "border-vitrine/35 bg-vitrine/8 hover:border-vitrine/60"
-                  : "border-checkout/35 bg-checkout/8 hover:border-checkout/60",
                 dimmed && "opacity-25"
               )}
               style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H }}
             >
-              <span className="flex items-center gap-1.5">
-                <Icon
-                  className={cn(
-                    "h-3.5 w-3.5 shrink-0",
-                    isVitrine ? "text-vitrine" : "text-checkout"
-                  )}
+              <span className="flex items-center gap-2">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    background: isVitrine ? "var(--vitrine)" : "var(--checkout)",
+                  }}
                   aria-hidden
                 />
-                <span className="truncate text-[13px] font-semibold text-foreground">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-t3" aria-hidden />
+                <span className="truncate text-[13px] font-medium text-foreground">
                   {node.store.name || node.store.shopDomain}
                 </span>
               </span>
-              <span className="truncate pl-5 text-[11px] text-muted-foreground">
+              <span className="truncate pl-[22px] font-mono text-[10.5px] text-t3">
                 {node.store.shopDomain}
               </span>
             </button>

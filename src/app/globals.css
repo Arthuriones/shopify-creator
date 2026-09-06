@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sora);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -44,6 +44,17 @@
   --color-danger: var(--danger);
   --color-info: var(--info);
   --color-warning: var(--warning);
+  --color-ink: var(--ink);
+  --color-t1: var(--t1);
+  --color-t2: var(--t2);
+  --color-t3: var(--t3);
+  --color-brand: var(--brand);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
   --color-vitrine: var(--vitrine);
   --color-vitrine-soft: var(--vitrine-soft);
   --color-checkout: var(--checkout);
@@ -58,123 +69,199 @@
 }
 
 :root {
-  --primary: oklch(0.58 0.19 247);
-  --primary-cyan: oklch(0.72 0.11 205);
-  --primary-foreground: oklch(1 0 0);
-  --background: oklch(0.978 0.004 255);
-  --foreground: oklch(0.24 0.025 258);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.025 258);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.025 258);
-  --secondary: oklch(0.955 0.006 255);
-  --secondary-foreground: oklch(0.26 0.02 258);
-  --muted: oklch(0.958 0.006 255);
-  --muted-foreground: oklch(0.52 0.015 256);
-  --accent: oklch(0.94 0.015 245);
-  --accent-foreground: oklch(0.34 0.05 246);
-  --destructive: oklch(0.58 0.2 28);
-  --border: oklch(0.9 0.008 255);
-  --input: oklch(0.9 0.008 255);
-  --ring: oklch(0.58 0.19 247);
-  --chart-1: oklch(0.58 0.19 247);
-  --chart-2: oklch(0.72 0.11 205);
-  --chart-3: oklch(0.68 0.14 140);
-  --chart-4: oklch(0.63 0.16 38);
-  --chart-5: oklch(0.56 0.12 326);
+  /* ------------------------------------------------------------------
+     Paleta do design novo. Os nomes proprios do design (--bg, --ink, --t1
+     ate --t5, --brand, --ok/--warn/--err) convivem com os nomes que o app
+     ja usava (--background, --foreground, --muted-foreground...), que agora
+     apontam para eles. E por isso que trocar estas linhas repinta o app
+     inteiro sem tocar em componente nenhum.
+     ------------------------------------------------------------------ */
+
+  /* superficies */
+  --bg: #f7f6f5;
+  --surface: #ffffff;
+  --surface-2: #fbfbfa;
+  --hover: #f4f3f1;
+  --track: #f0efed;
+  --nav-active: #f2f1ef;
+
+  /* bordas, em tres pesos */
+  --border-subtle: #f0efed;
+  --border-strong: #d6d4d1;
+  --control-border: #b6b3af;
+
+  /* texto, do mais forte ao mais apagado */
+  --ink: #1a1a1a;
+  --t1: #4d4b49;
+  --t2: #6b6b6b;
+  --t3: #8a8a8a;
+  --t4: #a5a3a0;
+  --t5: #c9c7c4;
+
+  /* acao: o botao primario e preto solido, nao colorido */
+  --solid: #1a1a1a;
+  --solid-hover: #333333;
+  --on-solid: #ffffff;
+
+  /* terracota: link, foco e acento. Nunca preenche botao primario. */
+  --brand: #b04a2f;
+
+  /* estado */
+  --ok: #2f7d4f;
+  --ok-bg: #eaf3ee;
+  --ok-border: #cfe3d7;
+  --warn: #a5741a;
+  --warn-bg: #fbf3e2;
+  --warn-border: #efe0bf;
+  --err: #b3261e;
+  --err-bg: #fceceb;
+  --err-border: #eccfcd;
+
+  --scrim: rgba(26, 26, 26, 0.22);
+  --header-bg: rgba(255, 255, 255, 0.9);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+  --shadow-panel: -8px 0 28px rgba(0, 0, 0, 0.07);
+
+  /* --- nomes antigos do app, agora apontando para o design --- */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--t1);
+  --muted: var(--track);
+  --muted-foreground: var(--t2);
+  --accent: var(--hover);
+  --accent-foreground: var(--ink);
+  --border: #e6e5e3;
+  --input: var(--control-border);
+  --ring: var(--brand);
+  --primary: var(--solid);
+  --primary-foreground: var(--on-solid);
+  --primary-cyan: var(--brand);
+  --destructive: var(--err);
+  --action: var(--solid);
+  --action-foreground: var(--on-solid);
+  --danger: var(--err);
+  --info: var(--brand);
+  --warning: var(--warn);
+
+  /* papel da loja no mapa de rotas: terracota entra o trafego, verde cobra */
+  --vitrine: var(--brand);
+  --vitrine-soft: #f7ece8;
+  --checkout: var(--ok);
+  --checkout-soft: var(--ok-bg);
+
   --radius: 0.5rem;
 
-  /* Paleta de acao. Estas cores ja eram as do app -- estavam escritas a mao em
-     144 lugares, o que impedia trocar qualquer uma delas e fazia cada tela
-     divergir um pouco. Aqui elas viram nome de papel: acao, perigo, aviso,
-     informacao. */
-  --action: oklch(0.62 0.16 155);
-  --action-foreground: oklch(0.13 0.02 155);
-  --danger: oklch(0.58 0.2 25);
-  --info: oklch(0.55 0.13 250);
-  --warning: oklch(0.65 0.14 78);
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--t1);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--on-solid);
+  --sidebar-accent: var(--nav-active);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: #e6e5e3;
+  --sidebar-ring: var(--brand);
 
-  /* Papel da loja no roteamento. Menos saturados que --action de proposito:
-     estas cores codificam DADO (quem manda trafego, quem cobra) e nao devem
-     competir com a cor de acao. O checkout foi para o verde-azulado para nao
-     virar um segundo verde ao lado do botao.
-     Papel da loja no roteamento. Duas cores que nunca se confundem entre si
-     nem com a primary: ambar = vitrine (recebe o trafego, carrega a marca),
-     verde = checkout (cobra). Sao usadas na badge, no no do mapa e na aresta,
-     entao precisam viver aqui e nao espalhadas por classe. */
-  --vitrine: oklch(0.60 0.12 68);
-  --vitrine-soft: oklch(0.95 0.04 78);
-  --checkout: oklch(0.54 0.10 205);
-  --checkout-soft: oklch(0.94 0.035 205);
-
-  --sidebar: oklch(0.992 0.004 255);
-  --sidebar-foreground: oklch(0.29 0.02 258);
-  --sidebar-primary: oklch(0.58 0.19 247);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.014 245);
-  --sidebar-accent-foreground: oklch(0.33 0.05 246);
-  --sidebar-border: oklch(0.9 0.008 255);
-  --sidebar-ring: oklch(0.58 0.19 247);
+  --chart-1: #b04a2f;
+  --chart-2: #2f7d4f;
+  --chart-3: #a5741a;
+  --chart-4: #4d4b49;
+  --chart-5: #8a8a8a;
 }
 
 .dark {
-  --primary: oklch(0.58 0.19 272);
-  --primary-cyan: oklch(0.72 0.12 215);
-  --primary-foreground: oklch(0.99 0 0);
-  --background: oklch(0.155 0.018 264);
-  --foreground: oklch(0.96 0.006 258);
-  --card: oklch(0.205 0.02 264);
-  --card-foreground: oklch(0.96 0.006 258);
-  --popover: oklch(0.205 0.02 264);
-  --popover-foreground: oklch(0.96 0.006 258);
-  --secondary: oklch(0.255 0.02 264);
-  --secondary-foreground: oklch(0.95 0.008 258);
-  --muted: oklch(0.235 0.018 264);
-  --muted-foreground: oklch(0.66 0.022 262);
-  --accent: oklch(0.3 0.04 272);
-  --accent-foreground: oklch(0.96 0.01 258);
-  --destructive: oklch(0.62 0.21 25);
-  --border: oklch(0.3 0.022 264);
-  --input: oklch(0.3 0.022 264);
-  --ring: oklch(0.58 0.19 272);
-  --chart-1: oklch(0.66 0.16 250);
-  --chart-2: oklch(0.62 0.19 295);
-  --chart-3: oklch(0.72 0.16 155);
-  --chart-4: oklch(0.7 0.16 55);
-  --chart-5: oklch(0.66 0.17 330);
+  --bg: #0f0f0f;
+  --surface: #171717;
+  --surface-2: #1c1c1c;
+  --hover: #242424;
+  --track: #262626;
+  --nav-active: #272727;
 
-  --action: oklch(0.72 0.19 155);
-  --action-foreground: oklch(0.13 0.02 155);
-  --danger: oklch(0.65 0.2 25);
-  --info: oklch(0.7 0.13 250);
-  --warning: oklch(0.78 0.15 78);
+  --border-subtle: #222222;
+  --border-strong: #3a3a3a;
+  --control-border: #6b6b6b;
 
-  --vitrine: oklch(0.76 0.12 72);
-  --vitrine-soft: oklch(0.28 0.05 72);
-  --checkout: oklch(0.72 0.11 205);
-  --checkout-soft: oklch(0.26 0.04 205);
+  --ink: #f1f0ee;
+  --t1: #c9c7c4;
+  --t2: #a5a3a0;
+  --t3: #8a8a8a;
+  --t4: #6f6d6a;
+  --t5: #4d4b49;
 
-  --sidebar: oklch(0.175 0.018 264);
-  --sidebar-foreground: oklch(0.94 0.008 258);
-  --sidebar-primary: oklch(0.58 0.19 272);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.27 0.03 272);
-  --sidebar-accent-foreground: oklch(0.96 0.01 258);
-  --sidebar-border: oklch(0.28 0.02 264);
-  --sidebar-ring: oklch(0.58 0.19 272);
+  --solid: #f1f0ee;
+  --solid-hover: #ffffff;
+  --on-solid: #141414;
+
+  --brand: #d9784f;
+
+  --ok: #5cbf85;
+  --ok-bg: #15301f;
+  --ok-border: #244d33;
+  --warn: #dba646;
+  --warn-bg: #33280f;
+  --warn-border: #4e3c17;
+  --err: #e2705f;
+  --err-bg: #351a17;
+  --err-border: #5a2b25;
+
+  --scrim: rgba(0, 0, 0, 0.6);
+  --header-bg: rgba(23, 23, 23, 0.9);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --shadow-panel: -8px 0 28px rgba(0, 0, 0, 0.4);
+
+  --border: #2a2a2a;
+  --sidebar-border: #2a2a2a;
+  --vitrine-soft: #2b1a13;
+  --checkout-soft: var(--ok-bg);
 }
 
 @layer base {
+  input,
+  select,
+  textarea {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--ink);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--t4);
+  }
+
+  /* Link e terracota; o preto solido fica reservado para botao primario. */
+  a {
+    color: var(--brand);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--ink);
+  }
+
+  ::selection {
+    background: var(--border);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
     @apply text-foreground antialiased bg-background;
-    font-family: var(--font-geist-sans), sans-serif;
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--foreground);
+    font-family: var(--font-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
+    /* 13px e a base do design novo: interface densa, nao pagina de leitura. */
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink);
   }
 
   html {
@@ -185,8 +272,8 @@
   h2,
   h3,
   h4 {
-    font-family: var(--font-sora), sans-serif;
-    letter-spacing: 0;
+    font-family: var(--font-sans), sans-serif;
+    letter-spacing: -0.01em;
     color: var(--foreground);
   }
 
@@ -211,8 +298,10 @@
 }
 
 @layer utilities {
+  /* O botao primario do design e preto solido. O gradiente antigo virou
+     apenas o preto de acao, para nao quebrar quem ainda usa a classe. */
   .bg-brand-gradient {
-    background: linear-gradient(135deg, color-mix(in oklab, var(--primary) 88%, white 12%), color-mix(in oklab, var(--primary-cyan) 78%, var(--primary) 22%));
+    background: var(--solid);
   }
 }
 
@@ -287,18 +376,10 @@
     opacity: 0.8;
   }
 
+  /* Fundo ambiente era decoracao do tema escuro forcado. O design novo usa
+     superficie chapada. */
   .ambient-bg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(900px circle at 18% -8%, color-mix(in oklab, var(--primary) 16%, transparent) 0, transparent 46%),
-      radial-gradient(800px circle at 100% 0%, color-mix(in oklab, var(--primary-cyan) 8%, transparent) 0, transparent 42%),
-      var(--background);
+    display: none;
   }
 }
 
