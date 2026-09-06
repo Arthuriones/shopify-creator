@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 import { deriveStoreRoles, type StoreRole } from "@/lib/checkout-routes/store-roles";
 
 const CAMPOS =
@@ -36,9 +37,7 @@ export interface StoreRow {
  */
 export async function getStoresWithRoles(): Promise<StoreRow[]> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return [];
 
   const [lojas, rotas] = await Promise.all([

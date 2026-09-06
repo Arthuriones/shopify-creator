@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 
 export interface OverviewTarget {
   id: string;
@@ -60,9 +61,7 @@ function rotulo(reason: string) {
 
 export async function getOverview(): Promise<Overview> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const vazio: Overview = {
     storeCount: 0,

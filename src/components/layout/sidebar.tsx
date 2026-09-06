@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -81,41 +80,26 @@ function initial(nome: string) {
   return (nome.trim()[0] || "?").toUpperCase();
 }
 
-export function Sidebar() {
+export interface SidebarData {
+  nome: string;
+  email: string;
+  stores: number;
+  credits: number;
+  percent: number;
+  nextLabel: string;
+}
+
+export function Sidebar({ dados }: { dados: SidebarData }) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations("nav");
 
-  const [nome, setNome] = useState("");
-  const [email, setEmail] = useState("");
-  const [contadores, setContadores] = useState({ stores: 0, credits: 0 });
-  const [progresso, setProgresso] = useState<{ pct: number; next: string } | null>(null);
+  const contadores = { stores: dados.stores, credits: dados.credits };
+  // O medidor some quando a operacao esta pronta: cravado em 100% vira ruido
+  // permanente.
+  const progresso =
+    dados.percent < 100 ? { pct: dados.percent, next: dados.nextLabel } : null;
 
-  useEffect(() => {
-    let cancelado = false;
-    const supabase = createClient();
-
-    supabase.auth.getUser().then(({ data }) => {
-      if (cancelado || !data.user) return;
-      const meta = data.user.user_metadata || {};
-      setNome((meta.full_name as string) || (meta.name as string) || data.user.email || "");
-      setEmail(data.user.email || "");
-    });
-
-    // Best-effort: a navegacao nunca pode depender destes numeros.
-    fetch("/api/setup/status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (cancelado || !d) return;
-        setContadores({ stores: d.storeCount ?? 0, credits: d.credits ?? 0 });
-        if (d.percent < 100) setProgresso({ pct: d.percent, next: d.nextLabel });
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelado = true;
-    };
-  }, [pathname]);
 
   function ativo(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -221,16 +205,16 @@ export function Sidebar() {
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover focus-visible:outline-none">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--track)] text-[10.5px] font-semibold text-t1">
-                {initial(nome)}
+                {initial(dados.nome)}
               </span>
               <span className="min-w-0 flex-1 truncate text-[12px] text-ink">
-                {nome || "—"}
+                {dados.nome || "—"}
               </span>
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-t4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="w-[206px]">
               <DropdownMenuLabel className="truncate text-[11px] font-normal text-t3">
-                {email}
+                {dados.email}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={sair}>

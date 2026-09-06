@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/current-user";
 
 export type SetupStepId =
   | "vitrine"
@@ -42,9 +43,7 @@ export interface SetupStatus {
  */
 export async function getSetupStatus(): Promise<SetupStatus> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   const vazio: SetupStatus = {
     steps: [],

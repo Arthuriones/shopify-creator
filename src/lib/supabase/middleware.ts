@@ -154,8 +154,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // /api e /admin (local) nao passam por i18n; api faz auth proprio (401).
-  if (isApi || pathname.startsWith("/admin")) {
+  // /api e /admin (local) nao passam por i18n.
+  //
+  // A rota de API autentica sozinha e devolve 401 -- este getUser() so servia
+  // para renovar o cookie, e custava uma ida a rede em TODA chamada de API.
+  // O app faz varias por tela, entao era o gasto mais repetido do sistema.
+  // A renovacao continua acontecendo na navegacao de pagina, que passa pelo
+  // ramo de baixo.
+  if (isApi) {
+    return NextResponse.next({ request });
+  }
+
+  if (pathname.startsWith("/admin")) {
     const response = NextResponse.next({ request });
     const supabase = attachSupabase(request, response);
     await supabase.auth.getUser();
