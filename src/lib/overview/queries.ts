@@ -113,9 +113,9 @@ export async function getOverview(): Promise<Overview> {
     const loja = porId.get(d.target_store_id);
     const mapa = Object.keys(d.sku_map || {}).length;
     const ativo = d.enabled !== false && (d.weight ?? 0) > 0;
-    // "Atenção" é destino ligado que não consegue atender: mapa vazio recebe
-    // comprador e não resolve nada.
-    const problema = ativo && mapa === 0;
+    // "Atenção" é destino ligado sem nenhum produto ligado -- mesmo em 0%,
+    // porque basta dar fatia para os carrinhos começarem a falhar.
+    const problema = d.enabled !== false && mapa === 0;
     return {
       id: d.id,
       name: loja?.name || "loja removida",

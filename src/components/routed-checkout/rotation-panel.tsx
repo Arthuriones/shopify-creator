@@ -49,12 +49,15 @@ export function RotationPanel({
   stores = [],
   className,
   onChanged,
+  esconderLista = false,
 }: {
   routeId: string;
   sourceStoreId?: string;
   stores?: { id: string; name: string; shopDomain: string }[];
   className?: string;
   onChanged?: () => void;
+  /** A faixa da operacao ja mostra a lista e as fatias; aqui vira repeticao. */
+  esconderLista?: boolean;
 }) {
   const [targets, setTargets] = useState<PanelTarget[]>([]);
   const [strategy, setStrategy] = useState<Strategy>("sticky");
@@ -291,6 +294,7 @@ export function RotationPanel({
 
   return (
     <div className={cn("space-y-4", className)}>
+      {!esconderLista && (
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="font-heading text-base font-semibold text-foreground">
           {varias ? "Divisao do trafego" : "Loja de checkout"}
@@ -306,10 +310,11 @@ export function RotationPanel({
           </button>
         )}
       </div>
+      )}
 
       {/* A barra e a resposta visual: quanto de cada cor, tanto de comprador.
           Um numero por linha nao mostra a proporcao entre as lojas. */}
-      {varias && ativos.length > 0 && (
+      {!esconderLista && varias && ativos.length > 0 && (
         <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
           {targets.map((alvo, indice) => {
             const percentual = fatia(alvo);
@@ -328,6 +333,7 @@ export function RotationPanel({
         </div>
       )}
 
+      {!esconderLista && (
       <div className="space-y-1.5">
         {targets.map((alvo, indice) => {
           const percentual = fatia(alvo);
@@ -414,8 +420,9 @@ export function RotationPanel({
           );
         })}
       </div>
+      )}
 
-      {ativos.length === 0 && (
+      {!esconderLista && ativos.length === 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
           <p className="text-xs leading-5 text-foreground">

@@ -1,66 +1,104 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CreditCard, Loader2, Plus, RefreshCw, Store } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Ellipsis,
+  Loader2,
+  Plus,
+  SlidersHorizontal,
+  Stethoscope,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { RouteMap, type MapRoute, type MapStore } from "@/components/routed-checkout/route-map";
-import { RouteInspector } from "@/components/routed-checkout/route-inspector";
+import { getPublicAppUrl } from "@/lib/public-url";
+import { RouteStrip, targetState, type StripTarget } from "@/components/routed-checkout/route-strip";
+import { RotationPanel } from "@/components/routed-checkout/rotation-panel";
 import { AddStorePanel } from "@/components/routed-checkout/add-store-panel";
 
-interface Graph {
-  stores: MapStore[];
-  routes: (MapRoute & {
-    publicToken: string;
-    lastHeal: { at: string; ok: boolean; message?: string } | null;
-  })[];
+interface Alvo {
+  id: string;
+  storeId: string;
+  weight: number;
+  enabled: boolean;
+  sharePercent: number;
+  mappedSkuCount: number;
 }
 
-/**
- * Console de roteamento: uma tela so.
- *
- * Antes o mesmo trabalho estava espalhado por um wizard em dialogo de tres
- * passos, uma aba de "rotas e tokens" com o script sempre aberto, o mapa e a
- * pagina de lojas. Quem opera nao pensa em passos: pensa em "o dinheiro esta
- * passando?". Entao o quadro fica sempre visivel e tudo que se faz com uma
- * rota acontece no painel ao lado, sem trocar de tela.
- */
-export function RoutingConsole({ onConnectStores }: { onConnectStores: () => void }) {
-  const [graph, setGraph] = useState<Graph>({ stores: [], routes: [] });
-  const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  // O painel lateral e um espaco so: ou inspeciona uma rota, ou conecta uma
-  // loja. Abrir um dialogo por cima do quadro para conectar era exatamente o
-  // que tirava a pessoa do contexto.
-  const [addingStore, setAddingStore] = useState(false);
+interface Rota {
+  id: string;
+  name: string;
+  enabled: boolean;
+  publicToken: string;
+  sourceStoreId: string;
+  rotationStrategy: "sticky" | "each_checkout";
+  lastHeal: { at: string; ok: boolean; message?: string } | null;
+  targets: Alvo[];
+}
 
-  const load = useCallback(async () => {
+interface Loja {
+  id: string;
+  name: string;
+  shopDomain: string;
+}
+
+interface Grafo {
+  stores: Loja[];
+  routes: Rota[];
+}
+
+interface Diagnostico {
+  ok: boolean;
+  coveragePercent: number;
+  noSkuCount: number;
+  missingCount: number;
+  wrongCount: number;
+  checkedTargetName?: string;
+}
+
+function snippet(token: string) {
+  const origem = getPublicAppUrl(process.env.NEXT_PUBLIC_APP_URL || "");
+  return `<script\n  src="${origem}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>`;
+}
+
+export function RoutingConsole({ onConnectStores }: { onConnectStores: () => void }) {
+  const [grafo, setGrafo] = useState<Grafo>({ stores: [], routes: [] });
+  const [carregando, setCarregando] = useState(true);
+  const [rotaId, setRotaId] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
     try {
-      const response = await fetch("/api/checkout-routes/map");
-      if (!response.ok) throw new Error();
-      const data = (await response.json()) as Graph;
-      setGraph(data);
-      setSelectedId((current) =>
-        current && data.routes.some((route) => route.id === current)
-          ? current
-          : (data.routes[0]?.id ?? null)
+      const r = await fetch("/api/checkout-routes/map");
+      if (!r.ok) throw new Error();
+      const d = (await r.json()) as Grafo;
+      setGrafo(d);
+      setRotaId((atual) =>
+        atual && d.routes.some((x) => x.id === atual) ? atual : (d.routes[0]?.id ?? null)
       );
     } catch {
-      toast.error("Nao consegui carregar as rotas.");
+      toast.error("Não consegui carregar as rotas.");
     } finally {
-      setLoading(false);
+      setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    carregar();
+  }, [carregar]);
 
-  if (loading) {
+  if (carregando) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+      <div className="flex min-h-[50vh] items-center justify-center gap-2 text-[12.5px] text-t3">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Carregando o roteamento
       </div>
     );
@@ -68,223 +106,507 @@ export function RoutingConsole({ onConnectStores }: { onConnectStores: () => voi
 
   return (
     <ConsoleView
-      graph={graph}
-      selectedId={selectedId}
-      onSelect={(id) => {
-        setAddingStore(false);
-        setSelectedId(id);
-      }}
+      grafo={grafo}
+      rotaId={rotaId}
+      onSelecionar={setRotaId}
       onConnectStores={onConnectStores}
-      onReload={load}
-      addingStore={addingStore}
-      onAddStore={() => setAddingStore(true)}
-      onCloseAddStore={() => setAddingStore(false)}
+      onRecarregar={carregar}
     />
   );
 }
 
-/**
- * O desenho do console, sem busca de dados. Separado para poder ser renderizado
- * com qualquer estado -- inclusive fora do app, na hora de revisar o design.
- */
+/** O desenho, sem busca de dados: dá para renderizar com qualquer estado. */
 export function ConsoleView({
-  graph,
-  selectedId,
-  onSelect,
+  grafo,
+  rotaId,
+  onSelecionar,
   onConnectStores,
-  onReload,
-  addingStore = false,
-  onAddStore,
-  onCloseAddStore,
+  onRecarregar,
 }: {
-  graph: Graph;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  grafo: Grafo;
+  rotaId: string | null;
+  onSelecionar: (id: string) => void;
   onConnectStores: () => void;
-  onReload: () => void;
-  addingStore?: boolean;
-  onAddStore?: () => void;
-  onCloseAddStore?: () => void;
+  onRecarregar: () => void;
 }) {
-  const selected = graph.routes.find((route) => route.id === selectedId) ?? null;
+  const [editando, setEditando] = useState(false);
+  const [conectandoLoja, setConectandoLoja] = useState(false);
+  const [instalando, setInstalando] = useState(false);
+  const [instalado, setInstalado] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [checando, setChecando] = useState(false);
+  const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null);
+  const [consertando, setConsertando] = useState(false);
+  const [ocupadoId, setOcupadoId] = useState<string | null>(null);
+  const [alvosLocais, setAlvosLocais] = useState<Alvo[] | null>(null);
 
-  const storeOptions = graph.stores.map((store) => ({
-    id: store.id,
-    name: store.name,
-    shopDomain: store.shopDomain,
-  }));
+  const rota = grafo.routes.find((r) => r.id === rotaId) ?? null;
+  const porId = new Map(grafo.stores.map((s) => [s.id, s]));
 
-  const vitrines = graph.stores.filter(
-    (store) => store.role === "vitrine" || store.role === "both"
-  ).length;
-  const checkouts = graph.stores.filter(
-    (store) => store.role === "checkout" || store.role === "both"
-  ).length;
-  const quebradas = graph.routes.filter(
-    (route) => route.enabled && route.lastHeal && !route.lastHeal.ok
-  ).length;
-
-  // Estado vazio como convite, nao como aviso: quem chega aqui sem rota
-  // precisa saber qual e o proximo passo, nao que algo esta faltando.
-  if (graph.routes.length === 0 && !addingStore) {
-    const semLojas = graph.stores.length < 2;
+  if (grafo.routes.length === 0) {
+    const semLojas = grafo.stores.length < 2;
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-vitrine/40 bg-vitrine/10">
-            <Store className="h-5 w-5 text-vitrine" aria-hidden />
-          </span>
-          <span className="h-px w-10 bg-gradient-to-r from-vitrine to-checkout" />
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-checkout/40 bg-checkout/10">
-            <CreditCard className="h-5 w-5 text-checkout" aria-hidden />
-          </span>
-        </div>
-        <h1 className="mt-6 font-heading text-2xl font-semibold text-foreground">
+      <div className="mx-auto flex min-h-[55vh] max-w-md flex-col items-center justify-center text-center">
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">
           Ligue a vitrine ao checkout
         </h1>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          A vitrine recebe o trafego do anuncio. A loja de checkout cobra. O xcart
-          leva o carrinho de uma para a outra casando os SKUs.
+        <p className="mt-2 text-[13px] leading-relaxed text-t2">
+          A vitrine recebe o tráfego do anúncio. A loja de checkout cobra. O xcart leva
+          o carrinho de uma para a outra casando os SKUs.
         </p>
-        {semLojas ? (
-          <>
-            <Button size="lg" className="mt-6" onClick={onAddStore}>
-              Conectar uma loja Shopify
-            </Button>
-            <p className="mt-3 text-xs text-muted-foreground">
-              {graph.stores.length === 0
-                ? "Sao necessarias duas: a que recebe o trafego e a que cobra."
-                : "Falta uma. Voce ja conectou a primeira."}
-            </p>
-          </>
-        ) : (
-          <Button size="lg" className="mt-6" onClick={onConnectStores}>
-            Criar a primeira rota
-          </Button>
+        <button
+          type="button"
+          onClick={semLojas ? () => setConectandoLoja(true) : onConnectStores}
+          className="mt-5 rounded-md bg-[var(--solid)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
+        >
+          {semLojas ? "Conectar uma loja Shopify" : "Criar a primeira rota"}
+        </button>
+        {conectandoLoja && (
+          <div className="mt-6 w-full rounded-xl border border-border bg-surface text-left">
+            <AddStorePanel
+              onConnected={() => {
+                setConectandoLoja(false);
+                onRecarregar();
+              }}
+              onCancel={() => setConectandoLoja(false)}
+            />
+          </div>
         )}
       </div>
     );
   }
 
-  if (graph.routes.length === 0 && addingStore) {
-    return (
-      <div className="mx-auto max-w-md rounded-2xl border border-border/60 bg-card/40">
-        <AddStorePanel
-          onConnected={() => {
-            onCloseAddStore?.();
-            onReload();
-          }}
-          onCancel={() => onCloseAddStore?.()}
-        />
-      </div>
+  if (!rota) return null;
+
+  const alvos: StripTarget[] = (alvosLocais ?? rota.targets).map((t) => ({
+    id: t.id,
+    name: porId.get(t.storeId)?.name || "loja removida",
+    domain: porId.get(t.storeId)?.shopDomain || "",
+    enabled: t.enabled,
+    weight: t.weight,
+    sharePercent: t.sharePercent,
+    mappedSkuCount: t.mappedSkuCount,
+  }));
+
+  const cobrando = alvos.filter((a) => targetState(a) === "ok").length;
+  const vitrine = porId.get(rota.sourceStoreId);
+  const quebrada = rota.lastHeal && !rota.lastHeal.ok;
+
+  async function salvarAlvos(mudancas: { id: string; weight?: number; enabled?: boolean }[]) {
+    const resposta = await fetch(`/api/checkout-routes/${rota!.id}/targets`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets: mudancas }),
+    });
+    if (!resposta.ok) {
+      toast.error("Não consegui salvar. Recarregue a página.");
+      setAlvosLocais(null);
+      return;
+    }
+    onRecarregar();
+  }
+
+  /** Mexer numa fatia redistribui o resto, para a soma continuar 100. */
+  function mudarFatia(alvo: StripTarget, valor: number) {
+    const base = alvosLocais ?? rota!.targets;
+    const novo = Math.max(0, Math.min(100, Math.round(valor)));
+    const outros = base.filter((t) => t.id !== alvo.id && t.enabled);
+    const soma = outros.reduce((s, t) => s + t.weight, 0);
+    const sobra = 100 - novo;
+
+    const proximo = base.map((t) => {
+      if (t.id === alvo.id) return { ...t, weight: novo, sharePercent: novo };
+      if (!t.enabled) return t;
+      const parte =
+        soma > 0 ? Math.round((t.weight / soma) * sobra) : Math.round(sobra / outros.length);
+      return { ...t, weight: Math.max(0, parte), sharePercent: Math.max(0, parte) };
+    });
+    setAlvosLocais(proximo);
+    salvarAlvos(proximo.filter((t) => t.enabled).map((t) => ({ id: t.id, weight: t.weight })));
+  }
+
+  async function alternar(alvo: StripTarget) {
+    setOcupadoId(alvo.id);
+    try {
+      await salvarAlvos([{ id: alvo.id, weight: alvo.weight, enabled: !alvo.enabled }]);
+      setAlvosLocais(null);
+    } finally {
+      setOcupadoId(null);
+    }
+  }
+
+  function dividirIgual() {
+    const base = (alvosLocais ?? rota!.targets).filter((t) => t.enabled);
+    if (base.length === 0) return;
+    const parte = Math.floor(100 / base.length);
+    const resto = 100 - parte * base.length;
+    const mudancas = base.map((t, i) => ({ id: t.id, weight: parte + (i < resto ? 1 : 0) }));
+    setAlvosLocais(
+      (alvosLocais ?? rota!.targets).map((t) => {
+        const m = mudancas.find((x) => x.id === t.id);
+        return m ? { ...t, weight: m.weight, sharePercent: m.weight } : t;
+      })
     );
+    salvarAlvos(mudancas);
+  }
+
+  async function instalar() {
+    setInstalando(true);
+    try {
+      const r = await fetch(`/api/checkout-routes/${rota!.id}/update-theme`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setManual(true);
+        toast.error(d.error || "Não consegui escrever no tema. Cole o script na mão.");
+        return;
+      }
+      setInstalado(true);
+      toast.success(d.message || "Script instalado na vitrine.");
+      onRecarregar();
+    } finally {
+      setInstalando(false);
+    }
+  }
+
+  async function diagnosticar() {
+    setChecando(true);
+    setDiagnostico(null);
+    try {
+      const r = await fetch("/api/checkout-routes/health", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: rota!.id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.error(d.error || "Falha ao verificar.");
+        return;
+      }
+      setDiagnostico(d);
+    } finally {
+      setChecando(false);
+    }
+  }
+
+  async function corrigir() {
+    setConsertando(true);
+    try {
+      const r = await fetch("/api/checkout-routes/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: rota!.id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast.error(d.error || "Falha ao corrigir.");
+        return;
+      }
+      toast.success(
+        d.noop
+          ? "Nada para corrigir: a rota já estava certa."
+          : `Corrigida. ${d.createdProductCount || 0} produtos criados, ${d.stampedSkuCount || 0} SKUs gravados.`
+      );
+      setDiagnostico(null);
+      onRecarregar();
+    } finally {
+      setConsertando(false);
+    }
+  }
+
+  async function alternarRota() {
+    await fetch("/api/checkout-routes/toggle", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rota!.id, enabled: !rota!.enabled }),
+    });
+    toast.success(rota!.enabled ? "Rota pausada." : "Rota ligada.");
+    onRecarregar();
+  }
+
+  async function apagar() {
+    if (
+      !window.confirm(
+        `Apagar a rota "${rota!.name}"? A vitrine volta a mandar o comprador para o próprio checkout, que não cobra.`
+      )
+    )
+      return;
+    const r = await fetch(`/api/checkout-routes?id=${rota!.id}`, { method: "DELETE" });
+    if (!r.ok) {
+      toast.error("Falha ao apagar a rota.");
+      return;
+    }
+    toast.success("Rota apagada.");
+    onRecarregar();
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
-            Roteamento
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {vitrines === 1 ? "1 vitrine" : `${vitrines} vitrines`} mandando trafego para{" "}
-            {checkouts === 1 ? "1 loja de checkout" : `${checkouts} lojas de checkout`}
-            {quebradas > 0 && (
-              <span className="text-destructive">
-                {" "}
-                &mdash; {quebradas === 1 ? "1 rota precisa" : `${quebradas} rotas precisam`} de
-                atencao
-              </span>
-            )}
-          </p>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {grafo.routes.length > 1 &&
+            grafo.routes.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => {
+                  setAlvosLocais(null);
+                  setDiagnostico(null);
+                  onSelecionar(r.id);
+                }}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                  r.id === rota.id
+                    ? "border-[var(--border-strong)] bg-[var(--nav-active)] text-ink"
+                    : "border-border text-t2 hover:text-ink"
+                )}
+              >
+                {r.name}
+              </button>
+            ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onReload}>
-            <RefreshCw className="mr-2 h-3.5 w-3.5" />
-            Atualizar
-          </Button>
-          <Button variant="outline" onClick={onAddStore}>
-            <Store className="mr-2 h-4 w-4" />
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setConectandoLoja((v) => !v)}
+            className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-[var(--border-strong)]"
+          >
             Conectar loja
-          </Button>
-          <Button onClick={onConnectStores}>
-            <Plus className="mr-2 h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onConnectStores}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--solid)] px-3 py-1.5 text-[12px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
             Nova rota
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="rounded-2xl border border-border/60 bg-card/40 p-5">
-          <RouteMap
-            stores={graph.stores}
-            routes={graph.routes}
-            selectedRouteId={selectedId}
-            onSelectRoute={onSelect}
+      {conectandoLoja && (
+        <div className="rounded-xl border border-border bg-surface">
+          <AddStorePanel
+            onConnected={() => {
+              setConectandoLoja(false);
+              onRecarregar();
+            }}
+            onCancel={() => setConectandoLoja(false)}
           />
-
-          {graph.routes.length > 1 && (
-            <div className="mt-5 flex flex-wrap gap-1.5 border-t border-border/60 pt-4">
-              {graph.routes.map((route) => {
-                const active = route.id === selectedId;
-                const alerta = route.enabled && route.lastHeal && !route.lastHeal.ok;
-                return (
-                  <button
-                    key={route.id}
-                    type="button"
-                    onClick={() => onSelect(route.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors",
-                      active
-                        ? "border-foreground/25 bg-foreground/8 text-foreground"
-                        : "border-border/70 text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {alerta && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden />
-                    )}
-                    {!route.enabled && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" aria-hidden />
-                    )}
-                    {route.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
+      )}
 
-        <div className="rounded-2xl border border-border/60 bg-card/40 xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
-          {addingStore ? (
-            <AddStorePanel
-              onConnected={() => {
-                onCloseAddStore?.();
-                onReload();
-              }}
-              onCancel={() => onCloseAddStore?.()}
-            />
-          ) : selected ? (
-            <RouteInspector
-              route={{
-                id: selected.id,
-                name: selected.name,
-                enabled: selected.enabled,
-                publicToken: selected.publicToken,
-                sourceStoreId: selected.sourceStoreId,
-                lastHeal: selected.lastHeal,
-              }}
-              stores={storeOptions}
-              onChanged={onReload}
-              onDeleted={onReload}
-            />
-          ) : (
-            <p className="px-5 py-8 text-sm text-muted-foreground">
-              Escolha uma rota no quadro.
+      <section className="rounded-xl border border-border bg-surface">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-ink">
+              {rota.name}
+              <span className="text-t3"> — </span>
+              <span style={{ color: rota.enabled ? "var(--ok)" : "var(--t3)" }}>
+                {rota.enabled ? "ativo" : "pausado"}
+              </span>
             </p>
+            <p className="mt-0.5 text-[11.5px] text-t3">
+              {cobrando} de {alvos.length} lojas de checkout recebendo comprador
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={diagnosticar}
+              disabled={checando}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-[var(--border-strong)] disabled:opacity-50"
+            >
+              {checando ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Stethoscope className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Testar
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditando((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+                editando
+                  ? "border-[var(--border-strong)] bg-[var(--nav-active)] text-ink"
+                  : "border-border bg-surface text-ink hover:border-[var(--border-strong)]"
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+              Configurar
+            </button>
+            <button
+              type="button"
+              onClick={instalar}
+              disabled={instalando}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--solid)] px-3 py-1.5 text-[12px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] disabled:opacity-50"
+            >
+              {instalando ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : instalado ? (
+                <Check className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <Upload className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {instalado ? "Instalado" : "Instalar na vitrine"}
+            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-border bg-surface text-t2 transition-colors hover:border-[var(--border-strong)] hover:text-ink focus-visible:outline-none">
+                <Ellipsis className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only">Mais ações</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={alternarRota}>
+                  {rota.enabled ? "Pausar rota" : "Ligar rota"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setManual((v) => !v)}>
+                  <Copy className="mr-2 h-3.5 w-3.5" />
+                  Instalar o script na mão
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={apagar}>
+                  Apagar rota
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {quebrada && (
+          <p className="border-b border-[var(--err-border)] bg-[var(--err-bg)] px-4 py-2.5 text-[12px] text-ink">
+            {rota.lastHeal?.message || "A última checagem automática achou um problema."}
+          </p>
+        )}
+
+        <RouteStrip
+          vitrineName={vitrine?.name || "vitrine removida"}
+          vitrineDomain={vitrine?.shopDomain || ""}
+          rotationLabel={
+            rota.rotationStrategy === "each_checkout"
+              ? "sorteia toda vez"
+              : "sempre a mesma loja"
+          }
+          enabled={rota.enabled}
+          targets={alvos}
+          busyId={ocupadoId}
+          onToggle={alternar}
+          editando={editando}
+          onChangePercent={mudarFatia}
+        />
+
+        {editando && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2.5">
+            <button
+              type="button"
+              onClick={dividirIgual}
+              className="text-[12px] text-t2 underline underline-offset-4 hover:text-ink"
+            >
+              Dividir igual
+            </button>
+            <span className="text-[11.5px] text-t3">
+              Mexer numa fatia redistribui as outras para somar 100%.
+            </span>
+          </div>
+        )}
+      </section>
+
+      <p className="px-1 text-[11.5px] text-t3">
+        Loja parada não recebe comprador e continua conectada. Os produtos ligados são
+        preservados.
+      </p>
+
+      {manual && (
+        <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
+          <p className="text-[12px] text-t2">
+            Cole no <code className="font-mono text-[11px] text-ink">theme.liquid</code> da
+            vitrine, antes de{" "}
+            <code className="font-mono text-[11px] text-ink">&lt;/head&gt;</code>.
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded-md bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-ink">
+            {snippet(rota.publicToken)}
+          </pre>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(snippet(rota.publicToken));
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              } catch {
+                toast.error("O navegador bloqueou a cópia. Selecione o texto e copie.");
+              }
+            }}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] text-ink hover:border-[var(--border-strong)]"
+          >
+            {copiado ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copiado ? "Copiado" : "Copiar"}
+          </button>
+        </div>
+      )}
+
+      {diagnostico && (
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3.5",
+            diagnostico.ok
+              ? "border-[var(--ok-border)] bg-[var(--ok-bg)]"
+              : "border-[var(--err-border)] bg-[var(--err-bg)]"
+          )}
+        >
+          <p className="flex items-baseline gap-2">
+            <span className="font-mono text-[20px] font-medium tabular-nums text-ink">
+              {diagnostico.coveragePercent}%
+            </span>
+            <span className="text-[12px] text-t2">
+              das variantes têm destino
+              {diagnostico.checkedTargetName ? ` em ${diagnostico.checkedTargetName}` : ""}
+            </span>
+          </p>
+          {!diagnostico.ok && (
+            <>
+              <ul className="mt-1.5 flex flex-col gap-0.5 text-[12px] text-t2">
+                {diagnostico.noSkuCount > 0 && (
+                  <li>{diagnostico.noSkuCount} variantes sem SKU nunca roteiam.</li>
+                )}
+                {diagnostico.missingCount > 0 && (
+                  <li>{diagnostico.missingCount} SKUs sem par na loja de checkout.</li>
+                )}
+                {diagnostico.wrongCount > 0 && (
+                  <li>
+                    {diagnostico.wrongCount} SKUs apontam para a variante errada, o que
+                    manda o comprador para outro produto.
+                  </li>
+                )}
+              </ul>
+              <button
+                type="button"
+                onClick={corrigir}
+                disabled={consertando}
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-[var(--solid)] px-3 py-1.5 text-[12px] font-medium text-[var(--on-solid)] disabled:opacity-50"
+              >
+                {consertando && <Loader2 className="h-3 w-3 animate-spin" />}
+                Corrigir agora
+              </button>
+            </>
           )}
         </div>
-      </div>
+      )}
+
+      {editando && (
+        <div className="rounded-xl border border-border bg-surface px-4 py-4">
+          <RotationPanel
+            routeId={rota.id}
+            sourceStoreId={rota.sourceStoreId}
+            stores={grafo.stores}
+            onChanged={onRecarregar}
+            esconderLista
+          />
+        </div>
+      )}
     </div>
   );
 }
