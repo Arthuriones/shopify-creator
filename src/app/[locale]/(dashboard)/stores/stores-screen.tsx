@@ -3,10 +3,9 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { useState, useEffect, useMemo, useRef, Fragment } from "react";
-import { StoreRoleBadge } from "@/components/routed-checkout/store-role-badge";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { StoreRow } from "@/lib/stores/queries";
-import type { StoreRole } from "@/lib/checkout-routes/store-roles";
+import { StoreTable, sincronizado } from "@/components/stores/store-table";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +13,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -33,10 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
-  ExternalLink,
   Store,
-  Trash2,
-  Pencil,
   Upload,
   ImageIcon,
   Loader2,
@@ -60,16 +55,18 @@ interface ConnectedStore {
   name: string;
   shop_domain: string;
   theme_id: string | null;
-  niche: string | null;
-  target_audience: string | null;
-  brand_voice: string | null;
-  store_description: string | null;
+  // Opcionais desde que o perfil de marca saiu do formulario: as colunas
+  // continuam no banco, mas a tela nao busca mais nem preenche.
+  niche?: string | null;
+  target_audience?: string | null;
+  brand_voice?: string | null;
+  store_description?: string | null;
   logo_path: string | null;
-  target_language: string;
-  currency_code: string;
-  auto_convert_prices: boolean;
-  currency_rate: number;
-  price_markup_percent: number;
+  target_language: string | null;
+  currency_code: string | null;
+  auto_convert_prices: boolean | null;
+  currency_rate: number | null;
+  price_markup_percent: number | null;
   created_at: string;
 }
 
@@ -220,14 +217,6 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
   const [loadingStores, setLoadingStores] = useState(false);
   // Papel de cada loja no roteamento (vitrine / checkout). Nao e coluna da
   // loja: sai das rotas, entao vem do mesmo endpoint que desenha o mapa.
-  const storeRoles = useMemo(
-    () =>
-      Object.fromEntries(initialStores.map((loja) => [loja.id, loja.role])) as Record<
-        string,
-        StoreRole
-      >,
-    [initialStores]
-  );
   const [shopDomain, setShopDomain] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -336,42 +325,24 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
     void loadStoreAssets(materialsStoreId);
   }, [materialsStoreId]);
 
-  // As lojas agrupadas por papel. A ordem e deliberada: vitrine primeiro
-  // porque e por onde o trafego entra, depois quem cobra, e por ultimo o que
-  // ainda nao esta em rota nenhuma.
-  const storeGroups = useMemo(() => {
-    const order: { role: StoreRole; title: string; hint: string }[] = [
-      {
-        role: "vitrine",
-        title: "Vitrines",
-        hint: "Recebem o trafego do anuncio e carregam a marca. O comprador navega e monta o carrinho aqui.",
-      },
-      {
-        role: "both",
-        title: "Vitrine e checkout",
-        hint: "Recebem trafego numa rota e cobram em outra.",
-      },
-      {
-        role: "checkout",
-        title: "Lojas de checkout",
-        hint: "Catalogo neutralizado, onde o pagamento acontece. Titulo, descricao e imagem podem mudar a vontade; SKU e variante, nunca.",
-      },
-      {
-        role: "unassigned",
-        title: "Fora de rota",
-        hint: "Conectadas, mas ainda sem participar de nenhum roteamento.",
-      },
-    ];
+  // Duas listas, não quatro grupos: quem recebe tráfego e quem cobra. O papel
+  // vem das rotas; loja sem rota ainda aparece entre as de checkout, que é
+  // onde ela provavelmente vai entrar.
+  const vitrines = useMemo(
+    () =>
+      (initialStores as unknown as StoreRow[]).filter(
+        (loja) => loja.role === "vitrine" || loja.role === "both"
+      ),
+    [initialStores]
+  );
 
-    return order
-      .map((group) => ({
-        ...group,
-        stores: stores.filter(
-          (store) => (storeRoles[store.id] || "unassigned") === group.role
-        ),
-      }))
-      .filter((group) => group.stores.length > 0);
-  }, [stores, storeRoles]);
+  const checkouts = useMemo(
+    () =>
+      (initialStores as unknown as StoreRow[]).filter(
+        (loja) => loja.role !== "vitrine" && loja.role !== "both"
+      ),
+    [initialStores]
+  );
 
   async function loadStores() {
     // Recalcula tambem o papel de cada loja, que e derivado das rotas no
@@ -598,6 +569,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
   }
 
 
+
   async function handleRemoveAsset(asset: StoreAsset) {
     if (!confirm("Remover este material da marca?")) return;
 
@@ -621,7 +593,6 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
     setStoreAssets((prev) => prev.filter((a) => a.id !== asset.id));
   }
-
   async function handleSaveProfile() {
     if (!editingStore) return;
 
@@ -792,22 +763,6 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
     }
   }
 
-  async function handleRemove(storeId: string, storeName: string) {
-    if (!confirm(`Remover a loja "${storeName}"?`)) return;
-
-    const res = await fetch(`/api/stores/${encodeURIComponent(storeId)}`, {
-      method: "DELETE",
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      toast.error(data.error || "Erro ao remover loja");
-      return;
-    }
-
-    setStores((prev) => prev.filter((s) => s.id !== storeId));
-    toast.success("Loja removida");
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1028,116 +983,93 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-          {storeGroups.map((group) => (
-            <Fragment key={group.role}>
-              {/* Cabecalho de grupo ocupando a linha inteira do grid: separa
-                  quem recebe trafego de quem cobra sem precisar de duas telas. */}
-              <div className="col-span-full mt-2 first:mt-0">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border/60 pb-2">
-                  <h2 className="text-sm font-semibold text-foreground">{group.title}</h2>
-                  <StoreRoleBadge role={group.role} />
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {group.stores.length}
-                  </span>
-                </div>
-                <p className="mt-1.5 max-w-2xl text-xs leading-5 text-muted-foreground">
-                  {group.hint}
+        <div className="flex flex-col gap-7">
+          {/* Vitrines primeiro e como cartao: sao poucas e e por elas que o
+              trafego entra. Lojas de checkout viram tabela porque sao muitas e
+              o que interessa nelas e comparar linha a linha. */}
+          {vitrines.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center gap-2.5">
+                <h2 className="text-[13px] font-semibold text-ink">Vitrines</h2>
+                <span className="font-mono text-[11px] text-t4">{vitrines.length}</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <p className="mb-2.5 max-w-[640px] text-[12px] text-t3">
+                Recebem o tráfego do anúncio e carregam a marca. O comprador navega e
+                monta o carrinho aqui.
+              </p>
+              <div className="flex flex-col gap-2">
+                {vitrines.map((loja) => (
+                  <button
+                    key={loja.id}
+                    type="button"
+                    onClick={() => void openProfileEditor(loja)}
+                    className="flex w-full items-center gap-4 rounded-lg border border-border bg-surface px-4 py-[13px] text-left transition-colors hover:border-[var(--border-strong)] hover:bg-surface-2"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: "var(--ok)" }}
+                          aria-hidden
+                        />
+                        <span className="truncate text-[13.5px] font-semibold text-ink">
+                          {loja.name}
+                        </span>
+                        <span className="text-[11.5px] text-[var(--ok)]">Conectada</span>
+                      </span>
+                      <span className="mt-[3px] block truncate font-mono text-[11px] text-t3">
+                        {loja.shop_domain}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[12px] text-t1">
+                      {loja.product_count != null
+                        ? `${loja.product_count} produtos`
+                        : "produtos não conferidos"}
+                    </span>
+                    <span className="shrink-0 text-[12px] text-t3">
+                      Sync {sincronizado(loja.catalog_synced_at)}
+                    </span>
+                    <span className="shrink-0 text-[12px] font-semibold text-t1">
+                      Gerenciar &rarr;
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <div className="mb-2 flex items-center gap-2.5">
+              <h2 className="text-[13px] font-semibold text-ink">Lojas de checkout</h2>
+              <span className="font-mono text-[11px] text-t4">{checkouts.length}</span>
+              <span className="h-px flex-1 bg-border" />
+              <Button
+                variant="outline"
+                onClick={() => setOpen(true)}
+                className="h-[26px] rounded-md px-[9px] text-[12px] font-semibold"
+              >
+                {t("connect_btn")}
+              </Button>
+            </div>
+            <p className="mb-2.5 max-w-[640px] text-[12px] text-t3">
+              Catálogo neutralizado, onde o pagamento acontece. Título, descrição e
+              imagem podem mudar à vontade; SKU e variante, nunca.
+            </p>
+            {checkouts.length > 0 ? (
+              <StoreTable lojas={checkouts} onAbrir={(l) => void openProfileEditor(l)} />
+            ) : (
+              <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-surface px-8 py-11 text-center">
+                <p className="text-[15px] font-semibold text-ink">
+                  Nenhuma loja de checkout
+                </p>
+                <p className="mx-auto mt-1.5 max-w-[360px] text-[12.5px] text-t2">
+                  É nela que o pagamento acontece. Conecte a segunda loja para o xcart
+                  ter para onde rotear o carrinho.
                 </p>
               </div>
-              {group.stores.map((store) => (
-            <Card
-              key={store.id}
-              className={cn(
-                "group border-border/50 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-border",
-                // Faixa lateral na cor do papel: depois de rolar a pagina e
-                // perder o cabecalho do grupo de vista, ela ainda diz se esta
-                // loja recebe trafego ou cobra.
-                "border-l-2",
-                group.role === "vitrine" && "border-l-vitrine/70",
-                group.role === "checkout" && "border-l-checkout/70",
-                group.role === "both" && "border-l-primary/70",
-                group.role === "unassigned" && "border-l-border"
-              )}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  {/* Logo thumbnail */}
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/50 overflow-hidden"
-                    style={{ background: "var(--muted)" }}
-                  >
-                    {store.logo_path ? (
-                      <Image
-                        src={getLogoUrl(store.logo_path)}
-                        alt={store.name}
-                        width={40}
-                        height={40}
-                        className="object-contain"
-                        unoptimized
-                      />
-                    ) : (
-                      <Store className="h-4 w-4 text-muted-foreground/50" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <CardTitle
-                      className="truncate text-[15px] font-semibold"
-                      style={{ letterSpacing: "-0.01em" }}
-                    >
-                      {store.name}
-                    </CardTitle>
-                    <a
-                      href={`https://${store.shop_domain}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[12px] text-muted-foreground transition-colors duration-200 hover:text-foreground"
-                    >
-                      {store.shop_domain}
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  </div>
-                </div>
-
-                {/* Uma linha, nao seis badges. O papel e a unica coisa aqui que
-                    muda o que a loja FAZ; moeda e idioma sao configuracao, e
-                    configuracao pode ser texto quieto. */}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {group.role !== "unassigned" && <StoreRoleBadge role={group.role} />}
-                  <span className="text-[11px] text-muted-foreground">
-                    {store.currency_code || "USD"}
-                    {store.auto_convert_prices ? " convertido" : ""}
-                    {", "}
-                    {LANGUAGE_OPTIONS.find((option) => option.value === store.target_language)
-                      ?.label ||
-                      store.target_language ||
-                      "Português do Brasil"}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between pt-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void openProfileEditor(store)}
-                  className="h-8 text-[12px] border-border/50 hover:border-border"
-                >
-                  <Pencil className="mr-1.5 h-3 w-3" />
-                  {t("edit_profile_btn")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRemove(store.id, store.name)}
-                  className="h-8 w-8 p-0 text-muted-foreground/50 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all duration-200"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </CardContent>
-            </Card>
-              ))}
-            </Fragment>
-          ))}
+            )}
+          </section>
         </div>
       )}
 

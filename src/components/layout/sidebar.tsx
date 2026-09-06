@@ -129,7 +129,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[228px] flex-col border-r border-border bg-surface md:flex">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-[216px] flex-col border-r border-border bg-surface md:flex">
         <div className="flex h-14 shrink-0 items-center gap-2.5 px-4">
           <Link
             href="/overview"

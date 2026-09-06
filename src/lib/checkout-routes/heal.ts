@@ -240,6 +240,33 @@ export async function healRoute(
     fetchPublicShopifyProducts(sourceStore.shop_domain, { limit: 5000 }),
   ]);
 
+  // O catalogo das duas lojas acabou de ser paginado inteiro aqui. Guardar a
+  // contagem agora sai de graca; buscar depois, so para a tela de lojas
+  // mostrar "482 produtos", custaria a mesma paginacao de novo.
+  const agoraCatalogo = new Date().toISOString();
+  const variantesVitrine = sourceProducts.reduce(
+    (soma, produto) => soma + (produto.variants?.length || 0),
+    0
+  );
+  await Promise.all([
+    admin
+      .from("stores")
+      .update({
+        product_count: sourceProducts.length,
+        variant_count: variantesVitrine,
+        catalog_synced_at: agoraCatalogo,
+      })
+      .eq("id", sourceStore.id),
+    admin
+      .from("stores")
+      .update({
+        // targetIndex e indexado por SKU: conta variante, nao produto.
+        variant_count: targetIndex.size,
+        catalog_synced_at: agoraCatalogo,
+      })
+      .eq("id", targetStore.id),
+  ]);
+
   // Toda variante da vitrine precisa de SKU unico antes de qualquer comparacao.
   // O loop abaixo ignora quem esta sem SKU, entao produto criado na mao ficava
   // invisivel para o conserto e fora da rota para sempre.
