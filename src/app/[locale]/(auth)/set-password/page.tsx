@@ -2,10 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Package } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 
 export default function SetPasswordPage() {
@@ -51,109 +47,91 @@ export default function SetPasswordPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
-      {/* Background glow */}
-      <div
-        className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{
-          width: "600px",
-          height: "600px",
-          background:
-            "radial-gradient(circle, color-mix(in oklch, var(--action) 6%, transparent) 0%, transparent 70%)",
-        }}
-      />
+    <div className="grid min-h-screen bg-surface lg:grid-cols-2">
+      <div className="flex flex-col justify-center px-6 py-12 sm:px-[8vw]">
+        <div className="mb-10 flex items-center gap-2">
+          <span
+            className="h-5 w-5 rounded-[5px]"
+            style={{ background: "var(--brand)" }}
+            aria-hidden
+          />
+          <span className="text-[14px] font-bold tracking-[0.06em] text-ink">XCART</span>
+        </div>
 
-      <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
-        {/* Brand */}
-        <div className="mb-8 text-center">
-          <div
-            className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-xl"
-            style={{ background: "var(--action)" }}
-          >
-            <Package
-              className="h-5 w-5"
-              style={{ color: "var(--action-foreground)" }}
+        <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-ink">
+          Defina sua senha
+        </h1>
+        <p className="mb-7 mt-1.5 max-w-[340px] text-[13px] text-t2">
+          A partir de agora você entra com e-mail e senha, sem depender do link.
+        </p>
+
+        <form onSubmit={handleSubmit} className="flex max-w-[360px] flex-col gap-3.5">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-t1">Nova senha</span>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-9 rounded-md border border-[var(--control-border)] bg-surface px-2.5 text-[13px] text-ink outline-none transition-colors focus:border-[var(--brand)]"
             />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-t1">Repita a senha</span>
+            <input
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-9 rounded-md border border-[var(--control-border)] bg-surface px-2.5 text-[13px] text-ink outline-none transition-colors focus:border-[var(--brand)]"
+            />
+          </label>
+
+          {errorMessage && (
+            <p className="rounded-md border border-[var(--err-border)] bg-[var(--err-bg)] px-2.5 py-2 text-[12px] leading-relaxed text-ink">
+              {errorMessage}
+            </p>
+          )}
+
+          <p className="text-[11.5px] text-t3">Pelo menos 6 caracteres.</p>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-1 h-9 rounded-md bg-[var(--solid)] text-[13px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] active:translate-y-px disabled:opacity-60"
+          >
+            {loading ? "Salvando…" : "Salvar senha"}
+          </button>
+        </form>
+      </div>
+
+      <div className="hidden flex-col justify-center gap-7 border-l border-border bg-surface-2 px-[6vw] py-12 lg:flex">
+        <p className="font-mono text-[10px] tracking-[0.12em] text-t3">
+          MODELO DA OPERAÇÃO
+        </p>
+        <div className="flex max-w-[300px] flex-col gap-2.5">
+          <div className="rounded-[7px] border border-border bg-surface px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-ink">Vitrine</p>
+            <p className="text-[11px] text-t3">Recebe o tráfego do anúncio</p>
           </div>
-          <h1
-            className="text-2xl font-semibold text-foreground"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            Nova Segurança
-          </h1>
-          <p
-            className="mt-2 text-sm text-muted-foreground"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            Por favor, defina uma senha para sua conta
-          </p>
+          <span className="ml-4 h-4 w-px bg-[var(--border-strong)]" aria-hidden />
+          <div className="rounded-[7px] bg-[var(--solid)] px-3 py-2.5 text-[var(--on-solid)]">
+            <p className="text-[12px] font-semibold">XCART</p>
+            <p className="text-[11px] opacity-70">Mapeia, sincroniza e roteia</p>
+          </div>
+          <span className="ml-4 h-4 w-px bg-[var(--border-strong)]" aria-hidden />
+          <div className="rounded-[7px] border border-border bg-surface px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-ink">Lojas de checkout</p>
+            <p className="text-[11px] text-t3">Onde o pagamento acontece</p>
+          </div>
         </div>
-
-        <div className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="password"
-                  className="text-[13px] font-medium text-muted-foreground"
-                >
-                  Nova Senha
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="confirmPassword"
-                  className="text-[13px] font-medium text-muted-foreground"
-                >
-                  Confirmar Senha
-                </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full h-11 text-sm font-medium transition-all duration-200"
-              style={{
-                background: loading ? "color-mix(in oklch, var(--action) 70%, transparent)" : "var(--action)",
-                color: "var(--action-foreground)",
-              }}
-              disabled={loading}
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-flex gap-0.5">
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </span>
-                </span>
-              ) : (
-                "Salvar Senha"
-              )}
-            </Button>
-            {errorMessage ? (
-              <p className="text-xs text-red-400">{errorMessage}</p>
-            ) : null}
-          </form>
-        </div>
+        <p className="max-w-[320px] text-[13px] text-t1">
+          Uma vitrine, várias lojas de checkout. O xcart casa os SKUs e decide quem
+          cobra cada carrinho.
+        </p>
       </div>
     </div>
   );

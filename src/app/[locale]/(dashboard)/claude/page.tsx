@@ -129,10 +129,12 @@ export default function ClaudePage() {
   const ativos = tokens.filter((t) => !t.revoked_at);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold">Conectar ao Claude</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+          Conectar ao Claude
+        </h1>
+        <p className="mt-1.5 max-w-[62ch] text-[13px] leading-relaxed text-t2">
           Edite suas lojas conversando com o Claude — buscar produtos, reescrever
           descricao e SEO, conferir se a pagina subiu certo. Funciona no Claude
           Code e no Claude Desktop.
@@ -141,8 +143,8 @@ export default function ClaudePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">1. Gere um token</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-[12.5px] font-medium text-ink">1. Gere um token</CardTitle>
+          <CardDescription className="text-[12px] leading-relaxed text-t3">
             Ele aparece uma unica vez. Se perder, e so gerar outro e revogar o
             antigo.
           </CardDescription>
@@ -207,11 +209,11 @@ export default function ClaudePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-[12.5px] font-medium text-ink">
             <Terminal className="h-4 w-4" />
             2. Cole no seu Claude
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-[12px] leading-relaxed text-t3">
             {novoToken
               ? "O comando ja esta com o seu token."
               : "Gere um token acima para o comando vir preenchido."}
@@ -228,7 +230,7 @@ export default function ClaudePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">3. Teste</CardTitle>
+          <CardTitle className="text-[12.5px] font-medium text-ink">3. Teste</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>No Claude, peca:</p>

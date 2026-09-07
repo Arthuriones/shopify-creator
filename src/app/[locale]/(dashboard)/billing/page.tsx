@@ -163,10 +163,12 @@ function BillingInner() {
   const fimPeriodo = sub?.currentPeriodEnd || info?.currentPeriodEnd;
 
   return (
-    <div className="space-y-6 p-1">
+    <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-ink">
+          {t("title")}
+        </h1>
+        <p className="mt-1.5 text-[13px] text-t2">{t("subtitle")}</p>
       </div>
 
       {loading ? (
@@ -218,23 +220,23 @@ function BillingInner() {
 
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-3">
+                  <div className="flex items-center gap-1.5 text-[11.5px] text-t3">
                     <Zap className="h-3.5 w-3.5 text-primary" /> {t("aiCredits")}
                   </div>
-                  <p className="mt-1 text-2xl font-semibold text-foreground">
+                  <p className="mt-1 font-mono text-[22px] font-medium leading-none tabular-nums text-ink">
                     {info?.aiCredits ?? 0}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="text-xs text-muted-foreground">{t("usedThisMonth")}</div>
-                  <p className="mt-1 text-2xl font-semibold text-foreground">
+                <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-3">
+                  <div className="text-[11.5px] text-t3">{t("usedThisMonth")}</div>
+                  <p className="mt-1 font-mono text-[22px] font-medium leading-none tabular-nums text-ink">
                     {info?.usageThisMonth.creditsUsed ?? 0}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="text-xs text-muted-foreground">{t("estimatedCost")}</div>
-                  <p className="mt-1 text-2xl font-semibold text-foreground">
+                <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-3">
+                  <div className="text-[11.5px] text-t3">{t("estimatedCost")}</div>
+                  <p className="mt-1 font-mono text-[22px] font-medium leading-none tabular-nums text-ink">
                     US$ {info?.usageThisMonth.costUsd?.toFixed(2) ?? "0.00"}
                   </p>
                 </div>

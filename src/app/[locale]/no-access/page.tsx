@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Lock, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { AssinarPro } from "@/components/billing/assinar-pro";
 import { APP_HOME } from "@/lib/app-home";
 
@@ -27,43 +25,51 @@ export default function NoAccessPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-8">
-        <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Lock className="h-6 w-6 text-primary" />
-          </div>
-          <h1 className="mt-4 text-xl font-semibold text-foreground">
-            {t("title")}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">{t("body")}</p>
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-6 py-12">
+      <div className="w-full max-w-[380px]">
+        <div className="mb-8 flex items-center gap-2">
+          <span
+            className="h-5 w-5 rounded-[5px]"
+            style={{ background: "var(--brand)" }}
+            aria-hidden
+          />
+          <span className="text-[14px] font-bold tracking-[0.06em] text-ink">XCART</span>
         </div>
 
-        {mostrarCartao ? (
-          <div className="mt-6">
-            <AssinarPro
-              onPronto={() =>
-                // Recarrega para o layout reavaliar o acesso e liberar o app.
-                setTimeout(() => window.location.replace(APP_HOME), 900)
-              }
-            />
+        <div className="rounded-lg border border-border bg-surface p-6">
+          <h1 className="text-[18px] font-semibold tracking-[-0.01em] text-ink">
+            {t("title")}
+          </h1>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-t2">{t("body")}</p>
+
+          {mostrarCartao ? (
+            <div className="mt-5">
+              <AssinarPro
+                onPronto={() =>
+                  // Recarrega para o layout reavaliar o acesso e liberar o app.
+                  setTimeout(() => window.location.replace(APP_HOME), 900)
+                }
+              />
+              <button
+                onClick={() => setMostrarCartao(false)}
+                className="mt-3 w-full text-[12px] text-t3 hover:text-ink"
+              >
+                Voltar
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={() => setMostrarCartao(false)}
-              className="mt-3 w-full text-xs text-muted-foreground underline hover:text-foreground"
+              onClick={() => setMostrarCartao(true)}
+              className="mt-5 h-9 w-full rounded-md bg-[var(--solid)] text-[13px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] active:translate-y-px"
             >
-              Voltar
+              {t("subscribe")}
             </button>
-          </div>
-        ) : (
-          <Button className="mt-6 w-full" onClick={() => setMostrarCartao(true)}>
-            <Sparkles className="h-4 w-4" />
-            {t("subscribe")}
-          </Button>
-        )}
+          )}
+        </div>
 
         <button
           onClick={logout}
-          className="mt-4 w-full text-xs text-muted-foreground underline hover:text-foreground"
+          className="mt-4 w-full text-[12px] text-t3 hover:text-ink"
         >
           {t("logout")}
         </button>
