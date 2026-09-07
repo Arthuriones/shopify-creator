@@ -234,7 +234,7 @@ Documented in `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_
 
 - Routing: `public/routed-checkout-loader.js`, `src/app/api/checkout-routes/{resolve,connect-by-sku,create-destination,repair,health,settings,track-fallback,map,[id]/*}/route.ts`, `src/lib/shopify/cart-routing.ts`, `src/lib/checkout-routes/{rotation,targets,embed-config,store-roles,heal}.ts`, `src/components/routed-checkout/*`, `src/app/[locale]/(dashboard)/clone/routed-checkout/map/page.tsx`.
 - Import: `src/lib/import/*`, `src/lib/aliexpress/*`, `src/lib/shopify/public-store.ts`, `src/lib/jobs/*`, `src/app/api/{import,aliexpress,jobs}/*`.
-- Shopify + AI: `src/lib/shopify/client.ts`, `src/lib/gemini/client.ts`, `src/lib/ai/product-neutralizer.ts`, `src/lib/store-context.ts`, `src/lib/products/shopify-taxonomy-enrichment.ts`, `src/app/api/{shopify,ai,product}/*`.
+- Shopify + AI: `src/lib/shopify/client.ts`, `src/lib/gemini/client.ts`, `src/lib/ai/product-neutralizer.ts`, `src/lib/store-context.ts`, `src/lib/products/shopify-taxonomy-enrichment.ts`, `src/app/api/shopify/*`.
 - Shell: `src/proxy.ts`, `src/lib/supabase/middleware.ts`, `src/i18n/*`, `src/lib/billing/*`, `src/app/[locale]/(dashboard)/*`, `src/app/admin/*`.
 - Data: `supabase/migrations/001-025_*.sql`.
 - Deploy: `next.config.ts`, `vercel.json`, `Dockerfile`, `docker-compose.yml`, `.env.example`.

@@ -12,7 +12,6 @@ const TRILHA: { prefixo: string; chave: string }[] = [
   { prefixo: "/clone/routed-checkout", chave: "routing" },
   { prefixo: "/clone/shopify", chave: "importProducts" },
   { prefixo: "/clone", chave: "importProducts" },
-  { prefixo: "/products", chave: "products" },
   { prefixo: "/billing", chave: "billing" },
   { prefixo: "/claude", chave: "claude" },
 ];

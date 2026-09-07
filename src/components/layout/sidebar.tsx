@@ -10,7 +10,6 @@ import {
   LayoutGrid,
   ListChecks,
   LogOut,
-  Package,
   Store,
   Terminal,
   Waypoints,
@@ -57,7 +56,6 @@ const NAV: NavSection[] = [
       { href: "/stores", label: "connectedStores", icon: Store, counter: "stores" },
       { href: "/clone/routed-checkout", label: "routing", icon: Waypoints },
       { href: "/clone/shopify", label: "importProducts", icon: Download },
-      { href: "/products", label: "products", icon: Package },
     ],
   },
   {
