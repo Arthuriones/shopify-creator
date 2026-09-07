@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 
@@ -59,9 +60,8 @@ function rotulo(reason: string) {
   return EVENTOS[reason] ?? { label: reason, kind: "warn" as const };
 }
 
-export async function getOverview(): Promise<Overview> {
-  const supabase = await createClient();
-  const user = await getCurrentUser();
+export const getOverview = cache(async (): Promise<Overview> => {
+  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
 
   const vazio: Overview = {
     storeCount: 0,
@@ -219,4 +219,4 @@ export async function getOverview(): Promise<Overview> {
       };
     }),
   };
-}
+})

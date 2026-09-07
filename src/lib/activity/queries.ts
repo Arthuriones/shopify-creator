@@ -60,10 +60,8 @@ const ACAO_CLONE: Record<string, string> = {
  * dedicado daria, mas é verdade, e não exige gravar nada novo.
  */
 export async function getActivity(limite = 40): Promise<ActivityItem[]> {
-  const user = await getCurrentUser();
+  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   if (!user) return [];
-
-  const supabase = await createClient();
 
   const [lojas, rotas, execucoes] = await Promise.all([
     supabase

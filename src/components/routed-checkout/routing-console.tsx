@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   Check,
   Copy,
@@ -22,39 +23,23 @@ import {
 import { cn } from "@/lib/utils";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { RouteStrip, targetState, type StripTarget } from "@/components/routed-checkout/route-strip";
-import { RotationPanel } from "@/components/routed-checkout/rotation-panel";
-import { AddStorePanel } from "@/components/routed-checkout/add-store-panel";
+import type { GraphTarget, RouteGraph } from "@/lib/checkout-routes/graph";
 
-interface Alvo {
-  id: string;
-  storeId: string;
-  weight: number;
-  enabled: boolean;
-  sharePercent: number;
-  mappedSkuCount: number;
-}
+// Os dois so existem depois de um clique -- "Conectar loja" e "Configurar".
+// Somados sao 23 KB que todo mundo baixava para abrir o roteamento.
+const AddStorePanel = dynamic(
+  () =>
+    import("@/components/routed-checkout/add-store-panel").then((m) => m.AddStorePanel),
+  { ssr: false }
+);
+const RotationPanel = dynamic(
+  () =>
+    import("@/components/routed-checkout/rotation-panel").then((m) => m.RotationPanel),
+  { ssr: false }
+);
 
-interface Rota {
-  id: string;
-  name: string;
-  enabled: boolean;
-  publicToken: string;
-  sourceStoreId: string;
-  rotationStrategy: "sticky" | "each_checkout";
-  lastHeal: { at: string; ok: boolean; message?: string } | null;
-  targets: Alvo[];
-}
-
-interface Loja {
-  id: string;
-  name: string;
-  shopDomain: string;
-}
-
-interface Grafo {
-  stores: Loja[];
-  routes: Rota[];
-}
+type Alvo = GraphTarget;
+type Grafo = RouteGraph;
 
 interface Diagnostico {
   ok: boolean;
@@ -70,10 +55,17 @@ function snippet(token: string) {
   return `<script\n  src="${origem}/routed-checkout-loader.js"\n  data-token="${token}"\n  async>\n</script>`;
 }
 
-export function RoutingConsole({ onConnectStores }: { onConnectStores: () => void }) {
-  const [grafo, setGrafo] = useState<Grafo>({ stores: [], routes: [] });
-  const [carregando, setCarregando] = useState(true);
-  const [rotaId, setRotaId] = useState<string | null>(null);
+export function RoutingConsole({
+  grafoInicial,
+  onConnectStores,
+}: {
+  grafoInicial: Grafo;
+  onConnectStores: () => void;
+}) {
+  const [grafo, setGrafo] = useState<Grafo>(grafoInicial);
+  const [rotaId, setRotaId] = useState<string | null>(
+    grafoInicial.routes[0]?.id ?? null
+  );
 
   const carregar = useCallback(async () => {
     try {
@@ -86,23 +78,8 @@ export function RoutingConsole({ onConnectStores }: { onConnectStores: () => voi
       );
     } catch {
       toast.error("Não consegui carregar as rotas.");
-    } finally {
-      setCarregando(false);
     }
   }, []);
-
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
-
-  if (carregando) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center gap-2 text-[12.5px] text-t3">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Carregando o roteamento
-      </div>
-    );
-  }
 
   return (
     <ConsoleView

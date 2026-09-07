@@ -36,8 +36,9 @@ export interface StoreRow {
  * na tela. Aqui e uma consulta so, ao lado do banco, e o HTML ja sai pronto.
  */
 export async function getStoresWithRoles(): Promise<StoreRow[]> {
-  const supabase = await createClient();
-  const user = await getCurrentUser();
+  // As duas nao dependem uma da outra: em serie era um arredondamento a mais
+  // antes da primeira consulta sair.
+  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
   if (!user) return [];
 
   const [lojas, rotas] = await Promise.all([

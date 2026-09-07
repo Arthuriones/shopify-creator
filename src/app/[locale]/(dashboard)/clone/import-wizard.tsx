@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -363,13 +364,18 @@ export function ImportWizard({
   }
 
   const dominioOrigem = (source || "").replace(/^https?:\/\//, "").split("/")[0];
-  const escolhidos = preview.filter(
-    (p) => selectedProductHandles.length === 0 || selectedProductHandles.includes(p.handle)
+
+  // A lista pode ter milhares de linhas e cada uma pergunta se esta marcada.
+  // Com array isso e uma varredura por linha; com Set e uma consulta so.
+  const marcados = useMemo(
+    () => new Set(selectedProductHandles),
+    [selectedProductHandles]
   );
+
+  const escolhidos = preview.filter((p) => marcados.size === 0 || marcados.has(p.handle));
   const variantesEscolhidas = escolhidos.reduce((s, p) => s + p.variants.length, 0);
   const todosVisiveisMarcados =
-    visiblePreview.length > 0 &&
-    visiblePreview.every((p) => selectedProductHandles.includes(p.handle));
+    visiblePreview.length > 0 && visiblePreview.every((p) => marcados.has(p.handle));
 
   const rotuloEscopo =
     escopo === "product"
@@ -601,7 +607,11 @@ export function ImportWizard({
                           setPreviewKey("");
                         }}
                         className="flex w-full items-center gap-[11px] border-b border-[var(--border-subtle)] px-3.5 py-[9px] text-left transition-colors last:border-b-0 hover:bg-surface-2"
-                        style={{ background: on ? "var(--surface-2)" : "var(--surface)" }}
+                        style={{
+                          background: on ? "var(--surface-2)" : "var(--surface)",
+                          contentVisibility: "auto",
+                          containIntrinsicSize: "0 42px",
+                        }}
                       >
                         <Radio on={on} />
                         <span className="min-w-0 flex-1">
@@ -779,7 +789,7 @@ export function ImportWizard({
                   </p>
                 ) : (
                   visiblePreview.map((produto) => {
-                    const on = selectedProductHandles.includes(produto.handle);
+                    const on = marcados.has(produto.handle);
                     return (
                       <button
                         key={produto.handle}

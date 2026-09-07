@@ -3,18 +3,12 @@
 import dynamic from "next/dynamic";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Copy, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import {
-} from "@/components/ui/card";
-import {
-} from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
-import { getPublicAppUrl } from "@/lib/public-url";
 import {
   CLONE_BATCH_SIZE,
   DEFAULT_CLONE_LIMIT,
@@ -34,7 +28,6 @@ const ImportWizard = dynamic(
 );
 import type {
   CloneApplyProgress,
-  CloneRun,
   CloneView,
   ImportMode,
   InventoryMode,
@@ -44,8 +37,6 @@ import type {
   StoreOption,
   TransformedPreviewProduct,
 } from "./clone-shared";
-import {
-} from "@/components/ui/dialog";
 
 
 
@@ -108,14 +99,15 @@ export function CloneScreen({
 }) {
   const t = useTranslations("clone_page");
   const pathname = usePathname();
-  const [stores, setStores] = useState<StoreOption[]>(initialStores);
+  const stores: StoreOption[] = initialStores;
   // As lojas vêm prontas do servidor; não há carregamento pendente.
   const [source, setSource] = useState("");
   const [limit, setLimit] = useState(String(DEFAULT_CLONE_LIMIT));
   const [inventoryMode, setInventoryMode] = useState<InventoryMode>("not_tracked");
   const [inventoryQuantity, setInventoryQuantity] = useState("100");
-  const [targetStoreId, setTargetStoreId] = useState("");
-  const [sourceStoreId, setSourceStoreId] = useState("");
+  const [targetStoreId, setTargetStoreId] = useState(initialStores[0]?.id ?? "");
+  // A loja de origem da rota preparada e sempre a primeira conectada.
+  const sourceStoreId = initialStores[0]?.id ?? "";
   const [publishToStorefront, setPublishToStorefront] = useState(true);
   const [translateCloneProducts, setTranslateCloneProducts] = useState(false);
   const [translateVariantOptions, setTranslateVariantOptions] = useState(false);
@@ -149,7 +141,6 @@ export function CloneScreen({
     { handle: string; error: string }[]
   >([]);
   const [importMode, setImportMode] = useState<ImportMode>("bulk");
-  const [selectedImportMode, setSelectedImportMode] = useState<ImportMode | null>(null);
   const [sourceCollections, setSourceCollections] = useState<SourceCollection[]>([]);
   const [selectedProductHandles, setSelectedProductHandles] = useState<string[]>([]);
   // Filtros/ordenacao da lista de preview. Sao aplicados no cliente: o preview
@@ -159,12 +150,8 @@ export function CloneScreen({
   const [previewSort, setPreviewSort] = useState<PreviewSort>("source");
   const [previewCollections, setPreviewCollections] = useState<string[]>([]);
 
-  const [cloneRuns, setCloneRuns] = useState<CloneRun[]>([]);
-  const [routeSourceStoreId, setRouteSourceStoreId] = useState("");
-  const [routeTargetStoreId, setRouteTargetStoreId] = useState("");
 
 
-  const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
   const [importStep, setImportStep] = useState(1);
   const [importScope, setImportScope] = useState<"all" | "collection">("all");
   const [selectedSourceCollection, setSelectedSourceCollection] =
@@ -217,31 +204,51 @@ export function CloneScreen({
   }, [preview, sourceCollections]);
 
   // Lista efetivamente exibida: busca + filtro de categoria + ordenação.
-  const visiblePreview = useMemo(() => {
-    const term = previewSearch.trim().toLowerCase();
-    let list = preview;
-    if (previewCollections.length > 0) {
-      list = list.filter((product) =>
-        (product.collectionHandles || []).some((handle) =>
-          previewCollections.includes(handle)
-        )
-      );
-    }
-    if (term) {
-      list = list.filter((product) => {
-        const haystack = [
-          product.title,
-          product.handle,
-          ...(product.variants || []).map((variant) => variant.sku || ""),
+  // Digitar nao pode travar o campo. O termo entra na filtragem com atraso:
+  // o input responde a cada tecla, a lista alcanca depois.
+  const termoBusca = useDeferredValue(previewSearch);
+
+  // Indice de busca montado uma vez por catalogo lido. Antes o texto de cada
+  // produto era remontado e passado para minusculas a CADA tecla -- num
+  // catalogo de mil produtos sao mil concatenacoes por caractere digitado.
+  const indiceBusca = useMemo(
+    () =>
+      preview.map((produto) => ({
+        produto,
+        texto: [
+          produto.title,
+          produto.handle,
+          ...(produto.variants || []).map((variante) => variante.sku || ""),
         ]
           .join(" ")
-          .toLowerCase();
-        return haystack.includes(term);
-      });
+          .toLowerCase(),
+      })),
+    [preview]
+  );
+
+  const visiblePreview = useMemo(() => {
+    const termo = termoBusca.trim().toLowerCase();
+    // Set em vez de array: o teste de categoria roda uma vez por produto por
+    // categoria marcada, e includes percorre a lista inteira em cada um.
+    const categorias =
+      previewCollections.length > 0 ? new Set(previewCollections) : null;
+
+    // Categoria e texto na mesma passada, em vez de dois filter seguidos.
+    const list: PreviewProduct[] = [];
+    for (const item of indiceBusca) {
+      if (
+        categorias &&
+        !(item.produto.collectionHandles || []).some((handle) => categorias.has(handle))
+      ) {
+        continue;
+      }
+      if (termo && !item.texto.includes(termo)) continue;
+      list.push(item.produto);
     }
+
     if (previewSort === "source") return list;
-    const sorted = [...list];
-    sorted.sort((a, b) => {
+    // toSorted mantem a lista de cima intacta sem a copia manual.
+    return list.toSorted((a, b) => {
       switch (previewSort) {
         case "title_asc":
           return a.title.localeCompare(b.title);
@@ -257,29 +264,21 @@ export function CloneScreen({
           return 0;
       }
     });
-    return sorted;
-  }, [preview, previewSearch, previewCollections, previewSort]);
+  }, [indiceBusca, termoBusca, previewCollections, previewSort]);
 
-
-  useEffect(() => {
-    setAppOrigin(getPublicAppUrl(window.location.origin));
-  }, []);
 
   useEffect(() => {
     if (!routedImportMode) return;
     setImportMode(routedImportMode);
-    setSelectedImportMode(routedImportMode);
   }, [routedImportMode]);
 
   useEffect(() => {
     if (!isCloneConfigSubpage) return;
     setImportMode("bulk");
-    setSelectedImportMode("bulk");
   }, [isCloneConfigSubpage]);
 
   function openInlineImport(mode: ImportMode) {
     setImportMode(mode);
-    setSelectedImportMode(mode);
   }
 
   async function loadSourceCollectionOptions() {
@@ -317,38 +316,11 @@ export function CloneScreen({
       setImportStep(1);
     } else if (isCloneConfigSubpage) {
       setImportMode("bulk");
-      setSelectedImportMode("bulk");
       setImportStep(1);
     }
   }, [isImportSubpage, isCloneConfigSubpage]);
 
-  // A lista já veio do servidor; aqui sobra só escolher as lojas de partida.
-  useEffect(() => {
-    if (initialStores[0]) {
-      setTargetStoreId(initialStores[0].id);
-      setSourceStoreId(initialStores[0].id);
-      setRouteSourceStoreId(initialStores[0].id);
-    }
-    if (initialStores[1]) {
-      setRouteTargetStoreId(initialStores[1].id);
-    }
-  }, [initialStores]);
 
-
-  async function loadCloneRuns() {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("clone_runs")
-      .select("id, source_domain, action, status, product_count, result, created_at")
-      .order("created_at", { ascending: false })
-      .limit(8);
-
-    setCloneRuns((data || []) as CloneRun[]);
-  }
-
-  useEffect(() => {
-    void loadCloneRuns();
-  }, []);
 
 
   async function runClone(
@@ -744,7 +716,6 @@ export function CloneScreen({
       if (aggregate.logoAppliedCount) {
         toast.success(`${aggregate.logoAppliedCount} imagem(ns) receberam a logo.`);
       }
-      await loadCloneRuns();
     } catch (error) {
       if (isAbortError(error)) {
         toast("Operacao cancelada.");

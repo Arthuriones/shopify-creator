@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 
@@ -41,9 +42,8 @@ export interface SetupStatus {
  * passos que o usuário marca sozinho mente na primeira vez que ele desfaz
  * alguma coisa -- apaga a rota e o passo continua verde.
  */
-export async function getSetupStatus(): Promise<SetupStatus> {
-  const supabase = await createClient();
-  const user = await getCurrentUser();
+export const getSetupStatus = cache(async (): Promise<SetupStatus> => {
+  const [supabase, user] = await Promise.all([createClient(), getCurrentUser()]);
 
   const vazio: SetupStatus = {
     steps: [],
@@ -183,4 +183,4 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     checkoutNames: idsDestino.map((id) => nomePorId.get(id) || "loja removida"),
     routeActive: Boolean(rota?.enabled) && temDestinoAtivo,
   };
-}
+})

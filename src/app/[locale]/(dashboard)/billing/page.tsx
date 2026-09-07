@@ -13,8 +13,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import dynamic from "next/dynamic";
 import { AssinarPro } from "@/components/billing/assinar-pro";
-import { PixDialog, type CobrancaPix } from "@/components/billing/pix-dialog";
+import type { CobrancaPix } from "@/components/billing/pix-dialog";
+
+// So monta quando existe uma cobranca Pix aberta.
+const PixDialog = dynamic(
+  () => import("@/components/billing/pix-dialog").then((m) => m.PixDialog),
+  { ssr: false }
+);
 
 interface BillingInfo {
   email: string;

@@ -4,8 +4,19 @@ import { useState } from "react";
 import { ArrowLeft, Check, CreditCard, Loader2, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { PagouCardForm } from "@/components/billing/pagou-card-form";
-import { PixDialog, type CobrancaPix } from "@/components/billing/pix-dialog";
+import dynamic from "next/dynamic";
+import type { CobrancaPix } from "@/components/billing/pix-dialog";
+
+// So aparecem depois de escolher a forma de pagamento. Somados sao 16 KB que
+// todo mundo baixava para ver o botao de assinar.
+const PagouCardForm = dynamic(
+  () => import("@/components/billing/pagou-card-form").then((m) => m.PagouCardForm),
+  { ssr: false }
+);
+const PixDialog = dynamic(
+  () => import("@/components/billing/pix-dialog").then((m) => m.PixDialog),
+  { ssr: false }
+);
 import { PRO_INCLUDED_CREDITS, PRO_PRICE_CENTS } from "@/lib/billing/plans";
 
 // ============================================================================
