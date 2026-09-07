@@ -1,13 +1,11 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export function AdminLogout() {
   async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }
   return (

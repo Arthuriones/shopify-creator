@@ -16,7 +16,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,8 +105,8 @@ export function Sidebar({ dados }: { dados: SidebarData }) {
   }
 
   async function sair() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    // Rota de API em vez do cliente Supabase: ver src/app/api/auth/logout.
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }
 

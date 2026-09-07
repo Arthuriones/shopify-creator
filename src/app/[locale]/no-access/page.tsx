@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 import { AssinarPro } from "@/components/billing/assinar-pro";
 import { APP_HOME } from "@/lib/app-home";
 
@@ -22,8 +21,8 @@ export default function NoAccessPage() {
   const [mostrarCartao, setMostrarCartao] = useState(false);
 
   async function logout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    // Rota de API: evita puxar o cliente Supabase para o bundle desta tela.
+    await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }
 
