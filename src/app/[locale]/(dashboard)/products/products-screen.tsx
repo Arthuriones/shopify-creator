@@ -52,7 +52,6 @@ import {
   Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import type { AliExpressProduct, OptimizationResult } from "@/types";
 import Image from "next/image";
 import Link from "next/link";
@@ -853,22 +852,18 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
   }
 
   async function loadStoreAssets(storeId: string) {
-    const supabase = createClient();
     setMaterialsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("store_assets")
-        .select("id, store_id, file_path, label, created_at")
-        .eq("store_id", storeId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        toast.error("Nao foi possivel carregar os materiais da marca.");
+      const resposta = await fetch(
+        `/api/store-assets?storeId=${encodeURIComponent(storeId)}`
+      );
+      if (!resposta.ok) {
+        toast.error("Não foi possível carregar os materiais da marca.");
         setStoreAssets([]);
         return;
       }
-
-      setStoreAssets(data || []);
+      const dados = await resposta.json();
+      setStoreAssets(dados.assets || []);
     } finally {
       setMaterialsLoading(false);
     }
@@ -917,45 +912,24 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
       return;
     }
 
-    const supabase = createClient();
     setMaterialsSaving(true);
 
     try {
-      await ensureStorageBuckets();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Nao autenticado");
-
-      const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
-
-      for (const [index, file] of materialFiles.entries()) {
-        const ext = file.name.split(".").pop() || "png";
-        const filePath = `${user.id}/${selectedStore}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("store-assets")
-          .upload(filePath, file, { upsert: false });
-
-        if (uploadError) {
-          throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
-        }
-
-        recordsToInsert.push({
-          store_id: selectedStore,
-          file_path: filePath,
-          label: file.name,
+      // O endpoint grava o arquivo e o registro na mesma chamada, e monta o
+      // caminho com o id do usuario, que e o que a policy do bucket exige.
+      for (const file of materialFiles) {
+        const form = new FormData();
+        form.append("storeId", selectedStore);
+        form.append("bucket", "store-assets");
+        form.append("file", file);
+        form.append("label", file.name);
+        const resposta = await fetch("/api/store-assets", {
+          method: "POST",
+          body: form,
         });
-      }
-
-      if (recordsToInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from("store_assets")
-          .insert(recordsToInsert);
-
-        if (insertError) {
-          throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
+        if (!resposta.ok) {
+          const dados = await resposta.json().catch(() => ({}));
+          throw new Error(dados.error || "Erro no upload dos materiais.");
         }
       }
 
@@ -973,11 +947,12 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
   async function handleRemoveMaterial(asset: StoreAsset) {
     if (!confirm("Remover este material da marca?")) return;
 
-    const supabase = createClient();
-    const [{ error: dbError }, { error: storageError }] = await Promise.all([
-      supabase.from("store_assets").delete().eq("id", asset.id),
-      supabase.storage.from("store-assets").remove([asset.file_path]),
-    ]);
+    const respostaRemocao = await fetch(
+      `/api/store-assets?id=${encodeURIComponent(asset.id)}&filePath=${encodeURIComponent(asset.file_path)}`,
+      { method: "DELETE" }
+    );
+    const dbError = respostaRemocao.ok ? null : new Error("falhou");
+    const storageError = null;
 
     if (dbError) {
       toast.error("Nao foi possivel remover o material.");
@@ -1014,7 +989,6 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
     }
 
     async function loadLogos() {
-      const supabase = createClient();
       const logos: AvailableLogo[] = [];
 
       // Main store logo
@@ -1027,12 +1001,13 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
         });
       }
 
-      // Additional logos from store_assets
-      const { data: assets } = await supabase
-        .from("store_assets")
-        .select("id, file_path, label")
-        .eq("store_id", selectedStore)
-        .order("created_at", { ascending: false });
+      // Logos adicionais, gravados como material com rótulo "logo:".
+      const resposta = await fetch(
+        `/api/store-assets?storeId=${encodeURIComponent(selectedStore)}`
+      );
+      const assets = resposta.ok
+        ? ((await resposta.json()).assets as { file_path: string; label: string }[])
+        : null;
 
       if (assets) {
         for (const asset of assets) {
@@ -1561,18 +1536,21 @@ function ProductsPageContent({ initialStores }: { initialStores: PickerStore[] }
         | { ok?: boolean; reason?: string }
         | undefined;
 
-      const supabase = createClient();
-      await supabase.from("products").insert({
-        store_id: selectedStore,
-        aliexpress_url: url,
-        shopify_product_id: created?.product?.id || null,
-        title: publishTitle,
-        original_title: product.title,
-        description: publishDescriptionHtml,
-        original_description: product.description || "",
-        price: product.price,
-        images: product.images.map((src) => brandedImages[src] || generatedImages[src] || src),
-        status: publishToStorefront ? "published" : "optimized",
+      await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          store_id: selectedStore,
+          aliexpress_url: url,
+          shopify_product_id: created?.product?.id || null,
+          title: publishTitle,
+          original_title: product.title,
+          description: publishDescriptionHtml,
+          original_description: product.description || "",
+          price: product.price,
+          images: product.images.map((src) => brandedImages[src] || generatedImages[src] || src),
+          status: publishToStorefront ? "published" : "optimized",
+        }),
       });
 
       setPublished(true);

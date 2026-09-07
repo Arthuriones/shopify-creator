@@ -1,0 +1,102 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+
+/**
+ * Materiais da marca de uma loja: listar, enviar e apagar.
+ *
+ * Existe para as telas pararem de falar com o Supabase pelo navegador. Cada
+ * tela que importava o cliente do browser carregava 59 KB comprimidos so por
+ * causa disso -- e o RLS ja garante que o usuario so alcanca as proprias
+ * lojas, aqui pela sessao em cookie.
+ */
+export async function GET(request: NextRequest) {
+  const storeId = request.nextUrl.searchParams.get("storeId");
+  if (!storeId) {
+    return NextResponse.json({ error: "storeId e obrigatorio." }, { status: 400 });
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("store_assets")
+    .select("id, store_id, file_path, label, created_at")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: "Falha ao listar materiais." }, { status: 500 });
+  }
+  return NextResponse.json({ assets: data || [] });
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const form = await request.formData();
+  const storeId = String(form.get("storeId") || "");
+  const bucket = String(form.get("bucket") || "store-assets");
+  const label = String(form.get("label") || "");
+  const arquivo = form.get("file");
+
+  if (!storeId || !(arquivo instanceof File)) {
+    return NextResponse.json(
+      { error: "storeId e arquivo sao obrigatorios." },
+      { status: 400 }
+    );
+  }
+  // O caminho comeca com o id do usuario porque a policy do bucket casa
+  // foldername[1] com auth.uid(). Fora desse formato o upload e recusado.
+  const nome = arquivo.name.replace(/[^\w.-]/g, "_");
+  const path = `${user.id}/${storeId}/${Date.now()}-${nome}`;
+
+  const { error: erroUpload } = await supabase.storage
+    .from(bucket)
+    .upload(path, arquivo, { upsert: true, contentType: arquivo.type || undefined });
+
+  if (erroUpload) {
+    return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 });
+  }
+
+  // store-logos guarda so o caminho na loja; store-assets vira linha propria.
+  if (bucket === "store-assets") {
+    const { error } = await supabase
+      .from("store_assets")
+      .insert({ store_id: storeId, file_path: path, label: label || nome });
+    if (error) {
+      return NextResponse.json(
+        { error: "Arquivo enviado, mas falhou ao registrar." },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json({ path });
+}
+
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const id = searchParams.get("id");
+  const filePath = searchParams.get("filePath");
+  const bucket = searchParams.get("bucket") || "store-assets";
+  if (!id || !filePath) {
+    return NextResponse.json(
+      { error: "id e filePath sao obrigatorios." },
+      { status: 400 }
+    );
+  }
+
+  const supabase = await createClient();
+  const [{ error: erroBanco }, { error: erroArquivo }] = await Promise.all([
+    supabase.from("store_assets").delete().eq("id", id),
+    supabase.storage.from(bucket).remove([filePath]),
+  ]);
+
+  if (erroBanco || erroArquivo) {
+    return NextResponse.json({ error: "Falha ao remover o material." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}

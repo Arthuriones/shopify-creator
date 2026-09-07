@@ -42,7 +42,6 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import { getPublicAppUrl } from "@/lib/public-url";
 import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { SHOPIFY_SCOPES_STRING } from "@/lib/shopify/scopes";
@@ -176,13 +175,6 @@ function getAssetUrl(filePath: string): string {
 }
 
 
-async function ensureStorageBuckets() {
-  const res = await fetch("/api/storage/ensure-buckets", { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || "Nao foi possivel preparar o storage.");
-  }
-}
 
 function normalizeStorePricingDefaults(
   store: Omit<
@@ -346,31 +338,30 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
   async function loadStores() {
     // Recalcula tambem o papel de cada loja, que e derivado das rotas no
-    // servidor. Sem isto, uma loja recem-conectada ficaria em "Fora de
-    // rota" ate a proxima navegacao.
+    // servidor. Sem isto, uma loja recem-conectada ficaria em "Fora de rota"
+    // ate a proxima navegacao.
     router.refresh();
     setLoadingStores(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, target_language, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      const fallback = await supabase
-        .from("stores")
-        .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
-        .order("created_at", { ascending: false });
-
-      if (fallback.data) {
-        setStores(fallback.data.map((store) => normalizeStorePricingDefaults(store)));
-      }
+    try {
+      const lista = await buscarLojas();
+      if (lista) setStores(lista);
+    } finally {
       setLoadingStores(false);
-      return;
     }
+  }
 
-    if (data) setStores(data.map((store) => normalizeStorePricingDefaults(store)));
-    setLoadingStores(false);
+  /** Lista as lojas pelo endpoint, sem cliente Supabase no navegador. */
+  async function buscarLojas(): Promise<ConnectedStore[] | null> {
+    try {
+      const resposta = await fetch("/api/stores");
+      if (!resposta.ok) return null;
+      const dados = await resposta.json();
+      return (dados.stores || []).map((loja: ConnectedStore) =>
+        normalizeStorePricingDefaults(loja)
+      );
+    } catch {
+      return null;
+    }
   }
 
   async function handleConnect(e: React.FormEvent) {
@@ -429,38 +420,22 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
   }
 
   async function loadStoresAndReturn(): Promise<ConnectedStore[] | null> {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("stores")
-      .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, target_language, currency_code, auto_convert_prices, currency_rate, price_markup_percent, created_at")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      const fallback = await supabase
-        .from("stores")
-        .select("id, name, shop_domain, theme_id, niche, target_audience, brand_voice, store_description, logo_path, created_at")
-        .order("created_at", { ascending: false });
-
-      if (!fallback.data) return null;
-      const normalized = fallback.data.map((store) => normalizeStorePricingDefaults(store));
-      setStores(normalized);
-      return normalized;
-    }
-
-    if (!data) return null;
-    const normalized = data.map((store) => normalizeStorePricingDefaults(store));
-    setStores(normalized);
-    return normalized;
+    const lista = await buscarLojas();
+    if (lista) setStores(lista);
+    return lista;
   }
 
   async function loadStoreAssets(storeId: string) {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("store_assets")
-      .select("id, store_id, file_path, label, created_at")
-      .eq("store_id", storeId)
-      .order("created_at", { ascending: false });
-    setStoreAssets(data || []);
+    try {
+      const resposta = await fetch(
+        `/api/store-assets?storeId=${encodeURIComponent(storeId)}`
+      );
+      if (!resposta.ok) return;
+      const dados = await resposta.json();
+      setStoreAssets(dados.assets || []);
+    } catch {
+      // best-effort: a tela abre sem os materiais em vez de falhar
+    }
   }
 
   async function openProfileEditor(store: ConnectedStore) {
@@ -573,12 +548,12 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
   async function handleRemoveAsset(asset: StoreAsset) {
     if (!confirm("Remover este material da marca?")) return;
 
-    const supabase = createClient();
-
-    const [{ error: dbError }, { error: storageError }] = await Promise.all([
-      supabase.from("store_assets").delete().eq("id", asset.id),
-      supabase.storage.from("store-assets").remove([asset.file_path]),
-    ]);
+    const resposta = await fetch(
+      `/api/store-assets?id=${encodeURIComponent(asset.id)}&filePath=${encodeURIComponent(asset.file_path)}`,
+      { method: "DELETE" }
+    );
+    const dbError = resposta.ok ? null : new Error("falhou");
+    const storageError = null;
 
     if (dbError) {
       toast.error("Nao foi possivel remover o material.");
@@ -598,164 +573,89 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
     const parsedCurrencyRate = Number(profileCurrencyRate.replace(",", "."));
     if (!Number.isFinite(parsedCurrencyRate) || parsedCurrencyRate <= 0) {
-      toast.error("Taxa de conversao deve ser maior que zero.");
+      toast.error("Taxa de conversão deve ser maior que zero.");
       return;
     }
-    const parsedMarkupPercent = Number(
-      profilePriceMarkupPercent.replace(",", ".")
-    );
+    const parsedMarkupPercent = Number(profilePriceMarkupPercent.replace(",", "."));
     if (!Number.isFinite(parsedMarkupPercent) || parsedMarkupPercent < -100) {
-      toast.error("Markup invalido. Use um valor maior que -100.");
+      toast.error("Markup inválido. Use um valor maior que -100.");
       return;
     }
 
     setProfileSaving(true);
-    const supabase = createClient();
 
     try {
-      if (logoFile || assetFiles.length > 0) {
-        await ensureStorageBuckets();
-      }
-
       let logoPath = editingStore.logo_path;
-      let userId: string | null = null;
 
-      if (logoFile || assetFiles.length > 0) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error("Nao autenticado");
-        userId = user.id;
+      /** Envia um arquivo pelo endpoint e devolve o caminho gravado. */
+      async function enviar(file: File, bucket: string, label?: string) {
+        const form = new FormData();
+        form.append("storeId", editingStore!.id);
+        form.append("bucket", bucket);
+        form.append("file", file);
+        if (label) form.append("label", label);
+        const resposta = await fetch("/api/store-assets", {
+          method: "POST",
+          body: form,
+        });
+        if (!resposta.ok) {
+          const dados = await resposta.json().catch(() => ({}));
+          throw new Error(dados.error || "Falha ao enviar o arquivo.");
+        }
+        const dados = await resposta.json();
+        return dados.path as string;
       }
 
-      // Upload logo se selecionou novo arquivo
       if (logoFile) {
         setLogoUploading(true);
-        if (!userId) throw new Error("Nao autenticado");
-        const ext = logoFile.name.split(".").pop() || "png";
-        const path = `${userId}/${editingStore.id}/logo.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("store-logos")
-          .upload(path, logoFile, { upsert: true });
-
-        if (uploadError) {
-          throw new Error(`Erro no upload: ${uploadError.message}`);
-        }
-
-        logoPath = path;
+        logoPath = await enviar(logoFile, "store-logos");
         setLogoUploading(false);
       }
 
-      // Upload additional logos as store_assets with label "logo"
+      // Logos adicionais e materiais viram linha em store_assets; o endpoint
+      // grava o arquivo e o registro na mesma chamada.
       if (additionalLogoFiles.length > 0) {
-        if (!userId) throw new Error("Nao autenticado");
-        const logoRecords: { store_id: string; file_path: string; label: string }[] = [];
-
-        for (const [idx, file] of additionalLogoFiles.entries()) {
-          const ext = file.name.split(".").pop() || "png";
-          const path = `${userId}/${editingStore.id}/logo-${Date.now()}-${idx}.${ext}`;
-
-          const { error: upErr } = await supabase.storage
-            .from("store-logos")
-            .upload(path, file, { upsert: false });
-
-          if (upErr) {
-            console.warn("Additional logo upload error:", upErr.message);
-            continue;
-          }
-
-          logoRecords.push({
-            store_id: editingStore.id,
-            file_path: path,
-            label: `logo:${file.name.replace(/\.[^.]+$/, "")}`,
-          });
+        setLogoUploading(true);
+        for (const file of additionalLogoFiles) {
+          await enviar(file, "store-assets", `logo:${file.name}`);
         }
-
-        if (logoRecords.length > 0) {
-          await supabase.from("store_assets").insert(logoRecords);
-        }
-        setAdditionalLogoFiles([]);
+        setLogoUploading(false);
       }
 
       if (assetFiles.length > 0) {
         setAssetUploading(true);
-        if (!userId) throw new Error("Nao autenticado");
-
-        const recordsToInsert: { store_id: string; file_path: string; label: string }[] = [];
-
-        for (const [index, file] of assetFiles.entries()) {
-          const ext = file.name.split(".").pop() || "png";
-          const path = `${userId}/${editingStore.id}/${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from("store-assets")
-            .upload(path, file, { upsert: false });
-
-          if (uploadError) {
-            throw new Error(`Erro no upload dos materiais: ${uploadError.message}`);
-          }
-
-          recordsToInsert.push({
-            store_id: editingStore.id,
-            file_path: path,
-            label: file.name,
-          });
+        for (const file of assetFiles) {
+          await enviar(file, "store-assets", file.name);
         }
-
-        if (recordsToInsert.length > 0) {
-          const { error: insertError } = await supabase
-            .from("store_assets")
-            .insert(recordsToInsert);
-          if (insertError) {
-            throw new Error(`Erro ao salvar materiais: ${insertError.message}`);
-          }
-        }
+        setAssetUploading(false);
       }
 
-      const brandVoice = profileVoice === "custom" ? profileCustomVoice : profileVoice;
-
-      const profilePayload = {
-        name: profileName.trim() || editingStore.name,
-        niche: profileNiche.trim(),
-        target_audience: profileAudience.trim() || null,
-        brand_voice: brandVoice || null,
-        store_description: profileDescription.trim() || null,
-        logo_path: logoPath,
-        target_language: profileTargetLanguage,
-        currency_code: profileCurrencyCode,
-        auto_convert_prices: profileAutoConvertPrices,
-        currency_rate: parsedCurrencyRate,
-        price_markup_percent: parsedMarkupPercent,
-      };
-
-      const { error } = await supabase
-        .from("stores")
-        .update(profilePayload)
-        .eq("id", editingStore.id);
-
-      if (error && /target_language/i.test(error.message)) {
-        const fallbackPayload: Partial<typeof profilePayload> = { ...profilePayload };
-        delete fallbackPayload.target_language;
-        const { error: fallbackError } = await supabase
-          .from("stores")
-          .update(fallbackPayload)
-          .eq("id", editingStore.id);
-
-        if (fallbackError) throw new Error(fallbackError.message);
-        toast.warning("Perfil salvo, mas aplique a migration 010 para salvar o idioma da loja.");
-      } else if (error) {
-        throw new Error(error.message);
+      const resposta = await fetch(`/api/stores/${editingStore.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName.trim() || editingStore.name,
+          logo_path: logoPath,
+          target_language: profileTargetLanguage,
+          currency_code: profileCurrencyCode,
+          auto_convert_prices: profileAutoConvertPrices,
+          currency_rate: parsedCurrencyRate,
+          price_markup_percent: parsedMarkupPercent,
+        }),
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => ({}));
+        throw new Error(dados.error || "Falha ao salvar a loja.");
       }
 
       await loadStores();
       await loadStoreAssets(editingStore.id);
       setAssetFiles([]);
+      setAdditionalLogoFiles([]);
       setProfileOpen(false);
-      toast.success("Perfil da loja salvo!");
+      toast.success("Configurações salvas.");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao salvar perfil";
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
       setProfileSaving(false);
       setLogoUploading(false);

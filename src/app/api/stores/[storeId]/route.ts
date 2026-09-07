@@ -73,3 +73,54 @@ export async function DELETE(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+
+/**
+ * Atualiza os campos editaveis da loja (nome, logo, idioma, preco).
+ *
+ * Aqui em vez de no navegador para a tela de lojas parar de importar o
+ * cliente Supabase -- eram 59 KB comprimidos so por causa dessas gravacoes.
+ * A allowlist abaixo importa: sem ela, um PATCH poderia mexer em client_id,
+ * client_secret ou user_id.
+ */
+const CAMPOS_EDITAVEIS = [
+  "name",
+  "logo_path",
+  "target_language",
+  "currency_code",
+  "auto_convert_prices",
+  "currency_rate",
+  "price_markup_percent",
+] as const;
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ storeId: string }> }
+) {
+  const { storeId } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const patch: Record<string, unknown> = {};
+  for (const campo of CAMPOS_EDITAVEIS) {
+    if (campo in body) patch[campo] = body[campo];
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "Nada para atualizar." }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("stores")
+    .update(patch)
+    .eq("id", storeId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: "Falha ao salvar a loja." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}
