@@ -134,11 +134,11 @@ export function Sidebar({ dados }: { dados: SidebarData }) {
           </span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
+        <nav className="flex-1 overflow-y-auto px-2 py-2.5">
           {NAV.map((secao, i) => (
-            <div key={secao.label ?? `s${i}`} className={i === 0 ? "" : "mt-5"}>
+            <div key={secao.label ?? `s${i}`} className={i === 0 ? "" : "mt-3"}>
               {secao.label && (
-                <div className="px-2.5 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.13em] text-t4">
+                <div className="px-2 pb-[5px] pt-3.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-t4">
                   {t(secao.label)}
                 </div>
               )}
@@ -151,7 +151,7 @@ export function Sidebar({ dados }: { dados: SidebarData }) {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "group flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[12.5px] transition-colors",
+                        "group flex items-center gap-[9px] rounded-md px-2 py-1.5 text-[13px] transition-colors",
                         on
                           ? "bg-[var(--nav-active)] font-medium text-ink"
                           : "text-t2 hover:bg-hover hover:text-ink"
@@ -164,7 +164,7 @@ export function Sidebar({ dados }: { dados: SidebarData }) {
                       />
                       <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
                       {valor ? (
-                        <span className="font-mono text-[10.5px] tabular-nums text-t4">
+                        <span className="font-mono text-[10px] tabular-nums text-t4">
                           {valor}
                         </span>
                       ) : null}

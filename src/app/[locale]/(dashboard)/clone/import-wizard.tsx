@@ -1,46 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Image from "next/image";
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Copy,
-  Download,
-  GitBranch,
-  Image as ImageIcon,
-  Loader2,
-  PackageCheck,
-  SlidersHorizontal,
-  Store,
-  WandSparkles,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   MAX_CLONE_LIMIT,
   TransformedPreviewCard,
   formatStoreLabel,
-  parseCloneLimit,
 } from "./clone-shared";
 import type {
   CloneApplyProgress,
@@ -64,9 +30,124 @@ const CustomPromptDialog = dynamic(
 /**
  * O assistente de importação.
  *
- * Mora em módulo próprio para não entrar no primeiro download da tela: são
- * mil linhas que só existem depois que alguém abre o diálogo.
+ * Passo a passo na própria página, não em diálogo: a importação é o trabalho
+ * da tela, e uma janela por cima só encolhia o espaço da lista de produtos.
+ *
+ * Os números dos passos são internos: 1 destino, 2 escopo, 3 origem,
+ * 4 seleção (só em massa), 5 opções, 6 revisão. Quem importa um produto só
+ * pula o 4 -- não há lista para escolher.
  */
+
+const PASSO = {
+  DESTINO: 1,
+  ESCOPO: 2,
+  ORIGEM: 3,
+  SELECAO: 4,
+  OPCOES: 5,
+  REVISAO: 6,
+} as const;
+
+// ---------------------------------------------------------------- peças
+
+/** Bolinha de seleção do design: anel interno na cor da superfície. */
+function Radio({ on }: { on: boolean }) {
+  return (
+    <span
+      className="h-3.5 w-3.5 shrink-0 rounded-full"
+      style={{
+        border: `1px solid ${on ? "var(--solid)" : "var(--control-border)"}`,
+        background: on ? "var(--solid)" : "var(--surface)",
+        boxShadow: "inset 0 0 0 2.5px var(--surface-2)",
+      }}
+      aria-hidden
+    />
+  );
+}
+
+function Toggle({
+  on,
+  onChange,
+  label,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className="relative h-5 w-[34px] shrink-0 rounded-[11px] transition-colors"
+      style={{
+        border: on ? "0" : "1px solid var(--control-border)",
+        background: on ? "var(--solid)" : "var(--surface)",
+      }}
+    >
+      <span
+        className="absolute top-0.5 block rounded-full transition-all"
+        style={
+          on
+            ? { right: 2, width: 16, height: 16, background: "var(--surface)" }
+            : { left: 2, width: 14, height: 14, background: "var(--control-border)" }
+        }
+      />
+    </button>
+  );
+}
+
+/** Linha de opção: título, explicação e o interruptor à direita. */
+function OptionRow({
+  title,
+  hint,
+  on,
+  onChange,
+  children,
+}: {
+  title: string;
+  hint: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-[var(--border-subtle)] last:border-b-0">
+      <div className="flex items-center gap-3.5 px-[15px] py-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[12.5px] font-semibold text-ink">{title}</div>
+          <div className="text-[12px] text-t3">{hint}</div>
+        </div>
+        <Toggle on={on} onChange={onChange} label={title} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Titulo({ title, hint }: { title: string; hint: string }) {
+  return (
+    <>
+      <h2 className="mb-[3px] text-[15px] font-semibold text-ink">{title}</h2>
+      <p className="mb-3 text-[12.5px] text-t2">{hint}</p>
+    </>
+  );
+}
+
+function Secao({ title }: { title: string }) {
+  return <h3 className="mb-[9px] mt-[18px] text-[12.5px] font-semibold text-ink">{title}</h3>;
+}
+
+const CAMPO =
+  "h-[34px] w-full rounded-md border border-[var(--control-border)] bg-surface px-[11px] text-[12px] text-ink outline-none focus:border-[var(--border-strong)]";
+const BOTAO_SEC =
+  "h-[30px] rounded-md border border-[var(--border-strong)] bg-surface px-[13px] text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-2 disabled:opacity-50";
+const BOTAO_PRI =
+  "h-[30px] rounded-md px-[13px] text-[12.5px] font-semibold text-[var(--on-solid)] transition-colors disabled:opacity-60";
+
+// ---------------------------------------------------------------- props
+
 export interface ImportWizardProps {
   applyLoading: boolean;
   applyLogoToCloneImages: boolean;
@@ -85,7 +166,6 @@ export interface ImportWizardProps {
   importMode: ImportMode;
   importScope: "all" | "collection";
   importStep: number;
-  importWizardOpen: boolean;
   inventoryMode: InventoryMode;
   inventoryQuantity: string;
   limit: string;
@@ -113,7 +193,6 @@ export interface ImportWizardProps {
   setDuplicatePolicy: React.Dispatch<React.SetStateAction<string>>;
   setImportScope: React.Dispatch<React.SetStateAction<"all" | "collection">>;
   setImportStep: React.Dispatch<React.SetStateAction<number>>;
-  setImportWizardOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setInventoryMode: React.Dispatch<React.SetStateAction<InventoryMode>>;
   setInventoryQuantity: React.Dispatch<React.SetStateAction<string>>;
   setLimit: React.Dispatch<React.SetStateAction<string>>;
@@ -163,7 +242,6 @@ export function ImportWizard({
   importMode,
   importScope,
   importStep,
-  importWizardOpen,
   inventoryMode,
   inventoryQuantity,
   limit,
@@ -191,7 +269,6 @@ export function ImportWizard({
   setDuplicatePolicy,
   setImportScope,
   setImportStep,
-  setImportWizardOpen,
   setInventoryMode,
   setInventoryQuantity,
   setLimit,
@@ -222,1038 +299,870 @@ export function ImportWizard({
   translateVariantOptions,
   visiblePreview,
 }: ImportWizardProps) {
+  const massa = importMode === "bulk";
+  const escopo: "product" | "collection" | "store" = !massa
+    ? "product"
+    : importScope === "collection"
+      ? "collection"
+      : "store";
+
+  const passos = massa
+    ? [
+        [PASSO.DESTINO, "Destino"],
+        [PASSO.ESCOPO, "Escopo"],
+        [PASSO.ORIGEM, "Origem"],
+        [PASSO.SELECAO, "Seleção"],
+        [PASSO.OPCOES, "Opções"],
+        [PASSO.REVISAO, "Revisão"],
+      ]
+    : [
+        [PASSO.DESTINO, "Destino"],
+        [PASSO.ESCOPO, "Escopo"],
+        [PASSO.ORIGEM, "Origem"],
+        [PASSO.OPCOES, "Opções"],
+        [PASSO.REVISAO, "Revisão"],
+      ];
+
+  const ordem = passos.map(([n]) => n as number);
+  const indiceAtual = Math.max(0, ordem.indexOf(importStep));
+
+  /** O que trava o "Continuar" em cada passo, e a explicação do porquê. */
+  const trava =
+    importStep === PASSO.DESTINO && !targetStoreId
+      ? "Escolha a loja de destino."
+      : importStep === PASSO.ORIGEM && !source.trim()
+        ? "Cole o link da origem."
+        : importStep === PASSO.ORIGEM && escopo === "collection" && !selectedSourceCollection
+          ? "Escolha a coleção."
+          : importStep === PASSO.SELECAO && preview.length > 0 && selectedProductHandles.length === 0
+            ? "Selecione ao menos um produto."
+            : null;
+
+  function avancar() {
+    if (trava) return;
+    const proximo = ordem[Math.min(ordem.length - 1, indiceAtual + 1)];
+    setImportStep(proximo);
+  }
+
+  function voltar() {
+    setImportStep(ordem[Math.max(0, indiceAtual - 1)]);
+  }
+
+  /** Trocar de escopo invalida qualquer catálogo já lido da origem antiga. */
+  function escolherEscopo(novo: "product" | "collection" | "store") {
+    setPreview([]);
+    setPreviewKey("");
+    setSelectedSourceCollection(null);
+    if (novo === "product") {
+      openInlineImport("single");
+      setImportScope("all");
+      return;
+    }
+    openInlineImport("bulk");
+    setImportScope(novo === "collection" ? "collection" : "all");
+  }
+
+  const dominioOrigem = (source || "").replace(/^https?:\/\//, "").split("/")[0];
+  const escolhidos = preview.filter(
+    (p) => selectedProductHandles.length === 0 || selectedProductHandles.includes(p.handle)
+  );
+  const variantesEscolhidas = escolhidos.reduce((s, p) => s + p.variants.length, 0);
+  const todosVisiveisMarcados =
+    visiblePreview.length > 0 &&
+    visiblePreview.every((p) => selectedProductHandles.includes(p.handle));
+
+  const rotuloEscopo =
+    escopo === "product"
+      ? "Produto único"
+      : escopo === "collection"
+        ? `Coleção: ${selectedSourceCollection?.title || "—"}`
+        : "Loja inteira";
+
+  const marcas = [
+    publishToStorefront && "Publicar",
+    translateCloneProducts && "Traduzir",
+    translateVariantOptions && "Traduzir variações",
+    neutralizeCloneProducts && "Neutralizar",
+    removeExternalReferencesCloneProducts && "Limpar refs externas",
+    applyLogoToCloneImages && "Aplicar logo",
+    createRoutingConfig && "Preparar rota",
+    inventoryMode === "tracked" && `Estoque: ${inventoryQuantity}`,
+    duplicatePolicy === "skip" ? "Pular duplicados" : "Criar duplicados",
+  ].filter(Boolean) as string[];
+
   return (
-      <Dialog open={importWizardOpen} onOpenChange={setImportWizardOpen}>
-        <DialogContent
-          className="max-h-[88vh] overflow-y-auto sm:max-w-2xl"
-          showCloseButton={!applyLoading}
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Download className="h-4 w-4 text-primary" />
-              {importMode === "single"
-                ? "Importar produto individual"
-                : "Importar produtos em massa"}
-            </DialogTitle>
-            <DialogDescription>
-              Siga os passos: origem, seleção, opções e importação.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Alterna individual / massa */}
-          <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
+    <div className="flex max-w-[760px] flex-col gap-[18px]">
+      {/* Trilha dos passos. Passo já vencido volta com um clique; passo à
+          frente não, porque ele depende do que ainda não foi preenchido. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {passos.map(([n, rotulo], i) => {
+          const numero = n as number;
+          const feito = i < indiceAtual;
+          const atual = numero === importStep;
+          return (
             <button
+              key={numero}
               type="button"
-              onClick={() => {
-                openInlineImport("single");
-                setImportStep(1);
+              onClick={() => (feito ? setImportStep(numero) : undefined)}
+              className="flex items-center gap-[7px] py-0.5 pl-0.5 pr-2 text-[12.5px]"
+              style={{
+                color: atual ? "var(--ink)" : feito ? "var(--t1)" : "var(--t4)",
+                fontWeight: atual ? 600 : 500,
+                cursor: feito ? "pointer" : "default",
               }}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-                importMode === "single"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
             >
-              {t("mode_individual")}
+              <span
+                className="flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px]"
+                style={{
+                  border: `1px solid ${feito ? "var(--ok-border)" : atual ? "var(--solid)" : "var(--border)"}`,
+                  background: feito ? "var(--ok-bg)" : atual ? "var(--solid)" : "var(--surface)",
+                  color: feito ? "var(--ok)" : atual ? "var(--on-solid)" : "var(--t4)",
+                }}
+              >
+                {feito ? "✓" : i + 1}
+              </span>
+              {rotulo as string}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                openInlineImport("bulk");
-                setImportStep(1);
-              }}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-                importMode === "bulk"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t("mode_bulk")}
-            </button>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Stepper */}
-          <div className="flex items-center gap-1.5">
-            {(importMode === "bulk"
-              ? [
-                  [1, t("step_origin")],
-                  [2, t("step_products")],
-                  [3, t("step_options")],
-                  [4, t("step_review")],
-                ]
-              : [
-                  [1, t("step_origin")],
-                  [3, t("step_options")],
-                  [4, t("step_review")],
-                ]
-            ).map(([n, label]) => {
-              const active = importStep === n;
-              const done = importStep > Number(n);
+      {/* ---------------------------------------------------- 1. destino */}
+      {importStep === PASSO.DESTINO && (
+        <div>
+          <Titulo
+            title="Para qual loja vai importar?"
+            hint="Os produtos serão criados nesta loja. Depois você liga por SKU nos checkouts."
+          />
+          {stores.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-surface px-8 py-11 text-center">
+              <p className="text-[15px] font-semibold text-ink">Nenhuma loja conectada</p>
+              <p className="mx-auto mt-1.5 max-w-[360px] text-[12.5px] text-t2">
+                Conecte uma loja Shopify antes de importar — é nela que os produtos
+                serão criados.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-[7px]">
+              {stores.map((loja) => {
+                const on = targetStoreId === loja.id;
+                return (
+                  <button
+                    key={loja.id}
+                    type="button"
+                    onClick={() => setTargetStoreId(loja.id)}
+                    className="flex items-center gap-[11px] rounded-[7px] px-[13px] py-2.5 text-left transition-colors hover:border-[var(--border-strong)]"
+                    style={{
+                      border: `1px solid ${on ? "var(--solid)" : "var(--border)"}`,
+                      background: on ? "var(--surface-2)" : "var(--surface)",
+                    }}
+                  >
+                    <Radio on={on} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-semibold text-ink">
+                        {loja.name}
+                      </span>
+                      <span className="block truncate font-mono text-[10.5px] text-t3">
+                        {loja.shop_domain}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ----------------------------------------------------- 2. escopo */}
+      {importStep === PASSO.ESCOPO && (
+        <div>
+          <Titulo
+            title="Quanto do catálogo?"
+            hint="Isso define o tipo de link que vamos pedir no próximo passo. Variantes acompanham os produtos."
+          />
+          <div className="grid grid-cols-1 gap-[9px] sm:grid-cols-3">
+            {(
+              [
+                ["product", "Produto único", "Link direto de um produto."],
+                ["collection", "Coleção", "Todos os produtos de uma coleção."],
+                ["store", "Loja inteira", "Catálogo completo da origem."],
+              ] as const
+            ).map(([id, rotulo, desc]) => {
+              const on = escopo === id;
               return (
-                <div
-                  key={String(n)}
-                  className="flex flex-1 items-center gap-1.5"
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => escolherEscopo(id)}
+                  className="flex flex-col gap-[5px] rounded-lg px-3.5 py-[13px] text-left transition-colors hover:border-[var(--border-strong)]"
+                  style={{
+                    border: `1px solid ${on ? "var(--solid)" : "var(--border)"}`,
+                    background: on ? "var(--surface-2)" : "var(--surface)",
+                  }}
                 >
-                  <div
-                    className={cn(
-                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                      done && "bg-primary/15 text-primary",
-                      active && "bg-primary text-primary-foreground",
-                      !active && !done && "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : String(n)}
-                  </div>
-                  <span
-                    className={cn(
-                      "truncate text-xs",
-                      active
-                        ? "font-medium text-foreground"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {label}
+                  <span className="flex items-center gap-2">
+                    <Radio on={on} />
+                    <span className="text-[12.5px] font-semibold text-ink">{rotulo}</span>
                   </span>
-                </div>
+                  <span className="text-[12px] leading-[1.4] text-t3">{desc}</span>
+                </button>
               );
             })}
           </div>
+        </div>
+      )}
 
-          {/* Passo 1 - Origem e destino */}
-          {importStep === 1 && (
-            <div className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px]">
-                <div className="space-y-1.5">
-                  <Label htmlFor="wiz-source">
-                    {importMode === "single"
-                      ? t("source_url_label")
-                      : t("source_store_label")}
-                  </Label>
-                  <Input
-                    id="wiz-source"
-                    value={source}
-                    onChange={(event) => setSource(event.target.value)}
-                    placeholder={
-                      importMode === "single"
-                        ? "https://loja.com/products/produto"
-                        : "Shopify ou WooCommerce: dominio.com"
-                    }
-                  />
-                  {importMode === "bulk" && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Detecta automaticamente Shopify ou WooCommerce pelo link.
-                    </p>
-                  )}
-                </div>
-                {importMode === "bulk" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wiz-limit">{t("limit_label")}</Label>
-                    <Input
-                      id="wiz-limit"
-                      value={limit}
-                      onChange={(event) => setLimit(event.target.value)}
-                      inputMode="numeric"
-                      min={1}
-                      max={MAX_CLONE_LIMIT}
-                      type="number"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label>{t("target_store_label")}</Label>
-                  <Select
-                    value={targetStoreId}
-                    onValueChange={(value) => setTargetStoreId(value || "")}
-                  >
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue placeholder="Selecione uma loja">
-                        {formatStoreLabel(selectedTarget)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      {stores.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          {formatStoreLabel(store)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t("duplicates_label")}</Label>
-                  <Select
-                    value={duplicatePolicy}
-                    onValueChange={(value) =>
-                      setDuplicatePolicy(value || "skip")
-                    }
-                  >
-                    <SelectTrigger className="w-full min-w-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="skip">{t("skip_existing")}</SelectItem>
-                      <SelectItem value="create">{t("create_anyway")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Passo 2 - Selecionar produtos (massa) */}
-          {importStep === 2 && importMode === "bulk" && (
-            <div className="space-y-3">
-              {/* Escopo: loja inteira ou uma colecao */}
-              <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
-                <div className="inline-flex w-fit rounded-md border border-border bg-muted p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImportScope("all");
-                      setSelectedSourceCollection(null);
-                      setPreview([]);
-                      setPreviewKey("");
-                    }}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      importScope === "all"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {t("scope_all")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImportScope("collection");
-                      setPreview([]);
-                      setPreviewKey("");
-                      if (sourceCollectionOptions.length === 0) {
-                        void loadSourceCollectionOptions();
-                      }
-                    }}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      importScope === "collection"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {t("scope_collection")}
-                  </button>
-                </div>
-
-                {importScope === "collection" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        Escolha a coleção da loja de origem para importar só ela.
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={loadSourceCollectionOptions}
-                        disabled={loadingSourceCollections || !source.trim()}
-                      >
-                        {loadingSourceCollections ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Download className="h-3.5 w-3.5" />
-                        )}
-                        Recarregar
-                      </Button>
-                    </div>
-                    {sourceCollectionOptions.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-border/70 bg-background/45 p-4 text-center text-xs text-muted-foreground">
-                        {loadingSourceCollections
-                          ? "Carregando coleções…"
-                          : "Nenhuma coleção carregada."}
-                      </div>
-                    ) : (
-                      <div className="max-h-40 space-y-1 overflow-auto">
-                        {sourceCollectionOptions.map((collection) => (
-                          <button
-                            type="button"
-                            key={collection.handle}
-                            onClick={() => {
-                              setSelectedSourceCollection(collection);
-                              setPreview([]);
-                              setPreviewKey("");
-                            }}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors",
-                              selectedSourceCollection?.handle ===
-                                collection.handle
-                                ? "border-primary/60 bg-primary/10"
-                                : "border-border/60 hover:bg-muted/40"
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                                selectedSourceCollection?.handle ===
-                                  collection.handle
-                                  ? "border-primary bg-primary"
-                                  : "border-muted-foreground/40"
-                              )}
-                            >
-                              {selectedSourceCollection?.handle ===
-                                collection.handle && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-medium text-foreground">
-                                {collection.title}
-                              </span>
-                              <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                                /collections/{collection.handle}
-                                {typeof collection.productsCount === "number"
-                                  ? ` · ${collection.productsCount} produto(s)`
-                                  : ""}
-                              </span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePreview}
-                  disabled={
-                    previewLoading ||
-                    !source.trim() ||
-                    (importScope === "collection" && !selectedSourceCollection)
-                  }
-                >
-                  {previewLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <WandSparkles className="h-4 w-4" />
-                  )}
-                  {importScope === "collection"
-                    ? t("analyze_collection_btn")
-                    : t("analyze_origin_btn")}
-                </Button>
-                {preview.length > 0 && (
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={
-                        visiblePreview.length > 0 &&
-                        visiblePreview.every((product) =>
-                          selectedProductHandles.includes(product.handle)
-                        )
-                      }
-                      onChange={(event) =>
-                        toggleAllProducts(event.target.checked)
-                      }
-                      className="h-4 w-4 accent-primary"
-                    />
-                    {t("select_all")}
-                  </label>
-                )}
-              </div>
-
-              {/* Busca + ordenacao + filtro por categoria da lista carregada */}
-              {preview.length > 0 && (
-                <div className="space-y-2 rounded-lg border border-border/60 bg-background/45 p-3">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      value={previewSearch}
-                      onChange={(event) => setPreviewSearch(event.target.value)}
-                      placeholder="Buscar por título, handle ou SKU"
-                      className="h-9 flex-1 text-sm"
-                    />
-                    <Select
-                      value={previewSort}
-                      onValueChange={(value) =>
-                        setPreviewSort(value as PreviewSort)
-                      }
-                    >
-                      <SelectTrigger className="h-9 w-full sm:w-56">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        <SelectItem value="source">Ordem da origem</SelectItem>
-                        <SelectItem value="recent">Mais recentes</SelectItem>
-                        <SelectItem value="title_asc">Título (A-Z)</SelectItem>
-                        <SelectItem value="title_desc">Título (Z-A)</SelectItem>
-                        <SelectItem value="price_asc">Menor preço</SelectItem>
-                        <SelectItem value="price_desc">Maior preço</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {previewCollectionOptions.length > 0 && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-medium text-muted-foreground">
-                          Filtrar por categoria
-                        </p>
-                        {previewCollections.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewCollections([])}
-                            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                          >
-                            Limpar
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex max-h-24 flex-wrap gap-1.5 overflow-auto">
-                        {previewCollectionOptions.map((collection) => {
-                          const active = previewCollections.includes(
-                            collection.handle
-                          );
-                          return (
-                            <button
-                              key={collection.handle}
-                              type="button"
-                              onClick={() =>
-                                setPreviewCollections((current) =>
-                                  active
-                                    ? current.filter(
-                                        (item) => item !== collection.handle
-                                      )
-                                    : [...current, collection.handle]
-                                )
-                              }
-                              className={cn(
-                                "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
-                                active
-                                  ? "border-primary bg-primary/15 text-foreground"
-                                  : "border-border/70 text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              {collection.title}
-                              <span className="ml-1 opacity-60">
-                                {collection.count}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                {preview.length
-                  ? `${selectedProductHandles.length} selecionado(s) · exibindo ${visiblePreview.length} de ${preview.length}`
-                  : "Clique em analisar para carregar os produtos da origem."}
-              </p>
-              <div className="max-h-72 overflow-auto rounded-lg border border-border/60">
-                {preview.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground">
-                    {t("no_products_loaded")}
-                  </div>
-                ) : visiblePreview.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-muted-foreground">
-                    Nenhum produto corresponde ao filtro.
-                  </div>
-                ) : (
-                  visiblePreview.map((product) => (
-                    <label
-                      key={product.handle}
-                      className="grid cursor-pointer grid-cols-[24px_48px_minmax(0,1fr)] gap-3 border-b border-border/50 p-3 last:border-b-0 hover:bg-muted/35"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedProductHandles.includes(
-                          product.handle
-                        )}
-                        onChange={(event) =>
-                          toggleProductHandle(
-                            product.handle,
-                            event.target.checked
-                          )
-                        }
-                        className="mt-3 h-4 w-4 accent-primary"
-                      />
-                      <div className="relative h-12 w-12 overflow-hidden rounded-md border border-border/60 bg-muted">
-                        {product.images?.[0]?.src ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={product.images[0].src}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {product.title}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {product.variants.length} variante(s) ·{" "}
-                          {product.variants[0]?.price || "0.00"}
-                        </p>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Passo 3 - Opções */}
-          {importStep === 3 && (
-            <div className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={publishToStorefront}
-                    onChange={(event) =>
-                      setPublishToStorefront(event.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="block font-medium text-foreground">
-                      Publicar produto
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Online Store ao importar.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={translateCloneProducts}
-                    onChange={(event) =>
-                      setTranslateCloneProducts(event.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="block font-medium text-foreground">
-                      Traduzir produto
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Idioma da loja destino.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={translateVariantOptions}
-                    onChange={(event) =>
-                      setTranslateVariantOptions(event.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="block font-medium text-foreground">
-                      Traduzir variações
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      blue {"->"} azul, S/small {"->"} P.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={neutralizeCloneProducts}
-                    onChange={(event) => {
-                      setNeutralizeCloneProducts(event.target.checked);
-                      if (event.target.checked) {
-                        setRemoveExternalReferencesCloneProducts(false);
-                      }
-                    }}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="flex items-center gap-1.5 font-medium text-foreground">
-                      <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                      Neutralizar (stock)
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Remove marcas, inclusive do próprio produto.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={removeExternalReferencesCloneProducts}
-                    onChange={(event) => {
-                      setRemoveExternalReferencesCloneProducts(
-                        event.target.checked
-                      );
-                      if (event.target.checked) {
-                        setNeutralizeCloneProducts(false);
-                      }
-                    }}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="flex items-center gap-1.5 font-medium text-foreground">
-                      <WandSparkles className="h-3.5 w-3.5 text-primary" />
-                      Retirar referências externas
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Mantém marcas reais, limpa origem/vendedor.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={applyLogoToCloneImages}
-                    onChange={(event) =>
-                      setApplyLogoToCloneImages(event.target.checked)
-                    }
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="flex items-center gap-1.5 font-medium text-foreground">
-                      <ImageIcon className="h-3.5 w-3.5 text-primary" />
-                      Aplicar logo
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Marca as imagens em massa.
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              {(neutralizeCloneProducts ||
-                removeExternalReferencesCloneProducts) && (
-                <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 md:grid-cols-[minmax(0,1fr)_140px]">
-                  <div className="space-y-2">
-                    <div>
-                      <Label htmlFor="wiz-ai-media-limit">
-                        Mídias com IA por produto
-                      </Label>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        A IA processa só as primeiras; as outras seguem
-                        originais (controle de custo).
-                      </p>
-                    </div>
-                    {neutralizeCloneProducts && (
-                      <label className="flex items-start gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={cloneGenericizeText}
-                          onChange={(event) =>
-                            setCloneGenericizeText(event.target.checked)
-                          }
-                          className="mt-0.5 h-4 w-4 accent-primary"
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          Genericizar nome/descrição (Air Jordan → Tênis
-                          esportivo).
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                  <Input
-                    id="wiz-ai-media-limit"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={cloneAiMediaLimit}
-                    onChange={(event) =>
-                      setCloneAiMediaLimit(event.target.value)
-                    }
-                    className="h-10 bg-background/70"
-                  />
-                </div>
-              )}
-
-              {neutralizeCloneProducts && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="wiz-neutralization-instructions">
-                    Instruções extras para neutralização
-                  </Label>
-                  <Textarea
-                    id="wiz-neutralization-instructions"
-                    rows={2}
-                    value={cloneNeutralizationInstructions}
-                    onChange={(event) =>
-                      setCloneNeutralizationInstructions(event.target.value)
-                    }
-                    placeholder="Ex.: remover só o patch FIFA, manter o escudo do time."
-                    className="bg-background/70 text-sm"
-                  />
-                </div>
-              )}
-
-              <CustomPromptDialog
-                value={cloneCustomPrompt}
-                onChange={(nextPrompt) => setCloneCustomPrompt(nextPrompt)}
-                className="w-full"
-              />
-
-              <div className="grid gap-3 md:grid-cols-[1fr_140px]">
-                <div className="space-y-1.5">
-                  <Label>Estoque</Label>
-                  <Select
-                    value={inventoryMode}
-                    onValueChange={(value) =>
-                      setInventoryMode((value || "not_tracked") as InventoryMode)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="not_tracked">
-                        Inventory not tracked
-                      </SelectItem>
-                      <SelectItem value="tracked">
-                        Definir estoque inicial
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Quantidade</Label>
-                  <Input
-                    value={inventoryQuantity}
-                    onChange={(event) =>
-                      setInventoryQuantity(event.target.value)
-                    }
-                    type="number"
-                    min={0}
-                    disabled={inventoryMode === "not_tracked"}
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/45 p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={createRoutingConfig}
-                  onChange={(event) =>
-                    setCreateRoutingConfig(event.target.checked)
-                  }
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                />
-                <span>
-                  <span className="block font-medium text-foreground">
-                    Preparar rota (checkout roteado)
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Gera o mapa para usar com a Loja vitrine.
-                  </span>
-                </span>
-              </label>
-            </div>
-          )}
-
-          {/* Passo 4 - Revisar e importar */}
-          {importStep === 4 && (
-            <div className="space-y-3">
-              {/* Resumo do que vai ser importado */}
-              <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-[11px] text-muted-foreground">
-                        Origem
-                      </span>
-                      <span className="block truncate font-medium text-foreground">
-                        {sourceDomain || source || "—"}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <PackageCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-[11px] text-muted-foreground">
-                        Destino
-                      </span>
-                      <span className="block truncate font-medium text-foreground">
-                        {formatStoreLabel(selectedTarget)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-[11px] text-muted-foreground">
-                        Escopo
-                      </span>
-                      <span className="block truncate font-medium text-foreground">
-                        {importMode === "single"
-                          ? "Produto individual"
-                          : importScope === "collection" &&
-                              selectedSourceCollection
-                            ? `Coleção: ${selectedSourceCollection.title}`
-                            : "Loja inteira"}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">
-                      <span className="block text-[11px] text-muted-foreground">
-                        Produtos
-                      </span>
-                      <span className="block font-medium text-foreground">
-                        {importMode === "single"
-                          ? "1 produto"
-                          : `${selectedProductHandles.length || preview.length} produto(s)`}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
-                {importMode === "bulk" &&
-                  importScope === "collection" &&
-                  selectedSourceCollection && (
-                    <p className="rounded-md bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">
-                      Os produtos entram na coleção{" "}
-                      <span className="font-medium text-foreground">
-                        {selectedSourceCollection.title}
-                      </span>{" "}
-                      criada na loja de destino.
-                    </p>
-                  )}
-
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    publishToStorefront && "Publicar",
-                    translateCloneProducts && "Traduzir",
-                    translateVariantOptions && "Traduzir variações",
-                    neutralizeCloneProducts && "Neutralizar",
-                    removeExternalReferencesCloneProducts &&
-                      "Limpar refs externas",
-                    applyLogoToCloneImages && "Aplicar logo",
-                    createRoutingConfig && "Preparar rota",
-                    inventoryMode === "tracked" &&
-                      `Estoque: ${inventoryQuantity}`,
-                    duplicatePolicy === "skip"
-                      ? "Pular duplicados"
-                      : "Criar duplicados",
-                  ]
-                    .filter(Boolean)
-                    .map((label) => (
-                      <Badge
-                        key={String(label)}
-                        variant="secondary"
-                        className="rounded-md text-[11px]"
-                      >
-                        {label}
-                      </Badge>
-                    ))}
-                </div>
-              </div>
-
-              {/* Grid dos produtos que serao importados */}
-              {importMode === "bulk" && preview.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Pré-visualização dos produtos
-                  </p>
-                  <div className="grid max-h-44 grid-cols-4 gap-1.5 overflow-auto sm:grid-cols-6">
-                    {preview
-                      .filter(
-                        (product) =>
-                          selectedProductHandles.length === 0 ||
-                          selectedProductHandles.includes(product.handle)
-                      )
-                      .slice(0, 18)
-                      .map((product) => (
-                        <div
-                          key={product.handle}
-                          className="relative aspect-square overflow-hidden rounded-md border border-border/60 bg-muted"
-                          title={product.title}
-                        >
-                          {product.images?.[0]?.src ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={product.images[0].src}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  {importMode === "bulk"
-                    ? `${selectedProductHandles.length} produto(s) selecionado(s)`
-                    : "Produto individual"}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTransformPreview}
-                  disabled={
-                    transformPreviewLoading || !source.trim() || !targetStoreId
-                  }
-                >
-                  {transformPreviewLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <SlidersHorizontal className="h-4 w-4" />
-                  )}
-                  Visualizar 1 produto
-                </Button>
-              </div>
-
-              {transformedPreview ? (
-                <TransformedPreviewCard preview={transformedPreview} />
-              ) : (
-                <div className="rounded-lg border border-dashed border-border/70 bg-background/45 p-4 text-sm text-muted-foreground">
-                  Clique em Visualizar para conferir como 1 produto fica com os
-                  critérios atuais antes de importar tudo.
-                </div>
-              )}
-
-              {applyProgress && (
-                <div className="rounded-lg border border-primary/25 bg-primary/8 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-foreground">
-                      {applyProgress.message}
-                    </p>
-                    <Badge variant="secondary" className="rounded-md">
-                      {applyProgress.total > 0
-                        ? `${applyProgress.current}/${applyProgress.total}`
-                        : "calculando"}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-background/70">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{
-                        width:
-                          applyProgress.total > 0
-                            ? `${Math.min(100, (applyProgress.current / applyProgress.total) * 100)}%`
-                            : "8%",
-                      }}
-                    />
-                  </div>
-
-                  {/* Contadores ao vivo: ja existiam no estado e nunca eram exibidos */}
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-muted-foreground">
-                      {applyProgress.created} criados · {applyProgress.skipped}{" "}
-                      pulados · {applyProgress.failed} falhas
-                    </p>
-                    {applyLoading && applyProgress.phase !== "done" && (
-                      <button
-                        type="button"
-                        onClick={() => cloneAbortRef.current?.abort()}
-                        className="rounded border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Detalhe das falhas — antes so aparecia a contagem num toast */}
-              {cloneFailures.length > 0 && (
-                <details className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-foreground">
-                    {cloneFailures.length} produto(s) não importado(s) — ver
-                    motivo
-                  </summary>
-                  <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
-                    {cloneFailures.map((failure, index) => (
-                      <li
-                        key={`${failure.handle}-${index}`}
-                        className="text-[11px] leading-relaxed text-muted-foreground"
-                      >
-                        <span className="font-medium text-foreground/90">
-                          {failure.handle}
-                        </span>
-                        : {failure.error}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          )}
-
-          {/* Navegação */}
-          <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setImportStep((current) =>
-                  current === 4
-                    ? 3
-                    : current === 3
-                      ? importMode === "bulk"
-                        ? 2
-                        : 1
-                      : 1
-                )
+      {/* ----------------------------------------------------- 3. origem */}
+      {importStep === PASSO.ORIGEM && (
+        <div>
+          <Titulo
+            title={
+              escopo === "product"
+                ? "Cole o link do produto"
+                : escopo === "collection"
+                  ? "Cole o link da loja da coleção"
+                  : "Cole o link da loja de origem"
+            }
+            hint="Lemos o catálogo público desse endereço e listamos o que pode ser importado."
+          />
+          <div className="flex items-center gap-[7px]">
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder={
+                escopo === "product"
+                  ? "https://loja-origem.com/products/tenis-runner-pro"
+                  : "https://loja-origem.com"
               }
-              disabled={importStep === 1 || applyLoading}
-            >
-              Voltar
-            </Button>
-            {importStep === 4 ? (
-              <Button
-                onClick={handleApply}
-                disabled={
-                  applyLoading ||
-                  !source.trim() ||
-                  !targetStoreId ||
-                  (importMode === "bulk" &&
-                    preview.length > 0 &&
-                    selectedProductHandles.length === 0)
-                }
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className={cn(CAMPO, "min-w-0 flex-1 font-mono")}
+            />
+            {escopo === "collection" && (
+              <button
+                type="button"
+                onClick={loadSourceCollectionOptions}
+                disabled={loadingSourceCollections || !source.trim()}
+                className={cn(BOTAO_PRI, "inline-flex items-center gap-1.5 !h-[34px]")}
+                style={{
+                  background: source.trim() ? "var(--solid)" : "var(--border-strong)",
+                }}
               >
-                {applyLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Store className="h-4 w-4" />
-                )}
-                Importar agora
-              </Button>
-            ) : (
-              <Button
-                onClick={() =>
-                  setImportStep((current) =>
-                    current === 1
-                      ? importMode === "bulk"
-                        ? 2
-                        : 3
-                      : current === 2
-                        ? 3
-                        : 4
-                  )
-                }
-                disabled={importStep === 1 && (!source.trim() || !targetStoreId)}
-              >
-                Próximo
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+                {loadingSourceCollections && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {sourceCollectionOptions.length > 0 ? "Ler de novo" : "Ler coleções"}
+              </button>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="mt-[7px] text-[11.5px] text-t4">
+            Somente leitura. A loja de origem não é alterada.
+          </div>
+
+          {massa && escopo === "store" && (
+            <div className="mt-3.5 flex items-end gap-2">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12px] text-t2">{t("limit_label")}</span>
+                <input
+                  value={limit}
+                  onChange={(e) => setLimit(e.target.value)}
+                  type="number"
+                  min={1}
+                  max={MAX_CLONE_LIMIT}
+                  inputMode="numeric"
+                  className={cn(CAMPO, "w-[120px] font-mono")}
+                />
+              </label>
+              <span className="pb-2 text-[11.5px] text-t4">
+                Teto de produtos lidos da origem.
+              </span>
+            </div>
+          )}
+
+          {escopo === "collection" && (
+            <div className="mt-3.5">
+              {sourceCollectionOptions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-surface px-6 py-8 text-center text-[12.5px] text-t3">
+                  {loadingSourceCollections
+                    ? "Lendo as coleções da origem…"
+                    : "Cole o link da loja e leia as coleções para escolher uma."}
+                </div>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto rounded-lg border border-border bg-surface">
+                  {sourceCollectionOptions.map((colecao) => {
+                    const on = selectedSourceCollection?.handle === colecao.handle;
+                    return (
+                      <button
+                        key={colecao.handle}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSourceCollection(colecao);
+                          setPreview([]);
+                          setPreviewKey("");
+                        }}
+                        className="flex w-full items-center gap-[11px] border-b border-[var(--border-subtle)] px-3.5 py-[9px] text-left transition-colors last:border-b-0 hover:bg-surface-2"
+                        style={{ background: on ? "var(--surface-2)" : "var(--surface)" }}
+                      >
+                        <Radio on={on} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] font-medium text-ink">
+                            {colecao.title}
+                          </span>
+                          <span className="block truncate font-mono text-[10.5px] text-t3">
+                            /collections/{colecao.handle}
+                          </span>
+                        </span>
+                        {typeof colecao.productsCount === "number" && (
+                          <span className="shrink-0 text-[12px] tabular-nums text-t3">
+                            {colecao.productsCount} produtos
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- 4. seleção */}
+      {importStep === PASSO.SELECAO && massa && (
+        <div>
+          <div className="mb-[11px] flex items-end gap-3">
+            <div className="flex-1">
+              <h2 className="mb-[3px] text-[15px] font-semibold text-ink">
+                Produtos encontrados
+              </h2>
+              <p className="text-[12.5px] text-t2">
+                {preview.length === 0
+                  ? "Leia o catálogo da origem para listar o que pode ser importado."
+                  : `${selectedProductHandles.length} de ${preview.length} produtos selecionados · origem ${sourceDomain || dominioOrigem}`}
+              </p>
+            </div>
+            {preview.length === 0 ? (
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={
+                  previewLoading ||
+                  !source.trim() ||
+                  (escopo === "collection" && !selectedSourceCollection)
+                }
+                className={cn(BOTAO_PRI, "inline-flex items-center gap-1.5")}
+                style={{ background: "var(--solid)" }}
+              >
+                {previewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Ler catálogo
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => toggleAllProducts(!todosVisiveisMarcados)}
+                className="h-[27px] rounded-md border border-[var(--border-strong)] bg-surface px-2.5 text-[12px] font-semibold text-ink transition-colors hover:bg-surface-2"
+              >
+                {todosVisiveisMarcados ? "Desmarcar visíveis" : "Selecionar visíveis"}
+              </button>
+            )}
+          </div>
+
+          {preview.length > 0 && (
+            <>
+              {/* Resumo do que foi lido, no formato do design: três números
+                  lado a lado num cartão só. */}
+              <div className="mb-[11px] overflow-hidden rounded-lg border border-border bg-surface">
+                <div className="flex items-center gap-[9px] border-b border-[var(--border-subtle)] px-4 py-[13px]">
+                  <span
+                    className="h-[7px] w-[7px] shrink-0 rounded-full"
+                    style={{ background: "var(--ok)" }}
+                    aria-hidden
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-[12.5px] font-semibold text-ink">
+                      Catálogo lido
+                    </span>
+                    <span className="block truncate font-mono text-[10.5px] text-t3">
+                      {sourceDomain || dominioOrigem}
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-3">
+                  {[
+                    ["Produtos", preview.length],
+                    ["Variantes", preview.reduce((s, p) => s + p.variants.length, 0)],
+                    ["Categorias", previewCollectionOptions.length],
+                  ].map(([rotulo, valor]) => (
+                    <div
+                      key={String(rotulo)}
+                      className="border-l border-[var(--border-subtle)] px-4 py-3 first:border-l-0"
+                    >
+                      <div className="text-[11.5px] text-t3">{rotulo}</div>
+                      <div className="mt-0.5 text-[17px] font-semibold tabular-nums text-ink">
+                        {valor}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Busca e ordenação: a lista pode ter milhares de linhas. */}
+              <div className="mb-[11px] flex flex-col gap-[7px] sm:flex-row">
+                <input
+                  value={previewSearch}
+                  onChange={(e) => setPreviewSearch(e.target.value)}
+                  placeholder="Buscar por título, handle ou SKU"
+                  className={cn(CAMPO, "flex-1")}
+                />
+                <select
+                  value={previewSort}
+                  onChange={(e) => setPreviewSort(e.target.value as PreviewSort)}
+                  className={cn(CAMPO, "w-full sm:w-[200px]")}
+                >
+                  <option value="source">Ordem da origem</option>
+                  <option value="recent">Mais recentes</option>
+                  <option value="title_asc">Título (A-Z)</option>
+                  <option value="title_desc">Título (Z-A)</option>
+                  <option value="price_asc">Menor preço</option>
+                  <option value="price_desc">Maior preço</option>
+                </select>
+              </div>
+
+              {previewCollectionOptions.length > 0 && (
+                <div className="mb-[11px] flex flex-wrap gap-[7px]">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewCollections([])}
+                    className="h-[27px] rounded-md px-[11px] text-[12px] font-semibold"
+                    style={{
+                      border: `1px solid ${previewCollections.length === 0 ? "var(--solid)" : "var(--border)"}`,
+                      background:
+                        previewCollections.length === 0 ? "var(--solid)" : "var(--surface)",
+                      color:
+                        previewCollections.length === 0 ? "var(--on-solid)" : "var(--t2)",
+                    }}
+                  >
+                    Todas as categorias
+                  </button>
+                  {previewCollectionOptions.map((colecao) => {
+                    const on = previewCollections.includes(colecao.handle);
+                    return (
+                      <button
+                        key={colecao.handle}
+                        type="button"
+                        onClick={() =>
+                          setPreviewCollections((atual) =>
+                            on
+                              ? atual.filter((h) => h !== colecao.handle)
+                              : [...atual, colecao.handle]
+                          )
+                        }
+                        className="h-[27px] rounded-md px-[11px] text-[12px] font-semibold"
+                        style={{
+                          border: `1px solid ${on ? "var(--solid)" : "var(--border)"}`,
+                          background: on ? "var(--solid)" : "var(--surface)",
+                          color: on ? "var(--on-solid)" : "var(--t2)",
+                        }}
+                      >
+                        {colecao.title}
+                        <span className="ml-1.5 opacity-60">{colecao.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="max-h-[420px] overflow-y-auto rounded-lg border border-border bg-surface">
+                {visiblePreview.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-[12.5px] text-t3">
+                    Nenhum produto corresponde ao filtro.
+                  </p>
+                ) : (
+                  visiblePreview.map((produto) => {
+                    const on = selectedProductHandles.includes(produto.handle);
+                    return (
+                      <button
+                        key={produto.handle}
+                        type="button"
+                        onClick={() => toggleProductHandle(produto.handle, !on)}
+                        className="flex w-full items-center gap-[11px] border-b border-[var(--border-subtle)] px-3.5 py-[9px] text-left transition-colors last:border-b-0 hover:bg-surface-2"
+                        style={{ background: on ? "var(--surface-2)" : "var(--surface)" }}
+                      >
+                        <span
+                          className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] text-[9px] text-[var(--on-solid)]"
+                          style={{
+                            border: `1px solid ${on ? "var(--solid)" : "var(--control-border)"}`,
+                            background: on ? "var(--solid)" : "var(--surface)",
+                          }}
+                          aria-hidden
+                        >
+                          {on ? "✓" : ""}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] font-medium text-ink">
+                            {produto.title}
+                          </span>
+                          <span className="block truncate font-mono text-[11.5px] text-t3">
+                            {produto.handle}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[12px] text-t3">
+                          {produto.variants.length} variantes
+                        </span>
+                        <span className="w-20 shrink-0 text-right font-mono text-[11.5px] tabular-nums text-t1">
+                          {produto.variants[0]?.price || "0.00"}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ----------------------------------------------------- 5. opções */}
+      {importStep === PASSO.OPCOES && (
+        <div>
+          <Titulo
+            title="Como os produtos entram"
+            hint="Vale para todos os produtos desta importação. Dá para mudar depois, produto a produto."
+          />
+
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            <OptionRow
+              title="Publicar imediatamente"
+              hint="Produtos entram como rascunho se desligado."
+              on={publishToStorefront}
+              onChange={setPublishToStorefront}
+            />
+            <OptionRow
+              title="Traduzir produto"
+              hint="Título e descrição no idioma da loja de destino."
+              on={translateCloneProducts}
+              onChange={setTranslateCloneProducts}
+            />
+            <OptionRow
+              title="Traduzir variações"
+              hint="blue → azul, S/small → P."
+              on={translateVariantOptions}
+              onChange={setTranslateVariantOptions}
+            />
+          </div>
+
+          <Secao title="Conteúdo" />
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            {/* Neutralizar e limpar referências se excluem: um reescreve a
+                marca, o outro a preserva de propósito. */}
+            <OptionRow
+              title="Neutralizar (stock)"
+              hint="Remove marcas, inclusive do próprio produto."
+              on={neutralizeCloneProducts}
+              onChange={(v) => {
+                setNeutralizeCloneProducts(v);
+                if (v) setRemoveExternalReferencesCloneProducts(false);
+              }}
+            >
+              {neutralizeCloneProducts && (
+                <div className="border-t border-[var(--border-subtle)] bg-surface-2 px-[15px] py-3">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={cloneGenericizeText}
+                      onChange={(e) => setCloneGenericizeText(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5 accent-[var(--solid)]"
+                    />
+                    <span className="text-[12px] text-t2">
+                      Genericizar nome e descrição (Air Jordan → Tênis esportivo).
+                    </span>
+                  </label>
+                  <label className="mt-3 block">
+                    <span className="text-[12px] text-t2">
+                      Instruções extras para a neutralização
+                    </span>
+                    <textarea
+                      rows={2}
+                      value={cloneNeutralizationInstructions}
+                      onChange={(e) => setCloneNeutralizationInstructions(e.target.value)}
+                      placeholder="Ex.: remover só o patch FIFA, manter o escudo do time."
+                      className="mt-1.5 w-full rounded-md border border-[var(--control-border)] bg-surface px-[11px] py-2 text-[12px] text-ink outline-none focus:border-[var(--border-strong)]"
+                    />
+                  </label>
+                </div>
+              )}
+            </OptionRow>
+            <OptionRow
+              title="Retirar referências externas"
+              hint="Mantém marcas reais, limpa origem e vendedor."
+              on={removeExternalReferencesCloneProducts}
+              onChange={(v) => {
+                setRemoveExternalReferencesCloneProducts(v);
+                if (v) setNeutralizeCloneProducts(false);
+              }}
+            />
+            <OptionRow
+              title="Aplicar logo nas imagens"
+              hint="Marca as imagens em massa com o logo da loja."
+              on={applyLogoToCloneImages}
+              onChange={setApplyLogoToCloneImages}
+            />
+            {(neutralizeCloneProducts || removeExternalReferencesCloneProducts) && (
+              <div className="flex items-center gap-3.5 border-t border-[var(--border-subtle)] px-[15px] py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[12.5px] font-semibold text-ink">
+                    Mídias com IA por produto
+                  </div>
+                  <div className="text-[12px] text-t3">
+                    A IA processa só as primeiras; as outras seguem originais.
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={cloneAiMediaLimit}
+                  onChange={(e) => setCloneAiMediaLimit(e.target.value)}
+                  className={cn(CAMPO, "w-[80px] shrink-0 text-right font-mono")}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="mt-[9px]">
+            <CustomPromptDialog
+              value={cloneCustomPrompt}
+              onChange={(novo) => setCloneCustomPrompt(novo)}
+              className="w-full"
+            />
+          </div>
+
+          <Secao title="Estoque e duplicados" />
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            <div className="flex items-center gap-3.5 border-b border-[var(--border-subtle)] px-[15px] py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-semibold text-ink">Estoque</div>
+                <div className="text-[12px] text-t3">
+                  Sem controle, a Shopify nunca marca o produto como esgotado.
+                </div>
+              </div>
+              <select
+                value={inventoryMode}
+                onChange={(e) => setInventoryMode(e.target.value as InventoryMode)}
+                className={cn(CAMPO, "w-[190px] shrink-0")}
+              >
+                <option value="not_tracked">Sem controle de estoque</option>
+                <option value="tracked">Definir estoque inicial</option>
+              </select>
+              <input
+                value={inventoryQuantity}
+                onChange={(e) => setInventoryQuantity(e.target.value)}
+                type="number"
+                min={0}
+                disabled={inventoryMode === "not_tracked"}
+                className={cn(CAMPO, "w-[80px] shrink-0 text-right font-mono disabled:opacity-40")}
+              />
+            </div>
+            <div className="flex items-center gap-3.5 border-b border-[var(--border-subtle)] px-[15px] py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-semibold text-ink">
+                  Produto que já existe no destino
+                </div>
+                <div className="text-[12px] text-t3">
+                  Comparado pelo handle da origem.
+                </div>
+              </div>
+              <select
+                value={duplicatePolicy}
+                onChange={(e) => setDuplicatePolicy(e.target.value)}
+                className={cn(CAMPO, "w-[190px] shrink-0")}
+              >
+                <option value="skip">{t("skip_existing")}</option>
+                <option value="create">{t("create_anyway")}</option>
+              </select>
+            </div>
+            <OptionRow
+              title="Preparar rota (checkout roteado)"
+              hint="Já grava o mapa de SKU para usar com a vitrine."
+              on={createRoutingConfig}
+              onChange={setCreateRoutingConfig}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- 6. revisão */}
+      {importStep === PASSO.REVISAO && (
+        <div>
+          <Titulo
+            title="Pronto para importar"
+            hint="Revise antes de iniciar. A importação pode ser interrompida a qualquer momento."
+          />
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            {[
+              ["Escopo", rotuloEscopo],
+              ["Origem", sourceDomain || dominioOrigem || "—"],
+              [
+                "Produtos",
+                massa ? String(escolhidos.length || preview.length) : "1",
+              ],
+              ["Variantes", massa ? String(variantesEscolhidas) : "—"],
+              ["Destino", formatStoreLabel(selectedTarget)],
+            ].map(([rotulo, valor]) => (
+              <div
+                key={rotulo}
+                className="flex justify-between gap-4 border-b border-[var(--border-subtle)] px-[15px] py-2.5 last:border-b-0"
+              >
+                <span className="text-[12.5px] text-t2">{rotulo}</span>
+                <span className="truncate text-[12.5px] font-semibold text-ink">{valor}</span>
+              </div>
+            ))}
+          </div>
+
+          {marcas.length > 0 && (
+            <div className="mt-[11px] flex flex-wrap gap-1.5">
+              {marcas.map((marca) => (
+                <span
+                  key={marca}
+                  className="rounded border border-border bg-surface-2 px-[7px] py-0.5 text-[11.5px] font-medium text-t2"
+                >
+                  {marca}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Confere um produto com os critérios atuais antes de gastar
+              crédito no catálogo inteiro. */}
+          <Secao title="Conferir um produto" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTransformPreview}
+              disabled={transformPreviewLoading || !source.trim() || !targetStoreId}
+              className={cn(BOTAO_SEC, "inline-flex items-center gap-1.5")}
+            >
+              {transformPreviewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Visualizar 1 produto
+            </button>
+            {!transformedPreview && (
+              <span className="text-[11.5px] text-t4">
+                Mostra como fica com as opções escolhidas.
+              </span>
+            )}
+          </div>
+          {transformedPreview && (
+            <div className="mt-2.5">
+              <TransformedPreviewCard preview={transformedPreview} />
+            </div>
+          )}
+
+          {applyProgress && (
+            <div className="mt-3.5 rounded-lg border border-border bg-surface p-[22px]">
+              <div className="mb-2.5 flex items-baseline gap-2.5">
+                <span className="text-[15px] font-semibold text-ink">Importando</span>
+                <span className="text-[12.5px] text-t3">{applyProgress.message}</span>
+                <div className="flex-1" />
+                <span className="font-mono text-[13px] font-medium tabular-nums text-ink">
+                  {applyProgress.total > 0
+                    ? `${applyProgress.current}/${applyProgress.total}`
+                    : "…"}
+                </span>
+              </div>
+              <div
+                className="h-[5px] overflow-hidden rounded-[3px]"
+                style={{ background: "var(--track)" }}
+              >
+                <div
+                  className="h-[5px] rounded-[3px] transition-[width] duration-150"
+                  style={{
+                    background: "var(--solid)",
+                    width:
+                      applyProgress.total > 0
+                        ? `${Math.min(100, (applyProgress.current / applyProgress.total) * 100)}%`
+                        : "8%",
+                  }}
+                />
+              </div>
+              <div className="mt-[11px] flex items-center justify-between gap-3">
+                <span className="text-[12px] text-t3">
+                  {applyProgress.created} criados · {applyProgress.skipped} pulados ·{" "}
+                  {applyProgress.failed} falhas
+                </span>
+                {applyLoading && applyProgress.phase !== "done" && (
+                  <button
+                    type="button"
+                    onClick={() => cloneAbortRef.current?.abort()}
+                    className="h-[24px] rounded-[5px] border border-border bg-surface px-2 text-[11.5px] font-semibold text-t2 transition-colors hover:border-[var(--border-strong)]"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {cloneFailures.length > 0 && (
+            <details
+              className="mt-3.5 rounded-lg border px-4 py-3"
+              style={{ borderColor: "var(--err-border)", background: "var(--err-bg)" }}
+            >
+              <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
+                {cloneFailures.length} produto(s) não importado(s) — ver motivo
+              </summary>
+              <ul className="mt-2 max-h-40 space-y-1 overflow-auto">
+                {cloneFailures.map((falha, i) => (
+                  <li key={`${falha.handle}-${i}`} className="text-[11.5px] text-t2">
+                    <span className="font-mono text-ink">{falha.handle}</span>: {falha.error}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* ------------------------------------------------------ navegação */}
+      <div className="flex items-center gap-2">
+        {indiceAtual > 0 && (
+          <button
+            type="button"
+            onClick={voltar}
+            disabled={applyLoading}
+            className={BOTAO_SEC}
+          >
+            Voltar
+          </button>
+        )}
+        {importStep === PASSO.REVISAO ? (
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={
+              applyLoading ||
+              !source.trim() ||
+              !targetStoreId ||
+              (massa && preview.length > 0 && selectedProductHandles.length === 0)
+            }
+            className={cn(BOTAO_PRI, "inline-flex items-center gap-1.5")}
+            style={{ background: "var(--solid)" }}
+          >
+            {applyLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Iniciar importação
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={avancar}
+            disabled={Boolean(trava)}
+            className={BOTAO_PRI}
+            style={{ background: trava ? "var(--border-strong)" : "var(--solid)" }}
+          >
+            Continuar
+          </button>
+        )}
+        {trava && <span className="text-[11.5px] text-t4">{trava}</span>}
+      </div>
+    </div>
   );
 }

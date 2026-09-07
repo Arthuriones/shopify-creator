@@ -6,7 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { StoreRow } from "@/lib/stores/queries";
 import { StoreTable, sincronizado } from "@/components/stores/store-table";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,7 +19,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -30,8 +29,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus,
-  Store,
   Upload,
   ImageIcon,
   Loader2,
@@ -47,7 +44,6 @@ import { normalizeShopDomain } from "@/lib/shopify/domain";
 import { SHOPIFY_SCOPES_STRING } from "@/lib/shopify/scopes";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { PageHeader } from "@/components/layout/page-header";
 
 interface ConnectedStore {
   id: string;
@@ -665,27 +661,11 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <PageHeader
-        title={t("title")}
-        description={t("description")}
-      >
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger
-            className={cn(
-              buttonVariants({ size: "lg" }),
-              "text-[13px] font-medium transition-all duration-200 bg-brand-gradient"
-            )}
-          >
-            <Plus className="mr-2 h-3.5 w-3.5" />
-            {t("connect_btn")}
-          </DialogTrigger>
-          <DialogContent className="border-border/50 bg-card max-h-[90vh] overflow-y-auto">
+    <div className="flex flex-col gap-[22px] animate-fade-in">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-border bg-surface">
             <DialogHeader>
-              <DialogTitle
-                className="text-lg font-semibold"
-                style={{ letterSpacing: "-0.02em" }}
-              >
+              <DialogTitle className="text-[15px] font-semibold text-ink">
                 {t("connect_dialog_title")}
               </DialogTitle>
             </DialogHeader>
@@ -766,7 +746,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
             <form onSubmit={handleConnect} className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
+                <Label className="text-[12px] text-t2">
                   {t("domain_label")}
                 </Label>
                 <Input
@@ -777,7 +757,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
                   autoCorrect="off"
                   spellCheck={false}
                   required
-                  className={`h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50 ${!isShopDomainValid ? "border-destructive/60 focus:border-destructive" : ""}`}
+                  className={`h-[34px] border-[var(--control-border)] bg-surface text-[12px] ${!isShopDomainValid ? "border-[var(--err)]" : ""}`}
                 />
                 <p className="text-xs text-muted-foreground/70">
                   Use o dominio interno da Shopify, exemplo:{" "}
@@ -790,7 +770,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
+                <Label className="text-[12px] text-t2">
                   {t("client_id_label")}
                 </Label>
                 <Input
@@ -798,11 +778,11 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
                   required
-                  className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
+                  className="h-[34px] border-[var(--control-border)] bg-surface text-[12px]"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-[13px] text-muted-foreground">
+                <Label className="text-[12px] text-t2">
                   {t("client_secret_label")}
                 </Label>
                 <Input
@@ -811,7 +791,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
                   value={clientSecret}
                   onChange={(e) => setClientSecret(e.target.value)}
                   required
-                  className="h-10 bg-background/50 border-border/50 text-sm transition-colors duration-200 focus:border-primary/50"
+                  className="h-[34px] border-[var(--control-border)] bg-surface text-[12px]"
                 />
                 <p className="text-xs text-muted-foreground/70">
                   Encontre em{" "}
@@ -828,13 +808,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
               </div>
               <Button
                 type="submit"
-                className="w-full h-10 text-sm font-medium transition-all duration-200"
-                style={{
-                  background: loading
-                    ? "color-mix(in oklch, var(--action) 70%, transparent)"
-                    : "var(--action)",
-                  color: "var(--action-foreground)",
-                }}
+                className="h-[34px] w-full bg-[var(--solid)] text-[12.5px] font-semibold text-[var(--on-solid)] hover:bg-[var(--solid-hover)]"
                 disabled={loading || !isShopDomainValid}
               >
                 {loading ? (
@@ -844,9 +818,8 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
                 )}
               </Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </PageHeader>
+        </DialogContent>
+      </Dialog>
 
       {loadingStores ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -855,35 +828,22 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
           <StoreSkeleton />
         </div>
       ) : stores.length === 0 ? (
-        <div className="animate-fade-in flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 py-16">
-          <div
-            className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl"
-            style={{ background: "color-mix(in oklch, var(--action) 8%, transparent)" }}
-          >
-            <Store
-              className="h-6 w-6"
-              style={{ color: "var(--action)" }}
-            />
-          </div>
-          <p
-            className="text-base font-medium text-foreground"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            {t("no_stores_title")}
+        <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-surface px-8 py-11 text-center">
+          <p className="text-[15px] font-semibold text-ink">{t("no_stores_title")}</p>
+          <p className="mx-auto mb-4 mt-1.5 max-w-[360px] text-[12.5px] text-t2">
+            Comece pela vitrine — é ela que define quais produtos o xcart vai
+            espelhar nas lojas de checkout.
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("no_stores_body")}
-          </p>
-          <Button
+          <button
+            type="button"
             onClick={() => setOpen(true)}
-            className="mt-5 h-9 text-[13px] font-medium transition-all duration-200"
+            className="h-[30px] rounded-md bg-[var(--solid)] px-[13px] text-[12.5px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
           >
-            <Plus className="mr-2 h-3.5 w-3.5" />
             {t("connect_btn")}
-          </Button>
+          </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-7">
+        <div className="flex flex-col gap-[22px]">
           {/* Vitrines primeiro e como cartao: sao poucas e e por elas que o
               trafego entra. Lojas de checkout viram tabela porque sao muitas e
               o que interessa nelas e comparar linha a linha. */}
@@ -891,7 +851,6 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
             <section>
               <div className="mb-2 flex items-center gap-2.5">
                 <h2 className="text-[13px] font-semibold text-ink">Vitrines</h2>
-                <span className="font-mono text-[11px] text-t4">{vitrines.length}</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
               <p className="mb-2.5 max-w-[640px] text-[12px] text-t3">
@@ -977,17 +936,14 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent className="border-border/50 bg-card max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle
-              className="text-lg font-semibold"
-              style={{ letterSpacing: "-0.02em" }}
-            >
+            <DialogTitle className="text-[15px] font-semibold text-ink">
               {t("profile_dialog_title", { name: editingStore?.name ?? "" })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5">
             {/* Store Name */}
             <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
+              <Label className="text-[12px] text-t2">
                 Store Name
               </Label>
               <Input
@@ -1000,7 +956,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
             {/* Logo upload */}
             <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
+              <Label className="text-[12px] text-t2">
                 {t("logo_label")}
               </Label>
               <div className="flex items-center gap-4">
@@ -1049,7 +1005,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
             {/* Logos adicionais */}
             <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
+              <Label className="text-[12px] text-t2">
                 {t("additional_logos_label")}
               </Label>
               <p className="text-[11px] text-muted-foreground/50">
@@ -1114,7 +1070,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
 
             {/* Materiais da marca */}
             <div className="space-y-2">
-              <Label className="text-[13px] text-muted-foreground">
+              <Label className="text-[12px] text-t2">
                 {t("brand_materials_label")}
               </Label>
 
@@ -1189,7 +1145,7 @@ export function StoresScreen({ initialStores }: { initialStores: StoreRow[] }) {
             </div>
 
             <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/8 p-3">
-              <Label className="text-[13px] text-muted-foreground">
+              <Label className="text-[12px] text-t2">
                 {t("language_label")}
               </Label>
               <Select

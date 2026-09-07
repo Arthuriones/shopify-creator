@@ -6,14 +6,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowRight,
-  Copy,
-  Download,
-  GitBranch,
-  Image as ImageIcon,
-  PackageCheck,
-} from "lucide-react";
+import { ArrowRight, Copy, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -55,51 +48,6 @@ import {
 } from "@/components/ui/dialog";
 
 
-
-function ServiceIntro({
-  icon: Icon,
-  title,
-  description,
-  steps,
-}: {
-  icon: typeof Copy;
-  title: string;
-  description: string;
-  steps: string[];
-}) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-card/70 p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/12 text-primary">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold leading-tight text-foreground">
-            {title}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {description}
-          </p>
-        </div>
-      </div>
-        <ol className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-        {steps.map((step, index) => (
-          <li
-            key={step}
-              className="flex min-w-0 items-center gap-2 rounded-md border border-border/50 bg-background/45 px-3 py-2"
-          >
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-xs font-semibold text-primary">
-              {index + 1}
-            </span>
-              <span className="leading-5">{step}</span>
-          </li>
-        ))}
-      </ol>
-      </div>
-    </div>
-  );
-}
 
 function ServiceOverview() {
   const t = useTranslations("clone_page");
@@ -217,7 +165,6 @@ export function CloneScreen({
 
 
   const [appOrigin, setAppOrigin] = useState(getPublicAppUrl());
-  const [importWizardOpen, setImportWizardOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
   const [importScope, setImportScope] = useState<"all" | "collection">("all");
   const [selectedSourceCollection, setSelectedSourceCollection] =
@@ -241,29 +188,6 @@ export function CloneScreen({
       : null;
   const isCloneConfigSubpage = pathname.endsWith("/configuracao");
   const isImportSubpage = Boolean(routedImportMode);
-
-  const pageMeta = {
-    overview: {
-      title: "Central de clone e checkout",
-      description:
-        "Escolha um recurso independente: clonar produtos, exportar catálogo ou configurar a Loja vitrine.",
-    },
-    shopify: {
-      title: "Clone de loja Shopify",
-      description:
-        "Importe produtos de uma vitrine pública e aplique em uma loja conectada.",
-    },
-    export: {
-      title: "Exportar catálogo",
-      description:
-        "Gere JSON ou CSV a partir de uma origem Shopify pública para revisão e backup.",
-    },
-    "routed-checkout": {
-      title: "Loja vitrine",
-      description:
-        "Roteie pedidos da vitrine para o checkout da loja checkout com mapas de SKU e variant.",
-    },
-  }[activeView];
 
   const selectedTarget = useMemo(
     () => stores.find((store) => store.id === targetStoreId),
@@ -358,14 +282,6 @@ export function CloneScreen({
     setSelectedImportMode(mode);
   }
 
-  function openImportWizard(mode: ImportMode) {
-    openInlineImport(mode);
-    setImportStep(1);
-    setImportScope("all");
-    setSelectedSourceCollection(null);
-    setImportWizardOpen(true);
-  }
-
   async function loadSourceCollectionOptions() {
     if (!source.trim()) {
       toast.error("Informe a loja de origem primeiro.");
@@ -394,16 +310,15 @@ export function CloneScreen({
     }
   }
 
-  // Sub-rotas /individual, /bulk, /configuracao abrem o wizard direto.
+  // Sub-rotas /individual, /bulk, /configuracao abrem o assistente no
+  // primeiro passo. O modo vem da propria rota; /configuracao e sempre massa.
   useEffect(() => {
     if (isImportSubpage) {
       setImportStep(1);
-      setImportWizardOpen(true);
     } else if (isCloneConfigSubpage) {
       setImportMode("bulk");
       setSelectedImportMode("bulk");
       setImportStep(1);
-      setImportWizardOpen(true);
     }
   }, [isImportSubpage, isCloneConfigSubpage]);
 
@@ -863,72 +778,11 @@ export function CloneScreen({
 
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <header className="border-b border-border/60 pb-5">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          {pageMeta.title}
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          {pageMeta.description}
-        </p>
-      </header>
-
+    <div className="animate-fade-in">
       {activeView === "overview" && <ServiceOverview />}
 
       {activeView === "shopify" && (
-      <section className="space-y-4" aria-labelledby="clone-shopify">
-        {!isCloneConfigSubpage && (
-          <ServiceIntro
-            icon={Copy}
-            title="Serviço 1: importar produtos da Shopify"
-            description="Copie produtos de uma vitrine pública (domínio próprio ou myshopify.com). O assistente abre em um passo a passo: origem, seleção, opções e importação."
-            steps={[
-              "Escolha individual ou em massa.",
-              "Informe a origem e selecione produtos.",
-              "Configure opções e importe na sua loja.",
-            ]}
-          />
-        )}
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => openImportWizard("single")}
-            className="group rounded-lg border border-primary/35 bg-primary/10 p-4 text-left shadow-sm transition-colors hover:border-primary/65 hover:bg-primary/15"
-          >
-            <span className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-bold text-primary-foreground">
-              <PackageCheck className="h-4 w-4" />
-              Importar individual
-            </span>
-            <h2 className="mt-3 text-lg font-semibold text-foreground">
-              Importar produto individual
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Cole a URL de um produto Shopify, configure e publique só aquele
-              item.
-            </p>
-            <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
-          </button>
-          <button
-            type="button"
-            onClick={() => openImportWizard("bulk")}
-            className="group rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/55 hover:bg-card/80"
-          >
-            <span className="inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-3 text-sm font-bold text-foreground">
-              <Download className="h-4 w-4 text-primary" />
-              Importar em massa
-            </span>
-            <h2 className="mt-3 text-lg font-semibold text-foreground">
-              Importar em massa
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Leia a loja, selecione vários produtos e importe em lotes com
-              progresso.
-            </p>
-            <ArrowRight className="mt-4 h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
-          </button>
-        </div>
-
+      <section aria-labelledby="clone-shopify">
         <ImportWizard
           applyLoading={applyLoading}
           applyLogoToCloneImages={applyLogoToCloneImages}
@@ -947,7 +801,6 @@ export function CloneScreen({
           importMode={importMode}
           importScope={importScope}
           importStep={importStep}
-          importWizardOpen={importWizardOpen}
           inventoryMode={inventoryMode}
           inventoryQuantity={inventoryQuantity}
           limit={limit}
@@ -975,7 +828,6 @@ export function CloneScreen({
           setDuplicatePolicy={setDuplicatePolicy}
           setImportScope={setImportScope}
           setImportStep={setImportStep}
-          setImportWizardOpen={setImportWizardOpen}
           setInventoryMode={setInventoryMode}
           setInventoryQuantity={setInventoryQuantity}
           setLimit={setLimit}

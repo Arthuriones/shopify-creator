@@ -1,7 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-
 export interface StripTarget {
   id: string;
   name: string;
@@ -63,35 +61,42 @@ export function RouteStrip({
   onChangePercent?: (alvo: StripTarget, valor: number) => void;
 }) {
   return (
-    <div className="grid items-center gap-x-6 gap-y-5 px-4 py-6 lg:grid-cols-[minmax(0,190px)_minmax(0,168px)_minmax(0,1fr)]">
-      <div className="rounded-lg border border-border bg-surface px-3.5 py-3">
-        <span className="block truncate text-[12.5px] font-medium text-ink">
-          {vitrineName}
-        </span>
-        <span className="mt-0.5 block truncate font-mono text-[10.5px] text-t3">
+    <div className="flex items-center gap-0 overflow-x-auto py-1">
+      <div className="shrink-0 basis-[176px] rounded-[7px] border border-border bg-surface-2 px-3 py-2.5">
+        <div className="truncate text-[12.5px] font-semibold text-ink">{vitrineName}</div>
+        <div className="mt-0.5 truncate font-mono text-[10.5px] text-t3">
           {vitrineDomain}
-        </span>
+        </div>
       </div>
+
+      <div className="h-px shrink-0 basis-8 bg-[var(--border-strong)]" aria-hidden />
 
       {/* A caixa preta e o xcart. O contraste diz que a decisao acontece aqui,
           e nao em mais um card igual aos outros. */}
-      <div className="rounded-lg bg-[var(--solid)] px-3.5 py-3 text-[var(--on-solid)]">
-        <span className="block text-[12.5px] font-medium">Divisão do tráfego</span>
-        <span className="mt-0.5 block font-mono text-[10.5px] opacity-70">
+      <div className="shrink-0 basis-[156px] rounded-[7px] border border-[var(--solid)] bg-[var(--solid)] px-3 py-2.5 text-[var(--on-solid)]">
+        <div className="text-[12.5px] font-semibold">Divisão do tráfego</div>
+        <div className="mt-0.5 truncate font-mono text-[10.5px] opacity-70">
           {enabled ? rotationLabel : "rota pausada"}
-        </span>
+        </div>
       </div>
 
-      {/* A régua vertical à esquerda substitui as curvas do grafo: mesma
-          informação de "sai de um, chega em vários", sem geometria. */}
-      <ul className="relative flex flex-col gap-px border-l border-border pl-4">
+      <div className="h-px shrink-0 basis-5 bg-[var(--border-strong)]" aria-hidden />
+      <div
+        className="my-3.5 shrink-0 basis-px self-stretch bg-[var(--border-strong)]"
+        aria-hidden
+      />
+
+      <ul className="flex min-w-[260px] flex-1 flex-col gap-1.5">
         {targets.map((alvo) => {
           const estado = targetState(alvo);
           const ocupado = busyId === alvo.id;
           return (
-            <li key={alvo.id} className="relative flex items-center gap-3 py-[7px]">
+            <li
+              key={alvo.id}
+              className="relative flex items-center gap-2.5 rounded-md border border-[var(--border-subtle)] bg-surface px-[11px] py-2 transition-colors hover:border-[var(--border-strong)]"
+            >
               <span
-                className="absolute -left-4 top-1/2 h-px w-3 bg-border"
+                className="absolute -left-2.5 h-px w-2.5 bg-[var(--border-strong)]"
                 aria-hidden
               />
               <span
@@ -99,22 +104,19 @@ export function RouteStrip({
                 style={{ background: COR[estado] }}
                 aria-hidden
               />
-              <span className="w-[104px] shrink-0 truncate text-[12.5px] text-ink">
+              <span className="min-w-0 max-w-[140px] flex-none truncate text-[12.5px] font-medium text-ink">
                 {alvo.name}
               </span>
-              <span
-                className="w-[54px] shrink-0 text-[11px]"
-                style={{ color: COR[estado] }}
-              >
+              <span className="shrink-0 text-[11.5px]" style={{ color: COR[estado] }}>
                 {TEXTO[estado]}
               </span>
 
-              <span className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--track)]">
+              <span className="h-1 min-w-[40px] flex-1 overflow-hidden rounded-[3px] bg-[var(--track)]">
                 <span
-                  className="block h-full rounded-full transition-[width] duration-300"
+                  className="block h-1 rounded-[3px] transition-[width] duration-300"
                   style={{
                     width: `${alvo.sharePercent}%`,
-                    background: estado === "ok" ? "var(--ink)" : "var(--t4)",
+                    background: estado === "ok" ? "var(--solid)" : "var(--border-strong)",
                   }}
                 />
               </span>
@@ -128,13 +130,13 @@ export function RouteStrip({
                     value={alvo.sharePercent}
                     disabled={!alvo.enabled || ocupado}
                     onChange={(e) => onChangePercent?.(alvo, Number(e.target.value))}
-                    className="h-7 w-14 rounded-md border border-[var(--control-border)] bg-surface px-2 text-right font-mono text-[11px] tabular-nums text-ink"
+                    className="h-[26px] w-14 rounded-md border border-[var(--control-border)] bg-surface px-2 text-right font-mono text-[11.5px] tabular-nums text-ink"
                     aria-label={`Porcentagem do tráfego para ${alvo.name}`}
                   />
-                  <span className="text-[11px] text-t3">%</span>
+                  <span className="text-[11px] text-t4">%</span>
                 </span>
               ) : (
-                <span className="w-10 shrink-0 text-right font-mono text-[11.5px] tabular-nums text-t2">
+                <span className="w-[38px] shrink-0 text-right font-mono text-[11.5px] tabular-nums text-t1">
                   {alvo.sharePercent}%
                 </span>
               )}
@@ -143,10 +145,7 @@ export function RouteStrip({
                 type="button"
                 disabled={ocupado}
                 onClick={() => onToggle?.(alvo)}
-                className={cn(
-                  "w-[52px] shrink-0 rounded-md border border-border bg-surface py-1 text-[11.5px] text-t1 transition-colors",
-                  "hover:border-[var(--border-strong)] hover:text-ink disabled:opacity-50"
-                )}
+                className="h-6 shrink-0 rounded-[5px] border border-border bg-surface px-2 text-[11.5px] font-semibold text-t2 transition-colors hover:border-[var(--border-strong)] disabled:opacity-50"
               >
                 {alvo.enabled ? "Parar" : "Voltar"}
               </button>

@@ -147,23 +147,24 @@ export function ConsoleView({
   if (grafo.routes.length === 0) {
     const semLojas = grafo.stores.length < 2;
     return (
-      <div className="mx-auto flex min-h-[55vh] max-w-md flex-col items-center justify-center text-center">
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-ink">
-          Ligue a vitrine ao checkout
-        </h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-t2">
-          A vitrine recebe o tráfego do anúncio. A loja de checkout cobra. O xcart leva
-          o carrinho de uma para a outra casando os SKUs.
-        </p>
-        <button
-          type="button"
-          onClick={semLojas ? () => setConectandoLoja(true) : onConnectStores}
-          className="mt-5 rounded-md bg-[var(--solid)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
-        >
-          {semLojas ? "Conectar uma loja Shopify" : "Criar a primeira rota"}
-        </button>
+      <div className="flex flex-col gap-[18px]">
+        <div className="rounded-lg border border-dashed border-[var(--border-strong)] bg-surface px-8 py-11 text-center">
+          <div className="text-[15px] font-semibold text-ink">Nenhuma rota ainda</div>
+          <p className="mx-auto mb-4 mt-1.5 max-w-[380px] text-[12.5px] text-t2">
+            Ligue a vitrine ao checkout: a vitrine recebe o tráfego do anúncio, a loja
+            de checkout cobra. O xcart leva o carrinho de uma para a outra casando os
+            SKUs.
+          </p>
+          <button
+            type="button"
+            onClick={semLojas ? () => setConectandoLoja(true) : onConnectStores}
+            className="h-[30px] rounded-md bg-[var(--solid)] px-[13px] text-[12.5px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
+          >
+            {semLojas ? "Conectar uma loja Shopify" : "Criar a primeira rota"}
+          </button>
+        </div>
         {conectandoLoja && (
-          <div className="mt-6 w-full rounded-xl border border-border bg-surface text-left">
+          <div className="rounded-lg border border-border bg-surface text-left">
             <AddStorePanel
               onConnected={() => {
                 setConectandoLoja(false);
@@ -341,7 +342,7 @@ export function ConsoleView({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-[18px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
           {grafo.routes.length > 1 &&
@@ -355,7 +356,7 @@ export function ConsoleView({
                   onSelecionar(r.id);
                 }}
                 className={cn(
-                  "rounded-md border px-2.5 py-1 text-[12px] transition-colors",
+                  "h-[26px] rounded-md border px-2.5 text-[12px] font-medium transition-colors",
                   r.id === rota.id
                     ? "border-[var(--border-strong)] bg-[var(--nav-active)] text-ink"
                     : "border-border text-t2 hover:text-ink"
@@ -369,14 +370,14 @@ export function ConsoleView({
           <button
             type="button"
             onClick={() => setConectandoLoja((v) => !v)}
-            className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-[var(--border-strong)]"
+            className="h-[26px] rounded-md border border-border bg-surface px-[9px] text-[12px] font-semibold text-ink transition-colors hover:border-[var(--border-strong)] hover:bg-surface-2"
           >
             Conectar loja
           </button>
           <button
             type="button"
             onClick={onConnectStores}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--solid)] px-3 py-1.5 text-[12px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
+            className="inline-flex h-[26px] items-center gap-1.5 rounded-md bg-[var(--solid)] px-[10px] text-[12px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)]"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Nova rota
@@ -385,7 +386,7 @@ export function ConsoleView({
       </div>
 
       {conectandoLoja && (
-        <div className="rounded-xl border border-border bg-surface">
+        <div className="rounded-lg border border-border bg-surface">
           <AddStorePanel
             onConnected={() => {
               setConectandoLoja(false);
@@ -396,19 +397,19 @@ export function ConsoleView({
         </div>
       )}
 
-      <section className="rounded-xl border border-border bg-surface">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-[13px] font-medium text-ink">
+      <section className="rounded-lg border border-border bg-surface px-5 py-[18px]">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-semibold text-ink">
               {rota.name}
               <span className="text-t3"> — </span>
               <span style={{ color: rota.enabled ? "var(--ok)" : "var(--t3)" }}>
                 {rota.enabled ? "ativo" : "pausado"}
               </span>
-            </p>
-            <p className="mt-0.5 text-[11.5px] text-t3">
+            </div>
+            <div className="mt-px text-[12px] text-t3">
               {cobrando} de {alvos.length} lojas de checkout recebendo comprador
-            </p>
+            </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -416,7 +417,7 @@ export function ConsoleView({
               type="button"
               onClick={diagnosticar}
               disabled={checando}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-[var(--border-strong)] disabled:opacity-50"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--border-strong)] bg-surface px-[11px] text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
             >
               {checando ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -429,10 +430,10 @@ export function ConsoleView({
               type="button"
               onClick={() => setEditando((v) => !v)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+                "inline-flex h-7 items-center gap-1.5 rounded-md border px-[11px] text-[12.5px] font-semibold transition-colors",
                 editando
                   ? "border-[var(--border-strong)] bg-[var(--nav-active)] text-ink"
-                  : "border-border bg-surface text-ink hover:border-[var(--border-strong)]"
+                  : "border-[var(--border-strong)] bg-surface text-ink hover:bg-surface-2"
               )}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
@@ -442,7 +443,7 @@ export function ConsoleView({
               type="button"
               onClick={instalar}
               disabled={instalando}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--solid)] px-3 py-1.5 text-[12px] font-medium text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] disabled:opacity-50"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[var(--solid)] px-[11px] text-[12.5px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] disabled:opacity-50"
             >
               {instalando ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -455,7 +456,7 @@ export function ConsoleView({
             </button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md border border-border bg-surface text-t2 transition-colors hover:border-[var(--border-strong)] hover:text-ink focus-visible:outline-none">
+              <DropdownMenuTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-surface text-t4 transition-colors hover:border-[var(--border-strong)] hover:text-ink focus-visible:outline-none">
                 <Ellipsis className="h-3.5 w-3.5" aria-hidden />
                 <span className="sr-only">Mais ações</span>
               </DropdownMenuTrigger>
@@ -477,7 +478,7 @@ export function ConsoleView({
         </div>
 
         {quebrada && (
-          <p className="border-b border-[var(--err-border)] bg-[var(--err-bg)] px-4 py-2.5 text-[12px] text-ink">
+          <p className="mb-3 rounded-md border border-[var(--err-border)] bg-[var(--err-bg)] px-3 py-2 text-[12px] text-ink">
             {rota.lastHeal?.message || "A última checagem automática achou um problema."}
           </p>
         )}
@@ -499,7 +500,7 @@ export function ConsoleView({
         />
 
         {editando && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2.5">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={dividirIgual}
@@ -514,13 +515,13 @@ export function ConsoleView({
         )}
       </section>
 
-      <p className="px-1 text-[11.5px] text-t3">
+      <p className="max-w-[620px] text-[12px] text-t3">
         Loja parada não recebe comprador e continua conectada. Os produtos ligados são
         preservados.
       </p>
 
       {manual && (
-        <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
+        <div className="rounded-lg border border-border bg-surface px-4 py-3.5">
           <p className="text-[12px] text-t2">
             Cole no <code className="font-mono text-[11px] text-ink">theme.liquid</code> da
             vitrine, antes de{" "}
@@ -551,7 +552,7 @@ export function ConsoleView({
       {diagnostico && (
         <div
           className={cn(
-            "rounded-xl border px-4 py-3.5",
+            "rounded-lg border px-4 py-3.5",
             diagnostico.ok
               ? "border-[var(--ok-border)] bg-[var(--ok-bg)]"
               : "border-[var(--err-border)] bg-[var(--err-bg)]"
@@ -597,7 +598,7 @@ export function ConsoleView({
       )}
 
       {editando && (
-        <div className="rounded-xl border border-border bg-surface px-4 py-4">
+        <div className="rounded-lg border border-border bg-surface px-4 py-4">
           <RotationPanel
             routeId={rota.id}
             sourceStoreId={rota.sourceStoreId}

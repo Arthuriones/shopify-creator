@@ -27,8 +27,8 @@ export default async function DashboardLayout({
       <Suspense fallback={<SidebarSkeleton />}>
         <SidebarData />
       </Suspense>
-      <main className="min-h-screen pb-16 pt-14 md:pb-0 md:pl-[216px]">
-        <div className="mx-auto max-w-[1400px] p-4 sm:p-6">
+      <main className="min-h-screen pb-16 pt-[52px] md:pb-0 md:pl-[216px]">
+        <div className="w-full max-w-[1240px] px-4 pb-[72px] pt-[22px] sm:px-6">
           {children}
         </div>
       </main>

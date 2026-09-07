@@ -27,10 +27,12 @@ export function TopNav() {
   )[0];
 
   return (
-    <header className="fixed inset-x-0 top-0 z-30 h-14 border-b border-border bg-[var(--header-bg)] backdrop-blur-md md:left-[216px]">
-      <div className="flex h-full items-center gap-3 px-4 sm:px-6">
+    <header className="fixed inset-x-0 top-0 z-30 h-[52px] border-b border-border bg-[var(--header-bg)] backdrop-blur-md md:left-[216px]">
+      <div className="flex h-full items-center gap-2.5 px-4 sm:px-5">
         {atual && (
-          <span className="text-[12.5px] font-medium text-ink">{t(atual.chave)}</span>
+          <span className="text-[13px] font-semibold tracking-[-0.005em] text-ink">
+            {t(atual.chave)}
+          </span>
         )}
         <div className="ml-auto">
           <LanguageSwitcher />
