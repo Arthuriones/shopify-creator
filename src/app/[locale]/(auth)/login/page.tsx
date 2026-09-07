@@ -3,10 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Check } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 
@@ -131,165 +127,156 @@ function LoginForm() {
     }
   }
 
-  return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
-      {/* Background glow */}
-      <div
-        className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{
-          width: "600px",
-          height: "600px",
-          background:
-            "radial-gradient(circle, color-mix(in oklch, var(--action) 6%, transparent) 0%, transparent 70%)",
-        }}
-      />
+  const enviando = loading;
+  const emEspera = secondsRemaining > 0;
 
-      <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
-        {/* Brand */}
-        <div className="mb-10 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="Logo"
-            className="mx-auto mb-4 h-12 w-auto"
+  return (
+    <div className="grid min-h-screen bg-surface lg:grid-cols-2">
+      {/* Formulário. Duas colunas com o modelo da operação ao lado: quem chega
+          aqui pela primeira vez precisa entender o que o xcart faz antes de
+          criar conta. */}
+      <div className="flex flex-col justify-center px-6 py-12 sm:px-[8vw]">
+        <div className="mb-10 flex items-center gap-2">
+          <span
+            className="h-5 w-5 rounded-[5px]"
+            style={{ background: "var(--brand)" }}
+            aria-hidden
           />
-          <p
-            className="text-sm text-muted-foreground"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            {t("tagline")}
-          </p>
+          <span className="text-[14px] font-bold tracking-[0.06em] text-ink">XCART</span>
         </div>
 
-        {/* Form / Success */}
         {sent && (mode === "recovery" || mode === "signup") ? (
-          <div className="animate-fade-in text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full animate-scale-in"
-              style={{ background: "color-mix(in oklch, var(--action) 12%, transparent)" }}
-            >
-              <Check
-                className="h-5 w-5"
-                style={{ color: "var(--action)" }}
-              />
-            </div>
-            <p className="text-sm text-foreground font-medium">
+          <div className="max-w-[360px]">
+            <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-ink">
               {mode === "signup" ? t("confirmEmailSent") : t("recoverySent")}
+            </h1>
+            <p className="mt-1.5 text-[13px] text-t2">
+              {t("checkEmail")} <strong className="font-medium text-ink">{email}</strong>
             </p>
-            <p className="mt-1.5 text-[13px] text-muted-foreground mb-4">
-              {t("checkEmail")} <strong className="text-foreground font-medium">{email}</strong>
-            </p>
-            <Button variant="outline" className="w-full h-11" onClick={() => { setSent(false); setMode("login"); }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSent(false);
+                setMode("login");
+              }}
+              className="mt-6 h-9 rounded-md border border-[var(--border-strong)] bg-surface px-3 text-[13px] font-semibold text-ink transition-colors hover:bg-surface-2"
+            >
               {t("backToLogin")}
-            </Button>
+            </button>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex bg-card p-1 rounded-lg border border-border/50">
-              <button
-                className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "login" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => setMode("login")}
-              >
-                {t("login")}
-              </button>
-              <button
-                className={`flex-1 text-sm font-medium h-9 rounded-md transition-all ${mode === "signup" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => setMode("signup")}
-              >
-                {t("signup")}
-              </button>
-            </div>
+          <>
+            <h1 className="text-[22px] font-semibold tracking-[-0.01em] text-ink">
+              {mode === "signup"
+                ? t("signup")
+                : mode === "recovery"
+                  ? t("forgotPassword")
+                  : t("login")}
+            </h1>
+            <p className="mb-7 mt-1.5 max-w-[340px] text-[13px] text-t2">
+              {t("tagline")}
+            </p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="email"
-                    className="text-[13px] font-medium text-muted-foreground"
-                  >
-                    {t("email")}
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+            <form
+              onSubmit={handleSubmit}
+              className="flex max-w-[360px] flex-col gap-3.5"
+            >
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[12px] font-medium text-t1">{t("email")}</span>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@empresa.com"
+                  className="h-9 rounded-md border border-[var(--control-border)] bg-surface px-2.5 text-[13px] text-ink outline-none transition-colors focus:border-[var(--brand)]"
+                />
+              </label>
+
+              {mode !== "recovery" && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-medium text-t1">{t("password")}</span>
+                  <input
+                    type="password"
                     required
-                    className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-9 rounded-md border border-[var(--control-border)] bg-surface px-2.5 text-[13px] text-ink outline-none transition-colors focus:border-[var(--brand)]"
                   />
-                </div>
-                
-                {mode !== "recovery" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="password"
-                        className="text-[13px] font-medium text-muted-foreground"
-                      >
-                        {t("password")}
-                      </Label>
-                      {mode === "login" && (
-                        <button
-                          type="button"
-                          onClick={() => setMode("recovery")}
-                          className="text-xs text-primary/80 hover:text-primary transition-colors"
-                        >
-                          {t("forgotPassword")}
-                        </button>
-                      )}
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="h-11 bg-card border-border/50 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 transition-colors duration-200"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-11 text-sm font-medium transition-all duration-200"
-                style={{
-                  background: loading ? "color-mix(in oklch, var(--action) 70%, transparent)" : "var(--action)",
-                  color: "var(--action-foreground)",
-                }}
-                disabled={loading || secondsRemaining > 0}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="inline-flex gap-0.5">
-                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="h-1 w-1 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </span>
-                  </span>
-                ) : secondsRemaining > 0 ? (
-                  t("wait", { seconds: secondsRemaining })
-                ) : mode === "login" ? (
-                  t("login")
-                ) : mode === "signup" ? (
-                  t("signup")
-                ) : (
-                  t("sendAccessLink")
-                )}
-              </Button>
-              {errorMessage ? (
-                <p className="text-xs text-red-400">{errorMessage}</p>
-              ) : null}
-
-              {mode === "recovery" && (
-                 <Button type="button" variant="ghost" className="w-full h-11 text-xs text-muted-foreground" onClick={() => setMode("login")}>
-                   {t("backToLogin")}
-                 </Button>
+                </label>
               )}
+
+              {errorMessage && (
+                <p className="rounded-md border border-[var(--err-border)] bg-[var(--err-bg)] px-2.5 py-2 text-[12px] leading-relaxed text-ink">
+                  {errorMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={enviando || emEspera}
+                className="mt-1 h-9 rounded-md bg-[var(--solid)] text-[13px] font-semibold text-[var(--on-solid)] transition-colors hover:bg-[var(--solid-hover)] active:translate-y-px disabled:opacity-60"
+              >
+                {emEspera
+                  ? t("wait", { seconds: secondsRemaining })
+                  : mode === "signup"
+                    ? t("signup")
+                    : mode === "recovery"
+                      ? t("sendAccessLink")
+                      : t("login")}
+              </button>
+
+              {mode === "login" && (
+                <button
+                  type="button"
+                  onClick={() => setMode("recovery")}
+                  className="mt-0.5 self-start text-[12px] font-semibold text-[var(--brand)] hover:text-ink"
+                >
+                  {t("forgotPassword")}
+                </button>
+              )}
+
+              <p className="mt-0.5 text-[12px] text-t2">
+                {mode === "signup" ? "Já tem conta?" : "Ainda não tem conta?"}{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+                  className="font-semibold text-[var(--brand)] hover:text-ink"
+                >
+                  {mode === "signup" ? t("login") : t("signup")}
+                </button>
+              </p>
             </form>
-          </div>
+          </>
         )}
+      </div>
+
+      {/* O modelo da operação, do design: vitrine -> xcart -> checkouts. */}
+      <div className="hidden flex-col justify-center gap-7 border-l border-border bg-surface-2 px-[6vw] py-12 lg:flex">
+        <p className="font-mono text-[10px] tracking-[0.12em] text-t3">
+          MODELO DA OPERAÇÃO
+        </p>
+        <div className="flex max-w-[300px] flex-col gap-2.5">
+          <div className="rounded-[7px] border border-border bg-surface px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-ink">Vitrine</p>
+            <p className="text-[11px] text-t3">Recebe o tráfego do anúncio</p>
+          </div>
+          <span className="ml-4 h-4 w-px bg-[var(--border-strong)]" aria-hidden />
+          <div className="rounded-[7px] bg-[var(--solid)] px-3 py-2.5 text-[var(--on-solid)]">
+            <p className="text-[12px] font-semibold">XCART</p>
+            <p className="text-[11px] opacity-70">Mapeia, sincroniza e roteia</p>
+          </div>
+          <span className="ml-4 h-4 w-px bg-[var(--border-strong)]" aria-hidden />
+          <div className="rounded-[7px] border border-border bg-surface px-3 py-2.5">
+            <p className="text-[12px] font-semibold text-ink">Lojas de checkout</p>
+            <p className="text-[11px] text-t3">Onde o pagamento acontece</p>
+          </div>
+        </div>
+        <p className="max-w-[320px] text-[13px] text-t1">
+          Uma vitrine, várias lojas de checkout. O xcart casa os SKUs e decide quem
+          cobra cada carrinho.
+        </p>
       </div>
     </div>
   );
