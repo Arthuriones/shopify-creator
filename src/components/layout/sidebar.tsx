@@ -11,6 +11,7 @@ import {
   ListChecks,
   LogOut,
   Store,
+  TrendingUp,
   Terminal,
   Waypoints,
   type LucideIcon,
@@ -54,6 +55,7 @@ const NAV: NavSection[] = [
     label: "operations",
     items: [
       { href: "/stores", label: "connectedStores", icon: Store, counter: "stores" },
+      { href: "/sales", label: "sales", icon: TrendingUp },
       { href: "/clone/routed-checkout", label: "routing", icon: Waypoints },
       { href: "/clone/shopify", label: "importProducts", icon: Download },
     ],

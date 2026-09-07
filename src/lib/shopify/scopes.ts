@@ -57,6 +57,18 @@ export const SHOPIFY_SCOPES = [
   // Diagnostico de publicacao (publishedOnCurrentPublication). Colecao ou
   // produto fora do canal Online Store some da vitrine sem nenhum aviso.
   "read_product_listings",
+
+  // Vendas. A tela de Vendas soma os pedidos pagos de cada loja de checkout
+  // direto na Shopify -- o xcart nao guarda pedido.
+  //
+  // ATENCAO: read_orders da acesso aos ULTIMOS 60 DIAS. Historico completo
+  // exige read_all_orders, que e escopo protegido e depende de aprovacao da
+  // Shopify caso a caso. Por isso o periodo maximo da tela e 60 dias.
+  //
+  // Loja conectada antes deste escopo entrar continua funcionando para todo o
+  // resto, mas devolve ACCESS_DENIED em pedido ate ser reconectada. A tela de
+  // Vendas mostra quais lojas estao nesse estado.
+  "read_orders",
 ] as const;
 
 // String pronta para colar no painel da Shopify e para a URL de authorize.
