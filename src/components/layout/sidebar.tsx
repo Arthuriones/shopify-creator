@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  Activity,
   ChevronDown,
   CreditCard,
   Download,
@@ -60,8 +61,8 @@ const NAV: NavSection[] = [
     ],
   },
   {
-    label: "account",
     items: [
+      { href: "/activity", label: "activity", icon: Activity },
       { href: "/billing", label: "billing", icon: CreditCard, counter: "credits" },
       { href: "/claude", label: "claude", icon: Terminal },
     ],
